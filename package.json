@@ -1,0 +1,17 @@
+{
+  "name": "frida-mono-bridge",
+  "version": "0.1.0",
+  "description": "TypeScript bridge for instrumenting Mono runtimes with Frida",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "frida-compile src/index.ts -o dist/agent.js",
+    "watch": "frida-compile -w src/index.ts -o dist/agent.js",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/frida-gum": "^18.4.4",
+    "frida-compile": "^19.0.4",
+    "typescript": "^5.5.4"
+  }
+}
