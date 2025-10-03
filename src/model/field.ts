@@ -5,14 +5,14 @@ export class MonoField extends MonoHandle {
   getValue(instance: MonoObject | NativePointer): NativePointer {
     return this.withThread(() => {
       const buffer = Memory.alloc(Process.pointerSize);
-      this.api.call("mono_field_get_value", unwrapInstance(instance), this.pointer, buffer);
+      this.api.native.mono_field_get_value(unwrapInstance(instance), this.pointer, buffer);
       return Memory.readPointer(buffer);
     });
   }
 
   setValue(instance: MonoObject | NativePointer, value: NativePointer): void {
     this.withThread(() => {
-      this.api.call("mono_field_set_value", unwrapInstance(instance), this.pointer, value);
+      this.api.native.mono_field_set_value(unwrapInstance(instance), this.pointer, value);
     });
   }
 }

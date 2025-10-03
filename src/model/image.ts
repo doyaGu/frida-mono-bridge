@@ -12,7 +12,7 @@ export class MonoImage extends MonoHandle {
   classFromName(namespace: string, name: string): MonoKlass {
     const nsPtr = namespace ? allocUtf8(namespace) : NULL;
     const namePtr = allocUtf8(name);
-    const klassPtr = this.withThread(() => this.api.call("mono_class_from_name", this.pointer, nsPtr, namePtr));
+    const klassPtr = this.withThread(() => this.api.native.mono_class_from_name(this.pointer, nsPtr, namePtr));
     if (pointerIsNull(klassPtr)) {
       throw new Error(`Class ${namespace}.${name} not found in image.`);
     }

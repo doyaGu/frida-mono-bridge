@@ -6,6 +6,6 @@ export { MonoArrayModel as MonoArray };
 
 export function createMonoArray(api: MonoApi, elementClass: MonoKlass, length: number): MonoArrayModel {
   const domain = api.getRootDomain();
-  const arrayPtr = api.call("mono_array_new", domain, elementClass.pointer, length);
+  const arrayPtr = api.native.mono_array_new(domain, elementClass.pointer, length);
   return new MonoArrayModel(api, arrayPtr);
 }

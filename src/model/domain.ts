@@ -10,7 +10,7 @@ export class MonoDomain extends MonoHandle {
   }
 
   static current(api: MonoApi): MonoDomain {
-    const domainPtr = api.call("mono_domain_get");
+    const domainPtr = api.native.mono_domain_get();
     return new MonoDomain(api, domainPtr);
   }
 
@@ -20,7 +20,7 @@ export class MonoDomain extends MonoHandle {
 
   assemblyOpen(path: string): MonoAssembly {
     const pathPtr = allocUtf8(path);
-    const assemblyPtr = this.withThread(() => this.api.call("mono_domain_assembly_open", this.pointer, pathPtr));
+    const assemblyPtr = this.withThread(() => this.api.native.mono_domain_assembly_open(this.pointer, pathPtr));
     if (pointerIsNull(assemblyPtr)) {
       throw new Error(`Unable to open assembly at ${path}`);
     }

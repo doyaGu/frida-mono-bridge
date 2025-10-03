@@ -34,10 +34,11 @@ export class MonoModuleDiscoveryError extends Error {
 }
 
 export function findMonoModule(): MonoModuleInfo {
-  const modules = Module.enumerateModulesSync();
+  // Use Process.enumerateModules() instead of Module.enumerateModulesSync()
+  const modules = Process.enumerateModules();
 
   for (const candidate of COMMON_MODULE_NAMES) {
-    const moduleInfo = modules.find((m) => m.name === candidate || m.path.endsWith(`/${candidate}`));
+    const moduleInfo = modules.find((m) => m.name === candidate || m.path.endsWith(`/${candidate}`) || m.path.endsWith(`\\${candidate}`));
     if (moduleInfo) {
       return normalizeModuleInfo(moduleInfo);
     }

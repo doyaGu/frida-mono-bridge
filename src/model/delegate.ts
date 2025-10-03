@@ -16,7 +16,7 @@ export class MonoDelegate extends MonoObject {
     const instance = delegateClass.newObject(false);
     const methodPtr = method instanceof MonoMethod ? method.pointer : (method as NativePointer);
     const targetPtr = target instanceof MonoObject ? target.pointer : (target ?? NULL);
-    withAttachedThread(api, () => api.call("mono_delegate_ctor", instance.pointer, targetPtr, methodPtr));
+    withAttachedThread(api, () => api.native.mono_delegate_ctor(instance.pointer, targetPtr, methodPtr));
     return new MonoDelegate(api, instance.pointer);
   }
 

@@ -9,7 +9,7 @@ import { MonoProperty } from "./property";
 export class MonoKlass extends MonoHandle {
   getMethod(name: string, paramCount = -1): MonoMethod {
     const namePtr = allocUtf8(name);
-    const methodPtr = this.withThread(() => this.api.call("mono_class_get_method_from_name", this.pointer, namePtr, paramCount));
+    const methodPtr = this.withThread(() => this.api.native.mono_class_get_method_from_name(this.pointer, namePtr, paramCount));
     if (pointerIsNull(methodPtr)) {
       throw new Error(`Method ${name}(${paramCount}) not found on klass.`);
     }
@@ -18,7 +18,7 @@ export class MonoKlass extends MonoHandle {
 
   getField(name: string): MonoField {
     const namePtr = allocUtf8(name);
-    const fieldPtr = this.withThread(() => this.api.call("mono_class_get_field_from_name", this.pointer, namePtr));
+    const fieldPtr = this.withThread(() => this.api.native.mono_class_get_field_from_name(this.pointer, namePtr));
     if (pointerIsNull(fieldPtr)) {
       throw new Error(`Field ${name} not found on klass.`);
     }
@@ -27,7 +27,7 @@ export class MonoKlass extends MonoHandle {
 
   getProperty(name: string): MonoProperty {
     const namePtr = allocUtf8(name);
-    const propertyPtr = this.withThread(() => this.api.call("mono_class_get_property_from_name", this.pointer, namePtr));
+    const propertyPtr = this.withThread(() => this.api.native.mono_class_get_property_from_name(this.pointer, namePtr));
     if (pointerIsNull(propertyPtr)) {
       throw new Error(`Property ${name} not found on klass.`);
     }
@@ -36,9 +36,9 @@ export class MonoKlass extends MonoHandle {
 
   newObject(initialise = true): MonoObject {
     const domain = this.api.getRootDomain();
-    const objectPtr = this.withThread(() => this.api.call("mono_object_new", domain, this.pointer));
+    const objectPtr = this.withThread(() => this.api.native.mono_object_new(domain, this.pointer));
     if (initialise) {
-      this.withThread(() => this.api.call("mono_runtime_object_init", objectPtr));
+      this.withThread(() => this.api.native.mono_runtime_object_init(objectPtr));
     }
     return new MonoObject(this.api, objectPtr);
   }

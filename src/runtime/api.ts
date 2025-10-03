@@ -4,6 +4,10 @@ import { MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./
 
 export type MonoArg = NativePointer | number | boolean | string | null | undefined;
 
+export type MonoNativeBindings = {
+  [Name in MonoApiName]: (...args: MonoArg[]) => any;
+};
+
 export class MonoFunctionResolutionError extends Error {
   constructor(public readonly exportName: string, message: string) {
     super(message);
@@ -29,13 +33,14 @@ export class MonoApi {
   private readonly delegateThunkCache = new Map<string, DelegateThunkInfo>();
   private exceptionSlot: NativePointer | null = null;
   private rootDomain: NativePointer | null = null;
+  // Lazily bound invokers keyed by Mono export name.
+  public readonly native: MonoNativeBindings = this.createNativeBindings();
 
   constructor(private readonly module: MonoModuleInfo) {}
 
   attachThread(): NativePointer {
     const rootDomain = this.getRootDomain();
-    const threadAttach = this.getNativeFunction("mono_thread_attach");
-    const thread = threadAttach(rootDomain);
+    const thread = this.native.mono_thread_attach(rootDomain);
     if (pointerIsNull(thread)) {
       throw new Error("mono_thread_attach returned NULL; ensure the Mono runtime is initialised");
     }
@@ -43,16 +48,14 @@ export class MonoApi {
   }
 
   detachThread(thread: NativePointer): void {
-    const threadDetach = this.getNativeFunction("mono_thread_detach");
-    threadDetach(thread);
+    this.native.mono_thread_detach(thread);
   }
 
   getRootDomain(): NativePointer {
     if (this.rootDomain && !pointerIsNull(this.rootDomain)) {
       return this.rootDomain;
     }
-    const getRootDomain = this.getNativeFunction("mono_get_root_domain");
-    const domain = getRootDomain();
+    const domain = this.native.mono_get_root_domain();
     if (pointerIsNull(domain)) {
       throw new Error("mono_get_root_domain returned NULL. Mono may not be initialised in this process");
     }
@@ -63,12 +66,11 @@ export class MonoApi {
   stringNew(text: string): NativePointer {
     const domain = this.getRootDomain();
     const data = allocUtf8(text);
-    const stringNew = this.getNativeFunction("mono_string_new");
-    return stringNew(domain, data);
+    return this.native.mono_string_new(domain, data);
   }
 
   runtimeInvoke(method: NativePointer, instance: NativePointer | null, args: NativePointer[]): NativePointer {
-    const invoke = this.getNativeFunction("mono_runtime_invoke");
+    const invoke = this.native.mono_runtime_invoke;
     const exceptionSlot = this.getExceptionSlot();
     Memory.writePointer(exceptionSlot, NULL);
     const argv = allocPointerArray(args);
@@ -86,13 +88,11 @@ export class MonoApi {
     if (cached) {
       return cached;
     }
-    const getInvoke = this.getNativeFunction("mono_get_delegate_invoke");
-    const methodGetThunk = this.getNativeFunction("mono_method_get_unmanaged_thunk");
-    const invoke = getInvoke(delegateClass);
+    const invoke = this.native.mono_get_delegate_invoke(delegateClass);
     if (pointerIsNull(invoke)) {
       throw new Error("Delegate invoke method not available for provided class");
     }
-    const thunk = methodGetThunk(invoke);
+    const thunk = this.native.mono_method_get_unmanaged_thunk(invoke);
     if (pointerIsNull(thunk)) {
       throw new Error("mono_method_get_unmanaged_thunk returned NULL. This Mono build may not support unmanaged thunks");
     }
@@ -102,15 +102,13 @@ export class MonoApi {
   }
 
   addInternalCall(name: string, callback: NativePointer): void {
-    const addIcall = this.getNativeFunction("mono_add_internal_call");
     const namePtr = allocUtf8(name);
-    addIcall(namePtr, callback);
+    this.native.mono_add_internal_call(namePtr, callback);
   }
 
   call<T = NativePointer>(name: MonoApiName, ...args: MonoArg[]): T {
-    const fn = this.getNativeFunction(name);
-    const normalizedArgs = args.map(normalizeArg);
-    return fn(...normalizedArgs);
+    const fn = this.native[name] as (...fnArgs: MonoArg[]) => T;
+    return fn(...args);
   }
 
   hasExport(name: MonoApiName): boolean {
@@ -132,6 +130,29 @@ export class MonoApi {
     fn = new NativeFunction(address, signature.retType, signature.argTypes);
     this.functionCache.set(name, fn);
     return fn;
+  }
+
+  private createNativeBindings(): MonoNativeBindings {
+    const bindings: Partial<MonoNativeBindings> = {};
+    const target = bindings as Record<MonoApiName, (...args: MonoArg[]) => any>;
+    for (const name of ALL_MONO_EXPORTS) {
+      Object.defineProperty(target, name, {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          const nativeFn = this.getNativeFunction(name);
+          const wrapper = (...args: MonoArg[]) => nativeFn(...args.map(normalizeArg));
+          Object.defineProperty(target, name, {
+            configurable: false,
+            enumerable: true,
+            value: wrapper,
+            writable: false,
+          });
+          return wrapper;
+        },
+      });
+    }
+    return target as MonoNativeBindings;
   }
 
   private getExceptionSlot(): NativePointer {

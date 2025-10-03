@@ -5,12 +5,12 @@ import { MonoKlass } from "./klass";
 
 export class MonoObject extends MonoHandle {
   getClass(): MonoKlass {
-    const klassPtr = this.withThread(() => this.api.call("mono_object_get_class", this.pointer));
+    const klassPtr = this.withThread(() => this.api.native.mono_object_get_class(this.pointer));
     return new MonoKlass(this.api, klassPtr);
   }
 
   unbox(): NativePointer {
-    return this.withThread(() => this.api.call("mono_object_unbox", this.pointer));
+    return this.withThread(() => this.api.native.mono_object_unbox(this.pointer));
   }
 
   isNull(): boolean {
@@ -22,6 +22,6 @@ export class MonoString extends MonoObject {}
 
 export class MonoArray extends MonoObject {
   get length(): number {
-    return this.withThread(() => this.api.call<number>("mono_array_length", this.pointer));
+    return this.withThread(() => this.api.native.mono_array_length(this.pointer) as number);
   }
 }

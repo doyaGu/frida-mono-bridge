@@ -92,7 +92,7 @@ export const MONO_EXPORTS = {
   mono_method_desc_new: {
     name: "mono_method_desc_new",
     retType: "pointer",
-    argTypes: ["pointer", "bool"],
+    argTypes: ["pointer", "int"],
   },
   mono_method_desc_free: {
     name: "mono_method_desc_free",

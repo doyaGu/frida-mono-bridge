@@ -8,7 +8,7 @@ export class MonoAssembly extends MonoHandle {
   }
 
   getImage(): MonoImage {
-    const imagePtr = this.withThread(() => this.api.call("mono_assembly_get_image", this.pointer));
+    const imagePtr = this.withThread(() => this.api.native.mono_assembly_get_image(this.pointer));
     return new MonoImage(this.api, imagePtr);
   }
 }

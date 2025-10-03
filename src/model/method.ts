@@ -11,30 +11,30 @@ export interface InvokeOptions {
 export class MonoMethod extends MonoHandle {
   static find(api: MonoApi, image: MonoImage, descriptor: string): MonoMethod {
     const descPtr = allocUtf8(descriptor);
-    const methodDesc = api.call("mono_method_desc_new", descPtr, true);
-    if (!methodDesc) {
+    const methodDesc = api.native.mono_method_desc_new(descPtr, 1);
+    if (pointerIsNull(methodDesc)) {
       throw new Error(`mono_method_desc_new failed for descriptor ${descriptor}`);
     }
     try {
-      const methodPtr = api.call("mono_method_desc_search_in_image", methodDesc, image.pointer);
+      const methodPtr = api.native.mono_method_desc_search_in_image(methodDesc, image.pointer);
       if (pointerIsNull(methodPtr)) {
         throw new Error(`Method ${descriptor} not found in image.`);
       }
       return new MonoMethod(api, methodPtr);
     } finally {
-      api.call("mono_method_desc_free", methodDesc);
+      api.native.mono_method_desc_free(methodDesc);
     }
   }
 
   getName(): string {
-    const namePtr = this.withThread(() => this.api.call("mono_method_get_name", this.pointer));
+    const namePtr = this.withThread(() => this.api.native.mono_method_get_name(this.pointer));
     return Memory.readUtf8String(namePtr) ?? "";
   }
 
   getParamCount(): number {
     return this.withThread(() => {
-      const signature = this.api.call("mono_method_signature", this.pointer);
-      return this.api.call<number>("mono_signature_get_param_count", signature);
+      const signature = this.api.native.mono_method_signature(this.pointer);
+      return this.api.native.mono_signature_get_param_count(signature) as number;
     });
   }
 

@@ -18,14 +18,14 @@ export class GCHandle {
     if (this.#handle === 0) {
       return NULL;
     }
-    return this.api.call("mono_gchandle_get_target", this.#handle);
+    return this.api.native.mono_gchandle_get_target(this.#handle);
   }
 
   free(): void {
     if (this.#handle === 0) {
       return;
     }
-    this.api.call("mono_gchandle_free", this.#handle);
+    this.api.native.mono_gchandle_free(this.#handle);
     this.#handle = 0;
   }
 }
@@ -36,14 +36,14 @@ export class GCHandlePool {
   constructor(private readonly api: MonoApi) {}
 
   create(object: NativePointer, pinned = false): GCHandle {
-    const handleId = this.api.call<number>("mono_gchandle_new", object, pinned);
+    const handleId = this.api.native.mono_gchandle_new(object, pinned) as number;
     const handle = new GCHandle(this.api, handleId, false);
     this.handles.add(handle);
     return handle;
   }
 
   createWeak(object: NativePointer, trackResurrection = false): GCHandle {
-    const handleId = this.api.call<number>("mono_gchandle_new_weakref", object, trackResurrection);
+    const handleId = this.api.native.mono_gchandle_new_weakref(object, trackResurrection) as number;
     const handle = new GCHandle(this.api, handleId, true);
     this.handles.add(handle);
     return handle;
