@@ -11,7 +11,7 @@ function main(): void {
   const delegatePtr = method.invoke(null, []);
   const delegateInstance = new Mono.model.Delegate(Mono.api, delegatePtr);
 
-  const thunk = delegateInstance.compileNative<NativeFunction<void, [NativePointer]>>("void", ["pointer"]);
+  const thunk = delegateInstance.compileNative("void", ["pointer"]) as NativeFunction<void, [NativePointer]>;
 
   Mono.utils.logger.info("Calling unmanaged delegate thunk");
   const exceptionSlot = Memory.alloc(Process.pointerSize);

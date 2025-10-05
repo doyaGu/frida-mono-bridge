@@ -1,4 +1,5 @@
 import Mono from "../src";
+import { registerInternalCall } from "../src/model";
 
 function main(): void {
   Mono.attachThread();
@@ -9,7 +10,7 @@ function main(): void {
   }, "void", ["pointer"]);
 
   Mono.model.withThread(() => {
-    Mono.model.registerInternalCall(Mono.api, "Game.NativeHooks::OnMessage", callback);
+    registerInternalCall(Mono.api, "Game.NativeHooks::OnMessage", callback);
   });
 }
 
