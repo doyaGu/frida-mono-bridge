@@ -10,7 +10,7 @@ declare const NativeFunction: {
 };
 
 declare class NativeCallback<F extends Function = (...args: any[]) => any> {
-  constructor(retType: string, argTypes: string[], options: any, implementation: F);
+  constructor(implementation: F, retType: string, argTypes: string[], abi?: any);
 }
 
 declare namespace Module {
@@ -44,6 +44,26 @@ declare namespace Memory {
   function readUtf8String(address: NativePointer): string | null;
   function readPointer(address: NativePointer): NativePointer;
   function dup(address: NativePointer, size: number): NativePointer;
+  function readU8(address: NativePointer): number;
+  function readS8(address: NativePointer): number;
+  function readU16(address: NativePointer): number;
+  function readS16(address: NativePointer): number;
+  function readU32(address: NativePointer): number;
+  function readS32(address: NativePointer): number;
+  function readU64(address: NativePointer): UInt64;
+  function readS64(address: NativePointer): UInt64;
+  function readFloat(address: NativePointer): number;
+  function readDouble(address: NativePointer): number;
+  function writeU8(address: NativePointer, value: number): void;
+  function writeS8(address: NativePointer, value: number): void;
+  function writeU16(address: NativePointer, value: number): void;
+  function writeS16(address: NativePointer, value: number): void;
+  function writeU32(address: NativePointer, value: number): void;
+  function writeS32(address: NativePointer, value: number): void;
+  function writeU64(address: NativePointer, value: UInt64 | number): void;
+  function writeS64(address: NativePointer, value: UInt64 | number): void;
+  function writeFloat(address: NativePointer, value: number): void;
+  function writeDouble(address: NativePointer, value: number): void;
 }
 
 declare const NULL: NativePointer;
