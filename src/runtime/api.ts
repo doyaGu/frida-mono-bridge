@@ -1,6 +1,9 @@
-import { allocPointerArray, allocUtf8, pointerIsNull } from "./mem";
+import { allocPointerArray, allocUtf8, pointerIsNull, readUtf8String, readUtf16String } from "./mem";
 import { MonoModuleInfo } from "./module";
-import { MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./signatures";
+import { ALL_MONO_EXPORTS, MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./signatures";
+import { LruCache } from "../utils/lru-cache";
+
+type AnyNativeFunction = NativeFunction<any, any[]>;
 
 export type MonoArg = NativePointer | number | boolean | string | null | undefined;
 
@@ -15,9 +18,19 @@ export class MonoFunctionResolutionError extends Error {
   }
 }
 
+/**
+ * Error thrown when a managed exception occurs during mono_runtime_invoke.
+ * Contains the raw exception object pointer and extracted details when available.
+ */
 export class MonoManagedExceptionError extends Error {
-  constructor(public readonly exception: NativePointer) {
-    super("Managed exception thrown by mono_runtime_invoke");
+  constructor(
+    public readonly exception: NativePointer,
+    public readonly exceptionType?: string,
+    public readonly exceptionMessage?: string,
+  ) {
+    const details = exceptionMessage ? `: ${exceptionMessage}` : "";
+    const type = exceptionType ? ` (${exceptionType})` : "";
+    super(`Managed exception thrown${type}${details}`);
     this.name = "MonoManagedExceptionError";
   }
 }
@@ -27,12 +40,39 @@ export interface DelegateThunkInfo {
   thunk: NativePointer;
 }
 
+/**
+ * Maximum cache sizes for LRU caches to prevent unbounded memory growth.
+ */
+const CACHE_LIMITS = {
+  FUNCTION_CACHE: 256,
+  ADDRESS_CACHE: 512,
+  DELEGATE_THUNK_CACHE: 128,
+};
+
+/**
+ * Core API wrapper for Mono runtime functions.
+ * Provides high-level access to Mono C API with automatic thread attachment,
+ * exception handling, and intelligent caching with LRU eviction.
+ */
 export class MonoApi {
-  private readonly functionCache = new Map<MonoApiName, NativeFunction>();
-  private readonly addressCache = new Map<MonoApiName, NativePointer>();
-  private readonly delegateThunkCache = new Map<string, DelegateThunkInfo>();
+  private readonly functionCache = new LruCache<MonoApiName, AnyNativeFunction>(CACHE_LIMITS.FUNCTION_CACHE);
+  private readonly addressCache = new LruCache<MonoApiName, NativePointer>(CACHE_LIMITS.ADDRESS_CACHE);
+  private readonly delegateThunkCache = new LruCache<string, DelegateThunkInfo>(CACHE_LIMITS.DELEGATE_THUNK_CACHE);
+
+  /**
+   * Exception slot for mono_runtime_invoke exception handling.
+   * Allocated once and reused for session lifetime (pointer size: ~8 bytes).
+   * Not freed as it's needed throughout the entire session and relies on Frida's GC.
+   */
   private exceptionSlot: NativePointer | null = null;
   private rootDomain: NativePointer | null = null;
+
+  /**
+   * Thread manager for this API instance.
+   * @internal Used by guard.ts to avoid circular dependency
+   */
+  public readonly _threadManager: any;
+
   // Lazily bound invokers keyed by Mono export name.
   public readonly native: MonoNativeBindings = this.createNativeBindings();
 
@@ -69,6 +109,16 @@ export class MonoApi {
     return this.native.mono_string_new(domain, data);
   }
 
+  /**
+   * Invokes a managed method with exception handling and detail extraction.
+   * Automatically attaches exception slot and extracts exception type/message on error.
+   *
+   * @param method Pointer to MonoMethod
+   * @param instance Instance pointer (NULL for static methods)
+   * @param args Array of argument pointers
+   * @returns Result pointer from the invocation
+   * @throws MonoManagedExceptionError with extracted exception details
+   */
   runtimeInvoke(method: NativePointer, instance: NativePointer | null, args: NativePointer[]): NativePointer {
     const invoke = this.native.mono_runtime_invoke;
     const exceptionSlot = this.getExceptionSlot();
@@ -77,9 +127,48 @@ export class MonoApi {
     const result = invoke(method, instance ?? NULL, argv, exceptionSlot);
     const exception = Memory.readPointer(exceptionSlot);
     if (!pointerIsNull(exception)) {
-      throw new MonoManagedExceptionError(exception);
+      const details = this.extractExceptionDetails(exception);
+      throw new MonoManagedExceptionError(exception, details.type, details.message);
     }
     return result;
+  }
+
+  /**
+   * Attempts to extract type and message from a managed exception object.
+   * Falls back gracefully if extraction fails.
+   *
+   * @param exception Pointer to managed exception object
+   * @returns Object with optional type and message strings
+   */
+  private extractExceptionDetails(exception: NativePointer): { type?: string; message?: string } {
+    try {
+      const klass = this.native.mono_object_get_class(exception);
+      if (pointerIsNull(klass)) {
+        return {};
+      }
+
+      const typeNamePtr = this.native.mono_class_get_name(klass);
+      const type = readUtf8String(typeNamePtr);
+
+      // Try to extract message using ToString if available
+      if (this.hasExport("mono_object_to_string")) {
+        const excSlot = Memory.alloc(Process.pointerSize);
+        Memory.writePointer(excSlot, NULL);
+        const msgObj = this.native.mono_object_to_string(exception, excSlot);
+
+        if (!pointerIsNull(msgObj) && pointerIsNull(Memory.readPointer(excSlot))) {
+          const chars = this.native.mono_string_chars(msgObj);
+          const length = this.native.mono_string_length(msgObj) as number;
+          const message = readUtf16String(chars, length);
+          return { type, message };
+        }
+      }
+
+      return { type };
+    } catch (_error) {
+      // Best effort - return empty if extraction fails
+      return {};
+    }
   }
 
   getDelegateThunk(delegateClass: NativePointer): DelegateThunkInfo {
@@ -101,9 +190,42 @@ export class MonoApi {
     return info;
   }
 
+  /**
+   * Registers an internal call (native function callable from managed code).
+   *
+   * @param name Fully qualified method name (e.g., "Namespace.Class::MethodName")
+   * @param callback Native function pointer to invoke
+   * @throws Error if name is empty or callback is null
+   */
   addInternalCall(name: string, callback: NativePointer): void {
+    if (!name || name.trim().length === 0) {
+      throw new Error("Internal call name must be a non-empty string");
+    }
+    if (pointerIsNull(callback)) {
+      throw new Error("Internal call callback must not be NULL");
+    }
     const namePtr = allocUtf8(name);
     this.native.mono_add_internal_call(namePtr, callback);
+  }
+
+  /**
+   * Cleans up resources associated with this MonoApi instance.
+   * Detaches all threads and clears caches to prevent memory leaks.
+   * Should be called when the API instance is no longer needed.
+   */
+  dispose(): void {
+    // Detach threads via thread manager if available
+    if (this._threadManager && typeof this._threadManager.detachAll === "function") {
+      this._threadManager.detachAll();
+    }
+
+    // Clear all caches
+    this.functionCache.clear();
+    this.addressCache.clear();
+    this.delegateThunkCache.clear();
+
+    // Note: exceptionSlot and rootDomain are not freed as they use Memory.alloc
+    // which relies on Frida's garbage collection
   }
 
   call<T = NativePointer>(name: MonoApiName, ...args: MonoArg[]): T {
@@ -127,7 +249,7 @@ export class MonoApi {
     }
     const signature = getSignature(name);
     const address = this.resolveAddress(name, true, signature);
-    fn = new NativeFunction(address, signature.retType, signature.argTypes);
+    fn = new NativeFunction<any, any[]>(address, signature.retType as any, signature.argTypes as any[]) as AnyNativeFunction;
     this.functionCache.set(name, fn);
     return fn;
   }
@@ -198,17 +320,34 @@ export class MonoApi {
     return NULL;
   }
 
+  /**
+   * Attempts to find an export using normalization and fuzzy matching.
+   * Logs warnings when non-exact matches are used.
+   *
+   * @param exportName Export name to find
+   * @returns Export address or null if not found
+   */
   private findNearExport(exportName: string): NativePointer | null {
     try {
       const exports = Module.enumerateExportsSync(this.module.name);
       const canonical = normalizeExportName(exportName);
+
+      // Try normalized match first
       for (const item of exports) {
         if (normalizeExportName(item.name) === canonical) {
+          console.warn(`[Mono] Export "${exportName}" resolved via normalization to "${item.name}"`);
           return item.address;
         }
       }
+
+      // Fall back to fuzzy substring match
       const fuzzy = exports.find((exp) => exp.name.includes(exportName));
-      return fuzzy ? fuzzy.address : null;
+      if (fuzzy) {
+        console.warn(`[Mono] Export "${exportName}" resolved via fuzzy match to "${fuzzy.name}" (consider adding as alias)`);
+        return fuzzy.address;
+      }
+
+      return null;
     } catch (_error) {
       return null;
     }
@@ -230,4 +369,3 @@ export function createMonoApi(module: MonoModuleInfo): MonoApi {
   return new MonoApi(module);
 }
 
-export const ALL_MONO_EXPORTS = Object.keys(MONO_EXPORTS) as MonoApiName[];

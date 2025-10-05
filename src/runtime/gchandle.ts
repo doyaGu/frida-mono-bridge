@@ -43,6 +43,10 @@ export class GCHandlePool {
   }
 
   createWeak(object: NativePointer, trackResurrection = false): GCHandle {
+    if (!this.api.hasExport("mono_gchandle_new_weakref")) {
+      console.warn("[Mono] Weak GCHandles are not supported on this runtime; using a strong handle instead.");
+      return this.create(object, false);
+    }
     const handleId = this.api.native.mono_gchandle_new_weakref(object, trackResurrection) as number;
     const handle = new GCHandle(this.api, handleId, true);
     this.handles.add(handle);
