@@ -1,21 +1,135 @@
 import { MonoApi } from "../runtime/api";
-import { allocUtf8, pointerIsNull } from "../runtime/mem";
+import { allocUtf8, pointerIsNull, readUtf8String } from "../runtime/mem";
 import { MonoHandle } from "./base";
 import { MonoDomain } from "./domain";
-import { MonoKlass } from "./klass";
+import { MonoClass } from "./class";
 
+/**
+ * Represents a Mono image (assembly metadata)
+ */
 export class MonoImage extends MonoHandle {
   static fromAssemblyPath(api: MonoApi, path: string, domain: MonoDomain = MonoDomain.getRoot(api)): MonoImage {
     return domain.assemblyOpen(path).getImage();
   }
 
-  classFromName(namespace: string, name: string): MonoKlass {
+  /**
+   * Get image name
+   */
+  get name(): string {
+    return this.getName();
+  }
+
+  /**
+   * Get all classes in this image
+   */
+  get classes(): MonoClass[] {
+    return this.getClasses();
+  }
+
+  /**
+   * Find a class by namespace and name
+   * @param namespace Namespace (can be empty string)
+   * @param name Class name
+   */
+  classFromName(namespace: string, name: string): MonoClass {
     const nsPtr = namespace ? allocUtf8(namespace) : NULL;
     const namePtr = allocUtf8(name);
-    const klassPtr = this.withThread(() => this.api.native.mono_class_from_name(this.pointer, nsPtr, namePtr));
+    const klassPtr = this.native.mono_class_from_name(this.pointer, nsPtr, namePtr);
     if (pointerIsNull(klassPtr)) {
       throw new Error(`Class ${namespace}.${name} not found in image.`);
     }
-    return new MonoKlass(this.api, klassPtr);
+    return new MonoClass(this.api, klassPtr);
+  }
+
+  /**
+   * Try to find a class by namespace and name
+   * @param namespace Namespace (can be empty string)
+   * @param name Class name
+   * @returns Class if found, null otherwise
+   */
+  tryClassFromName(namespace: string, name: string): MonoClass | null {
+    const nsPtr = namespace ? allocUtf8(namespace) : NULL;
+    const namePtr = allocUtf8(name);
+    const klassPtr = this.native.mono_class_from_name(this.pointer, nsPtr, namePtr);
+    return pointerIsNull(klassPtr) ? null : new MonoClass(this.api, klassPtr);
+  }
+
+  /**
+   * Find a class by full name
+   * @param fullName Full class name (e.g., "Game.Player")
+   * @returns Class if found, null otherwise
+   */
+  class(fullName: string): MonoClass | null {
+    return this.tryFindClassByFullName(fullName);
+  }
+
+  findClassByFullName(fullName: string): MonoClass {
+    const separatorIndex = fullName.lastIndexOf(".");
+    if (separatorIndex === -1) {
+      return this.classFromName("", fullName);
+    }
+    const namespace = fullName.slice(0, separatorIndex);
+    const name = fullName.slice(separatorIndex + 1);
+    return this.classFromName(namespace, name);
+  }
+
+  tryFindClassByFullName(fullName: string): MonoClass | null {
+    const separatorIndex = fullName.lastIndexOf(".");
+    if (separatorIndex === -1) {
+      return this.tryClassFromName("", fullName);
+    }
+    const namespace = fullName.slice(0, separatorIndex);
+    const name = fullName.slice(separatorIndex + 1);
+    return this.tryClassFromName(namespace, name);
+  }
+
+  getClassTokens(): number[] {
+    if (!this.api.hasExport("mono_image_get_table_info")) {
+      return [];
+    }
+    const count = this.getClassCount();
+    const tokens: number[] = [];
+    for (let index = 0; index < count; index += 1) {
+      tokens.push(MONO_METADATA_TOKEN_TYPEDEF | (index + 1));
+    }
+    return tokens;
+  }
+
+  getClasses(): MonoClass[] {
+    const classes: MonoClass[] = [];
+    this.enumerateClasses((klass) => classes.push(klass));
+    return classes;
+  }
+
+  enumerateClasses(visitor: (klass: MonoClass, index: number) => void): void {
+    const tokens = this.getClassTokens();
+    if (tokens.length === 0) {
+      return;
+    }
+    tokens.forEach((token, index) => {
+      const klassPtr = this.native.mono_class_get(this.pointer, token);
+      if (!pointerIsNull(klassPtr)) {
+        visitor(new MonoClass(this.api, klassPtr), index);
+      }
+    });
+  }
+
+  getName(): string {
+    const namePtr = this.native.mono_image_get_name(this.pointer);
+    return readUtf8String(namePtr);
+  }
+
+  getClassCount(): number {
+    if (!this.api.hasExport("mono_image_get_table_info")) {
+      return 0;
+    }
+    const table = this.native.mono_image_get_table_info(this.pointer, MONO_METADATA_TABLE_TYPEDEF);
+    if (pointerIsNull(table)) {
+      return 0;
+    }
+    return this.native.mono_table_info_get_rows(table) as number;
   }
 }
+
+const MONO_METADATA_TABLE_TYPEDEF = 0x02;
+const MONO_METADATA_TOKEN_TYPEDEF = 0x02000000;
