@@ -54,11 +54,11 @@ export function classes(api: MonoApi, pattern: string, searchNamespace = true): 
 
   // Get all assemblies
   const assemblyIter = Memory.alloc(Process.pointerSize);
-  Memory.writePointer(assemblyIter, NULL);
+  assemblyIter.writePointer(NULL);
 
   while (true) {
     const assembly = api.native.mono_domain_assembly_open(domain, assemblyIter);
-    if (Memory.readPointer(assemblyIter).isNull()) {
+    if (assemblyIter.readPointer().isNull()) {
       break;
     }
 
@@ -66,11 +66,11 @@ export function classes(api: MonoApi, pattern: string, searchNamespace = true): 
 
     // Enumerate classes in this image
     const classIter = Memory.alloc(Process.pointerSize);
-    Memory.writePointer(classIter, NULL);
+    classIter.writePointer(NULL);
 
     while (true) {
       const klassPtr = api.native.mono_image_get_types(image, classIter);
-      if (Memory.readPointer(klassPtr).isNull()) {
+      if (klassPtr.readPointer().isNull()) {
         break;
       }
 
@@ -196,11 +196,11 @@ export function classExact(api: MonoApi, fullName: string): MonoClass | null {
 
   const domain = api.getRootDomain();
   const assemblyIter = Memory.alloc(Process.pointerSize);
-  Memory.writePointer(assemblyIter, NULL);
+  assemblyIter.writePointer(NULL);
 
   while (true) {
     const assembly = api.native.mono_domain_assembly_open(domain, assemblyIter);
-    if (Memory.readPointer(assemblyIter).isNull()) {
+    if (assemblyIter.readPointer().isNull()) {
       break;
     }
 

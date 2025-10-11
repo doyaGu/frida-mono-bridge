@@ -294,55 +294,55 @@ export class MonoMethod extends MonoHandle {
 
     switch (kind) {
       case MonoTypeKind.Boolean:
-        Memory.writeU8(storage, value ? 1 : 0);
+        storage.writeU8(value ? 1 : 0);
         break;
       case MonoTypeKind.I1:
-        Memory.writeS8(storage, Number(value));
+        storage.writeS8(Number(value));
         break;
       case MonoTypeKind.U1:
-        Memory.writeU8(storage, Number(value));
+        storage.writeU8(Number(value));
         break;
       case MonoTypeKind.I2:
-        Memory.writeS16(storage, Number(value));
+        storage.writeS16(Number(value));
         break;
       case MonoTypeKind.U2:
-        Memory.writeU16(storage, Number(value));
+        storage.writeU16(Number(value));
         break;
       case MonoTypeKind.Char:
-        Memory.writeU16(storage, typeof value === "number" ? value : Number(value));
+        storage.writeU16(typeof value === "number" ? value : Number(value));
         break;
       case MonoTypeKind.I4:
-        Memory.writeS32(storage, Number(value));
+        storage.writeS32(Number(value));
         break;
       case MonoTypeKind.U4:
-        Memory.writeU32(storage, Number(value));
+        storage.writeU32(Number(value));
         break;
       case MonoTypeKind.R4:
-        Memory.writeFloat(storage, Number(value));
+        storage.writeFloat(Number(value));
         break;
       case MonoTypeKind.R8:
-        Memory.writeDouble(storage, Number(value));
+        storage.writeDouble(Number(value));
         break;
       case MonoTypeKind.I8:
         // Support 64-bit signed integers using Frida's Int64
         if (typeof value === "bigint") {
-          Memory.writeS64(storage, int64(value.toString()));
+          storage.writeS64(int64(value.toString()));
         } else if (typeof value === "number") {
-          Memory.writeS64(storage, int64(value.toString()));
+          storage.writeS64(int64(value.toString()));
         } else {
           // Assume it's already an Int64 or compatible type
-          Memory.writeS64(storage, value as any);
+          storage.writeS64(value as any);
         }
         break;
       case MonoTypeKind.U8:
         // Support 64-bit unsigned integers using Frida's UInt64
         if (typeof value === "bigint") {
-          Memory.writeU64(storage, uint64(value.toString()));
+          storage.writeU64(uint64(value.toString()));
         } else if (typeof value === "number") {
-          Memory.writeU64(storage, uint64(value.toString()));
+          storage.writeU64(uint64(value.toString()));
         } else {
           // Assume it's already a UInt64 or compatible type
-          Memory.writeU64(storage, value as any);
+          storage.writeU64(value as any);
         }
         break;
       default:

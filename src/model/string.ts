@@ -31,7 +31,7 @@ export class MonoString extends MonoObject {
     }
     const chars = this.native.mono_string_chars(this.pointer);
     const charPtr = chars.add(index * 2);
-    return String.fromCharCode(Memory.readU16(charPtr));
+    return String.fromCharCode(charPtr.readU16());
   }
 
   /**

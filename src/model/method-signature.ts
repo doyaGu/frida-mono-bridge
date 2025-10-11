@@ -82,7 +82,7 @@ export class MonoMethodSignature extends MonoHandle {
 
   private enumerateParameterTypes(): MonoType[] {
     const iterator = Memory.alloc(Process.pointerSize);
-    Memory.writePointer(iterator, NULL);
+    iterator.writePointer(NULL);
     const parameters: MonoType[] = [];
     while (true) {
       const typePtr = this.native.mono_signature_get_params(this.pointer, iterator);

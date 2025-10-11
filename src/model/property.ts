@@ -1,5 +1,5 @@
 import { MonoHandle } from "./base";
-import { readUtf8String } from "../runtime/mem";
+import { pointerIsNull, readUtf8String } from "../runtime/mem";
 import { MonoMethod } from "./method";
 import { MonoClass } from "./class";
 import { MonoObject } from "./object";
@@ -106,14 +106,15 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @param instance Object instance (for instance properties)
    * @returns Property value
    */
-  getValue(instance?: MonoObject | NativePointer): TValue {
+  getValue(instance: MonoObject | NativePointer | null = null): TValue {
     const getter = this.getGetter();
     if (!getter) {
       throw new Error(`Property ${this.getName()} is not readable`);
     }
 
-    const result = getter.invoke(instance, []);
-    return this.convertResult(result) as TValue;
+  const rawResult = getter.invoke(this.resolveInstance(instance), []);
+  const resultObject = pointerIsNull(rawResult) ? null : new MonoObject(this.api, rawResult);
+  return this.convertResult(resultObject) as TValue;
   }
 
   /**
@@ -121,13 +122,13 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @param instance Object instance (for instance properties)
    * @param value Value to set
    */
-  setValue(instance: MonoObject | NativePointer | undefined, value: TValue): void {
+  setValue(instance: MonoObject | NativePointer | null = null, value: TValue): void {
     const setter = this.getSetter();
     if (!setter) {
       throw new Error(`Property ${this.getName()} is not writable`);
     }
 
-    setter.invoke(instance, [this.convertValue(value)]);
+    setter.invoke(this.resolveInstance(instance), [this.convertValue(value)]);
   }
 
   /**
@@ -135,7 +136,7 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @param instance Object instance (optional for static properties)
    * @returns Typed property value
    */
-  getTypedValue(instance?: MonoObject | NativePointer): TValue {
+  getTypedValue(instance: MonoObject | NativePointer | null = null): TValue {
     return this.getValue(instance);
   }
 
@@ -144,8 +145,21 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @param instance Object instance (optional for static properties)
    * @param value Typed value to set
    */
-  setTypedValue(instance: MonoObject | NativePointer | undefined, value: TValue): void {
+  setTypedValue(instance: MonoObject | NativePointer | null = null, value: TValue): void {
     this.setValue(instance, value);
+  }
+
+  private resolveInstance(instance: MonoObject | NativePointer | null): MonoObject | null {
+    if (instance === null) {
+      return null;
+    }
+    if (instance instanceof MonoObject) {
+      return instance;
+    }
+    if (instance.isNull()) {
+      return null;
+    }
+    return new MonoObject(this.api, instance);
   }
 
   /**

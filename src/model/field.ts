@@ -249,7 +249,7 @@ export class MonoField<T = any> extends MonoHandle {
     const pointerLike = isPointerLike(kind);
     const isValueType = type.isValueType();
     const treatAsReference = !isValueType && !pointerLike;
-    const valuePointer = treatAsReference ? Memory.readPointer(storage) : storage;
+    const valuePointer = treatAsReference ? storage.readPointer() : storage;
 
     return { storage, valuePointer, type };
   }
@@ -280,29 +280,29 @@ export class MonoField<T = any> extends MonoHandle {
 
     switch (kind) {
       case MonoTypeKind.Boolean:
-        return Memory.readU8(storage) !== 0;
+        return storage.readU8() !== 0;
       case MonoTypeKind.I1:
-        return Memory.readS8(storage);
+        return storage.readS8();
       case MonoTypeKind.U1:
-        return Memory.readU8(storage);
+        return storage.readU8();
       case MonoTypeKind.Char:
-        return String.fromCharCode(Memory.readU16(storage));
+        return String.fromCharCode(storage.readU16());
       case MonoTypeKind.I2:
-        return Memory.readS16(storage);
+        return storage.readS16();
       case MonoTypeKind.U2:
-        return Memory.readU16(storage);
+        return storage.readU16();
       case MonoTypeKind.I4:
-        return Memory.readS32(storage);
+        return storage.readS32();
       case MonoTypeKind.U4:
-        return Memory.readU32(storage);
+        return storage.readU32();
       case MonoTypeKind.I8:
-        return Memory.readS64(storage);
+        return storage.readS64();
       case MonoTypeKind.U8:
-        return Memory.readU64(storage);
+        return storage.readU64();
       case MonoTypeKind.R4:
-        return Memory.readFloat(storage);
+        return storage.readFloat();
       case MonoTypeKind.R8:
-        return Memory.readDouble(storage);
+        return storage.readDouble();
       case MonoTypeKind.String:
         return pointerIsNull(valuePointer) ? null : new MonoString(this.api, valuePointer).toString();
       case MonoTypeKind.Pointer:
@@ -310,7 +310,7 @@ export class MonoField<T = any> extends MonoHandle {
       case MonoTypeKind.FunctionPointer:
       case MonoTypeKind.Int:
       case MonoTypeKind.UInt:
-        return Memory.readPointer(storage);
+        return storage.readPointer();
       case MonoTypeKind.Enum: {
         const underlying = type.getUnderlyingType();
         if (underlying) {
@@ -572,7 +572,8 @@ export class MonoField<T = any> extends MonoHandle {
    * Get the serialized value of this field
    */
   getSerializedValue(instance?: MonoObject | NativePointer | null): any {
-    const value = this.readValue(instance);
+    const targetInstance = instance ?? null;
+    const value = this.readValue(targetInstance);
     return this.serializeValue(value);
   }
 
@@ -580,8 +581,8 @@ export class MonoField<T = any> extends MonoHandle {
    * Set the field value from serialized data
    */
   setSerializedValue(instance: MonoObject | NativePointer | null, serializedValue: any): void {
-    const value = this.deserializeValue(serializedValue);
-    this.setValueObject(instance, value);
+  const value = this.deserializeValue(serializedValue);
+  this.setValueObject(instance, value);
   }
 
   /**
@@ -609,7 +610,7 @@ export class MonoField<T = any> extends MonoHandle {
     }
 
     try {
-      const value = this.readValue(instance);
+  const value = this.readValue(instance ?? null);
       return value !== null && value !== undefined;
     } catch {
       return false;
@@ -634,9 +635,9 @@ export class MonoField<T = any> extends MonoHandle {
       if (type.isValueType()) {
         const storage = Memory.alloc(type.getValueSize().size);
         storage.writeByteArray(new Array(type.getValueSize().size).fill(0));
-        this.setValue(instance, storage);
+        this.setValue(instance ?? null, storage);
       } else {
-        this.setValueObject(instance, null);
+        this.setValueObject(instance ?? null, null);
       }
     }
   }

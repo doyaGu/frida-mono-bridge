@@ -1,7 +1,7 @@
 import { MonoApi } from "../runtime/api";
 import { MonoObject } from "./object";
 import { MonoClass } from "./class";
-import { MonoType, MonoTypeKind } from "./type";
+import { MonoTypeKind } from "./type";
 import { pointerIsNull } from "../runtime/mem";
 
 // ===== TYPE DEFINITIONS AND GUARDS =====
@@ -461,7 +461,7 @@ export class MonoArray<T = any> extends MonoObject {
   getReference(index: number): NativePointer {
     this._recordRead(index);
     const address = this.getElementAddress(index);
-    return Memory.readPointer(address);
+    return address.readPointer();
   }
 
   /**
@@ -472,7 +472,7 @@ export class MonoArray<T = any> extends MonoObject {
   setReference(index: number, value: NativePointer): void {
     const oldValue = this.getReference(index);
     const address = this.getElementAddress(index);
-    Memory.writePointer(address, value);
+    address.writePointer(value);
     this._recordWrite(index, new MonoObject(this.api, oldValue) as T, new MonoObject(this.api, value) as T);
   }
 

@@ -23,7 +23,7 @@ export function allocPointerArray(items: NativePointer[]): NativePointer {
   for (let index = 0; index < items.length; index += 1) {
     const offset = index * POINTER_SIZE;
     const pointer = buffer.add(offset);
-    Memory.writePointer(pointer, items[index] ?? NULL);
+    pointer.writePointer(items[index] ?? NULL);
   }
 
   return buffer;

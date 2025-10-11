@@ -28,38 +28,38 @@ export class TypeHelper {
     const kind = type.getKind();
     switch (kind) {
       case MonoTypeKind.Boolean:
-        Memory.writeU8(storage, value ? 1 : 0);
+        storage.writeU8(value ? 1 : 0);
         break;
       case MonoTypeKind.I1:
-        Memory.writeS8(storage, value);
+        storage.writeS8(value);
         break;
       case MonoTypeKind.U1:
-        Memory.writeU8(storage, value);
+        storage.writeU8(value);
         break;
       case MonoTypeKind.I2:
-        Memory.writeS16(storage, value);
+        storage.writeS16(value);
         break;
       case MonoTypeKind.U2:
       case MonoTypeKind.Char:
-        Memory.writeU16(storage, value);
+        storage.writeU16(value);
         break;
       case MonoTypeKind.I4:
-        Memory.writeS32(storage, value);
+        storage.writeS32(value);
         break;
       case MonoTypeKind.U4:
-        Memory.writeU32(storage, value);
+        storage.writeU32(value);
         break;
       case MonoTypeKind.I8:
-        Memory.writeS64(storage, value);
+        storage.writeS64(value);
         break;
       case MonoTypeKind.U8:
-        Memory.writeU64(storage, value);
+        storage.writeU64(value);
         break;
       case MonoTypeKind.R4:
-        Memory.writeFloat(storage, value);
+        storage.writeFloat(value);
         break;
       case MonoTypeKind.R8:
-        Memory.writeDouble(storage, value);
+        storage.writeDouble(value);
         break;
       default:
         throw new Error(`Cannot box type kind ${kind}`);
@@ -77,28 +77,28 @@ export class TypeHelper {
 
     switch (kind) {
       case MonoTypeKind.Boolean:
-        return Memory.readU8(data) !== 0;
+        return data.readU8() !== 0;
       case MonoTypeKind.I1:
-        return Memory.readS8(data);
+        return data.readS8();
       case MonoTypeKind.U1:
-        return Memory.readU8(data);
+        return data.readU8();
       case MonoTypeKind.I2:
-        return Memory.readS16(data);
+        return data.readS16();
       case MonoTypeKind.U2:
       case MonoTypeKind.Char:
-        return Memory.readU16(data);
+        return data.readU16();
       case MonoTypeKind.I4:
-        return Memory.readS32(data);
+        return data.readS32();
       case MonoTypeKind.U4:
-        return Memory.readU32(data);
+        return data.readU32();
       case MonoTypeKind.I8:
-        return Memory.readS64(data);
+        return data.readS64();
       case MonoTypeKind.U8:
-        return Memory.readU64(data);
+        return data.readU64();
       case MonoTypeKind.R4:
-        return Memory.readFloat(data);
+        return data.readFloat();
       case MonoTypeKind.R8:
-        return Memory.readDouble(data);
+        return data.readDouble();
       default:
         throw new Error(`Cannot unbox type kind ${kind}`);
     }
@@ -120,17 +120,17 @@ export class TypeHelper {
     // Find the type in mscorlib
     const domain = this.api.getRootDomain();
     const assemblyIter = Memory.alloc(Process.pointerSize);
-    Memory.writePointer(assemblyIter, NULL);
+    assemblyIter.writePointer(NULL);
 
     while (true) {
       const assembly = this.api.native.mono_domain_assembly_open(domain, assemblyIter);
-      if (Memory.readPointer(assemblyIter).isNull()) {
+      if (assemblyIter.readPointer().isNull()) {
         break;
       }
 
       const image = this.api.native.mono_assembly_get_image(assembly);
       const imageName = this.api.native.mono_image_get_name(image);
-      const imageNameStr = Memory.readUtf8String(imageName);
+      const imageNameStr = imageName.readUtf8String();
 
       if (imageNameStr === "mscorlib.dll" || imageNameStr === "mscorlib") {
         const klassPtr = this.api.native.mono_class_from_name(

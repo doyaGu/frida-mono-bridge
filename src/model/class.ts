@@ -494,7 +494,7 @@ export class MonoClass extends MonoHandle {
 
 function enumerateHandles<T>(fetch: (iter: NativePointer) => NativePointer, factory: (ptr: NativePointer) => T): T[] {
   const iterator = Memory.alloc(Process.pointerSize);
-  Memory.writePointer(iterator, NULL);
+  iterator.writePointer(NULL);
   const results: T[] = [];
   while (true) {
     const handle = fetch(iterator);

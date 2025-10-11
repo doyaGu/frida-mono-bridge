@@ -3,7 +3,7 @@ import { MonoModuleInfo } from "./module";
 import { ALL_MONO_EXPORTS, MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./signatures";
 import { LruCache } from "../utils/lru-cache";
 
-type AnyNativeFunction = NativeFunction<any, any[]>;
+type AnyNativeFunction = NativeFunction<any, NativeFunctionArgumentValue[]>;
 
 export type MonoArg = NativePointer | number | boolean | string | null | undefined;
 
@@ -76,6 +76,8 @@ export class MonoApi {
   // Lazily bound invokers keyed by Mono export name.
   public readonly native: MonoNativeBindings = this.createNativeBindings();
 
+  private moduleHandle: Module | null = null;
+
   constructor(private readonly module: MonoModuleInfo) {}
 
   attachThread(): NativePointer {
@@ -122,10 +124,10 @@ export class MonoApi {
   runtimeInvoke(method: NativePointer, instance: NativePointer | null, args: NativePointer[]): NativePointer {
     const invoke = this.native.mono_runtime_invoke;
     const exceptionSlot = this.getExceptionSlot();
-    Memory.writePointer(exceptionSlot, NULL);
+    exceptionSlot.writePointer(NULL);
     const argv = allocPointerArray(args);
     const result = invoke(method, instance ?? NULL, argv, exceptionSlot);
-    const exception = Memory.readPointer(exceptionSlot);
+    const exception = exceptionSlot.readPointer();
     if (!pointerIsNull(exception)) {
       const details = this.extractExceptionDetails(exception);
       throw new MonoManagedExceptionError(exception, details.type, details.message);
@@ -153,10 +155,10 @@ export class MonoApi {
       // Try to extract message using ToString if available
       if (this.hasExport("mono_object_to_string")) {
         const excSlot = Memory.alloc(Process.pointerSize);
-        Memory.writePointer(excSlot, NULL);
+        excSlot.writePointer(NULL);
         const msgObj = this.native.mono_object_to_string(exception, excSlot);
 
-        if (!pointerIsNull(msgObj) && pointerIsNull(Memory.readPointer(excSlot))) {
+        if (!pointerIsNull(msgObj) && pointerIsNull(excSlot.readPointer())) {
           const chars = this.native.mono_string_chars(msgObj);
           const length = this.native.mono_string_length(msgObj) as number;
           const message = readUtf16String(chars, length);
@@ -242,14 +244,14 @@ export class MonoApi {
     }
   }
 
-  getNativeFunction(name: MonoApiName): NativeFunction {
+  getNativeFunction(name: MonoApiName): AnyNativeFunction {
     let fn = this.functionCache.get(name);
     if (fn) {
       return fn;
     }
     const signature = getSignature(name);
     const address = this.resolveAddress(name, true, signature);
-    fn = new NativeFunction<any, any[]>(address, signature.retType as any, signature.argTypes as any[]) as AnyNativeFunction;
+    fn = new NativeFunction(address, signature.retType as any, signature.argTypes as any[]) as AnyNativeFunction;
     this.functionCache.set(name, fn);
     return fn;
   }
@@ -297,7 +299,7 @@ export class MonoApi {
 
     const exportNames = [signature.name, ...(signature.aliases ?? [])];
     for (const exportName of exportNames) {
-      const address = Module.findExportByName(this.module.name, exportName);
+      const address = this.getModuleHandle().findExportByName(exportName);
       if (address) {
         this.addressCache.set(name, address);
         return address;
@@ -329,7 +331,7 @@ export class MonoApi {
    */
   private findNearExport(exportName: string): NativePointer | null {
     try {
-      const exports = Module.enumerateExportsSync(this.module.name);
+      const exports = this.getModuleHandle().enumerateExports();
       const canonical = normalizeExportName(exportName);
 
       // Try normalized match first
@@ -351,6 +353,22 @@ export class MonoApi {
     } catch (_error) {
       return null;
     }
+  }
+
+  private getModuleHandle(): Module {
+    if (this.moduleHandle) {
+      return this.moduleHandle;
+    }
+
+    const handle = Process.findModuleByName(this.module.name);
+    if (handle === null) {
+      throw new MonoFunctionResolutionError(
+        this.module.name,
+        `Module ${this.module.name} is not loaded in the current process`,
+      );
+    }
+    this.moduleHandle = handle;
+    return handle;
   }
 }
 

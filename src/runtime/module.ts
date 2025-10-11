@@ -60,7 +60,7 @@ export function findMonoModule(): MonoModuleInfo {
 
   for (const mod of modules) {
     try {
-      const exports = Module.enumerateExportsSync(mod.name);
+      const exports = mod.enumerateExports();
       const hits = exports.reduce((count, item) => count + (exportNames.has(item.name) ? 1 : 0), 0);
       if (hits > bestHits) {
         bestHits = hits;
