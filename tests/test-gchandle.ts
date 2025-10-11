@@ -39,12 +39,12 @@ export function testGCHandles(): TestResult {
     });
   }));
 
-  suite.addResult(createTest("GCHandlePool should be available", () => {
+  suite.addResult(createTest("GC utilities should be available", () => {
     Mono.perform(() => {
-      assert(typeof Mono.gchandles !== 'undefined', "gchandles pool should be defined");
-      assert(Mono.gchandles !== null, "gchandles pool should not be null");
+      assert(typeof Mono.gc !== 'undefined', "gc utilities should be defined");
+      assert(Mono.gc !== null, "gc utilities should not be null");
 
-      console.log("    GCHandlePool is accessible");
+      console.log("    GC utilities are accessible");
     });
   }));
 
@@ -113,24 +113,19 @@ export function testGCHandles(): TestResult {
 
   suite.addResult(createTest("Should test GC handle pool operations", () => {
     Mono.perform(() => {
-      const gcPool = Mono.gchandles;
+      const gcUtils = Mono.gc;
 
-      // Test that GC handle pool is accessible
-      assert(gcPool !== null, "GC handle pool should be accessible");
+      // Test that GC utilities are accessible
+      assert(gcUtils !== null, "GC utilities should be accessible");
 
-      // Test pool methods if they exist
-      if (typeof gcPool.create === 'function') {
-        const testString = Mono.api.stringNew("Pool Test");
-        const handle = gcPool.create(testString);
-        console.log(`    Created GC handle through pool: ${handle}`);
+      // Test GC handle methods
+      const testString = Mono.api.stringNew("Pool Test");
+      const handle = gcUtils.handle(testString);
+      console.log(`    Created GC handle: ${handle}`);
 
-        if (typeof gcPool.free === 'function') {
-          gcPool.free(handle);
-          console.log("    Freed GC handle through pool");
-        }
-      } else {
-        console.log("    GC handle pool methods not available, using direct API");
-      }
+      // Test releasing handle
+      gcUtils.releaseHandle(handle);
+      console.log("    Released GC handle");
     });
   }));
 

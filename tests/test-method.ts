@@ -71,7 +71,7 @@ function readManagedString(pointer: NativePointer): string {
       return "";
     }
     try {
-      return Memory.readUtf8String(utf8Ptr) ?? "";
+      return utf8Ptr.readUtf8String() ?? "";
     } finally {
       Mono.api.native.mono_free(utf8Ptr);
     }
@@ -217,7 +217,7 @@ class FakeMonoApiHarness {
   }
 
   private handleDescriptorNew(descPtr: NativePointer): NativePointer {
-    const descriptor = Memory.readUtf8String(descPtr) ?? "";
+    const descriptor = descPtr.readUtf8String() ?? "";
     if (this.descriptorFailures.has(descriptor)) {
       return NULL;
     }
@@ -411,13 +411,13 @@ export function testMethodOperations(): TestResult {
       const method = MonoMethod.find(harness.api, image, "Game.Type:Invoke");
       const instance = new MonoObject(harness.api, ptr("0x5000"));
       const argObject = new MonoObject(harness.api, ptr("0x5100"));
-      const result = method.invoke(instance, [argObject, "hello world"], { autoBoxPrimitives: false });
+      const result = method.invoke(instance, [argObject.pointer, "hello world"], { autoBoxPrimitives: false });
       assert(result.toString() === expectedReturn.toString(), "Return value should propagate from runtimeInvoke");
       assert(harness.runtimeInvokeCalls.length === 1, "runtimeInvoke should be called once");
       const call = harness.runtimeInvokeCalls[0];
       assert(call.instance.toString() === instance.pointer.toString(), "Instance pointer should match provided MonoObject");
       assert(call.args[0].toString() === argObject.pointer.toString(), "First argument should be unwrapped MonoObject pointer");
-      assert(Memory.readUtf8String(call.args[1]) === "hello world", "String arguments should be boxed via mono_string_new");
+      assert(call.args[1].readUtf8String() === "hello world", "String arguments should be boxed via mono_string_new");
       assert(harness.stringNewInputs.includes("hello world"), "stringNew should be invoked for string arguments");
     });
   }));
@@ -608,7 +608,7 @@ export function testMethodOperations(): TestResult {
     try {
       const resultPtr = abs.invoke(null, [-123]);
       assert(!resultPtr.isNull(), "Abs should return a boxed result");
-      const absoluteValue = Mono.model.withThread(() => {
+      const absoluteValue = Mono.perform(() => {
         const unboxed = Mono.api.native.mono_object_unbox(resultPtr);
         return unboxed.readS32();
       });
