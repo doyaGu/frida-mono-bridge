@@ -1,31 +1,34 @@
-﻿{
-    "name":  "frida-mono-bridge",
-    "version":  "0.1.0",
-    "description":  "TypeScript bridge for instrumenting Mono runtimes with Frida",
-    "license":  "MIT",
-    "type":  "module",
-    "scripts":  {
-                    "build":  "frida-compile src/index.ts -o dist/agent.js",
-                    "watch":  "frida-compile -w src/index.ts -o dist/agent.js",
-                    "lint":  "tsc --noEmit",
-                    "test":  "frida-compile tests/index.ts -o dist/tests.js",
-                    "build:examples":  "npm run build:example:call \u0026\u0026 npm run build:example:dump \u0026\u0026 npm run build:example:hook \u0026\u0026 npm run build:example:delegate \u0026\u0026 npm run build:example:icall \u0026\u0026 npm run build:example:metadata \u0026\u0026 npm run build:example:thread",
-                    "build:example:call":  "frida-compile examples/call-static-method.ts -o dist/call-static-method.js",
-                    "build:example:dump":  "frida-compile examples/dump-assemblies.ts -o dist/dump-assemblies.js",
-                    "build:example:hook":  "frida-compile examples/hook-runtime-invoke.ts -o dist/hook-runtime-invoke.js",
-                    "build:example:delegate":  "frida-compile examples/invoke-delegate-fast.ts -o dist/invoke-delegate-fast.js",
-                    "build:example:icall":  "frida-compile examples/register-icall.ts -o dist/register-icall.js",
-                    "build:example:metadata":  "frida-compile examples/explore-metadata.ts -o dist/explore-metadata.js",
-                    "build:example:thread":  "frida-compile examples/thread-management.ts -o dist/thread-management.js",
-                    "clean":  "rimraf dist",
-                    "prebuild":  "node -e \"const fs = require(\u0027fs\u0027); if (!fs.existsSync(\u0027dist\u0027)) fs.mkdirSync(\u0027dist\u0027, {recursive: true});\"",
-                    "pretest":  "node -e \"const fs = require(\u0027fs\u0027); if (!fs.existsSync(\u0027dist\u0027)) fs.mkdirSync(\u0027dist\u0027, {recursive: true});\"",
-                    "generate:enums":  "node scripts/generate-enums.ts"
-                },
-    "devDependencies":  {
-                            "@types/frida-gum":  "^18.4.4",
-                            "frida-compile":  "^19.0.4",
-                            "rimraf":  "^6.0.1",
-                            "typescript":  "^5.5.4"
-                        }
+{
+  "name": "frida-mono-bridge",
+  "version": "0.1.0",
+  "description": "TypeScript bridge for instrumenting Mono runtimes with Frida",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "frida-compile src/index.ts -o dist/agent.js",
+    "watch": "frida-compile -w src/index.ts -o dist/agent.js",
+    "lint": "tsc --noEmit",
+    "test": "frida-compile tests/index.ts -o dist/tests.js",
+
+    "build:examples": "npm run build:example:call-static-method && npm run build:example:dump-assemblies && npm run build:example:hook-runtime-invoke && npm run build:example:invoke-delegate-fast && npm run build:example:register-icall && npm run build:example:explore-metadata && npm run build:example:thread-management && npm run build:example:fluent-api-demo",
+
+    "build:example:call-static-method": "frida-compile examples/call-static-method.ts -o dist/call-static-method.js",
+    "build:example:dump-assemblies": "frida-compile examples/dump-assemblies.ts -o dist/dump-assemblies.js",
+    "build:example:hook-runtime-invoke": "frida-compile examples/hook-runtime-invoke.ts -o dist/hook-runtime-invoke.js",
+    "build:example:invoke-delegate-fast": "frida-compile examples/invoke-delegate-fast.ts -o dist/invoke-delegate-fast.js",
+    "build:example:register-icall": "frida-compile examples/register-icall.ts -o dist/register-icall.js",
+    "build:example:explore-metadata": "frida-compile examples/explore-metadata.ts -o dist/explore-metadata.js",
+    "build:example:thread-management": "frida-compile examples/thread-management.ts -o dist/thread-management.js",
+    "build:example:fluent-api-demo": "frida-compile examples/fluent-api-demo.ts -o dist/fluent-api-demo.js",
+
+    "clean": "rimraf dist",
+    "generate:enums": "node scripts/generate-enums.ts",
+    "generate:signatures": "npx tsx scripts/generate_mono_signatures.ts"
+  },
+  "devDependencies": {
+    "@types/frida-gum": "^18.4.4",
+    "frida-compile": "^19.0.4",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.5.4"
+  }
 }
