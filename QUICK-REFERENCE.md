@@ -21,8 +21,8 @@ Mono.dispose();                // Cleanup: detach threads + release GC handles
 
 ### Thread-Safe Execution
 ```typescript
-// Using the helper function
-Mono.model.withThread(() => {
+// Modern recommended approach
+Mono.perform(() => {
   // Your Mono API calls here
   // Thread is automatically attached/detached
 });
@@ -33,9 +33,9 @@ import { MonoThread } from "./src/model";
 // Get current thread (auto-attaches)
 const thread = MonoThread.current(Mono.api);
 
-// Execute with automatic thread attachment
-MonoThread.withAttached(Mono.api, () => {
-  const domain = Mono.api.getRootDomain();
+// Modern recommended approach
+Mono.perform(() => {
+  const domain = Mono.domain;
   // ... your code
 });
 
@@ -409,6 +409,23 @@ try {
 ## Further Reading
 
 - `TESTING.md` - Comprehensive testing guide
-- `Design.md` - Architecture documentation
-- `Implementation.md` - Implementation details
+- `DEVELOPER_GUIDE.md` - Comprehensive developer guide
+- `COMPREHENSIVE-GUIDE.md` - Detailed usage guide
+- `CODE_STANDARDS.md` - Code standards and conventions
+
+## Pattern System
+
+```typescript
+import { MonoOperation, BatchOperation, withErrorHandling } from "./src/patterns";
+
+// Safe operations with error handling
+const operation = new MonoOperation(() => method.invoke(instance, args));
+const result = operation.safeExecute("operation description");
+
+// Batch multiple operations
+const batch = new BatchOperation();
+batch.add(() => method1.invoke(instance1, []));
+batch.add(() => method2.invoke(instance2, []));
+const results = batch.executeAll("batch operation");
+```
 

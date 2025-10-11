@@ -14,7 +14,7 @@ A TypeScript bridge that exposes the Mono runtime (Unity/Xamarin/embedded Mono) 
 - **Performance**: LRU caching, native delegate thunks, optimized invocation paths
 - **Thread-Safe**: Automatic thread attachment with proper lifecycle management
 - **Well-Tested**: 187 tests across 23 modules with 100% pass rate
-- **Well-Documented**: Comprehensive JSDoc, examples, and guides
+- **Well-Documented**: Comprehensive JSDoc and guides
 
 ## Quick Start
 
@@ -57,7 +57,6 @@ const result = method.invoke(NULL, []);
 # Build the bridge
 npm run build
 
-
 # Run on a Unity/Mono process
 frida -n "UnityGame.exe" -l dist/agent.js
 ```
@@ -76,6 +75,7 @@ frida -n "UnityGame.exe" -l dist/agent.js
 src/
   runtime/     # Mono runtime access: discovery, signatures, threading, memory management
   model/       # High-level object model (Domain, Assembly, Class, Method, Field, etc.)
+  patterns/    # Common operation patterns and error handling
   utils/       # Utilities: logging, caching, search, tracing, GC helpers
   mono.ts      # MonoNamespace - Main fluent API entry point
   index.ts     # Global entry point and exports
@@ -127,11 +127,44 @@ frida -n "UnityGame.exe" -l dist/tests.js
 
 See **[tests/README.md](tests/README.md)** for detailed documentation.
 
+## Advanced Features
+
+### Pattern-Based Operations
+```typescript
+import { MonoOperation, BatchOperation, withErrorHandling } from "./src/patterns";
+
+// Safe operations with built-in error handling
+const operation = new MonoOperation(() => {
+  const method = playerClass.method("TakeDamage", 1);
+  return method.invoke(instance, [damage]);
+});
+const result = operation.safeExecute("player damage calculation");
+
+// Batch operations for efficiency
+const batch = new BatchOperation();
+batch.add(() => player.method("Update").invoke(player, []));
+batch.add(() => player.method("Render").invoke(player, []));
+const results = batch.executeAll("player frame update");
+```
+
+### Search & Tracing
+```typescript
+// Wildcard search for methods
+const attackMethods = Mono.find.methods("*Attack*");
+
+// Trace method calls
+Mono.trace.method(takeDamageMethod, {
+  onEnter(args) { console.log("→ Taking damage:", args[0]); },
+  onLeave(retval) { console.log("← Health:", retval); }
+});
+```
+
 ## Performance
 
 - **LRU Caching**: Function cache (256), address cache (512), thunk cache (128)
 - **Native Thunks**: High-performance delegate invocation via unmanaged thunks
 - **Smart Resolution**: Export discovery with aliases and fallback strategies
+- **Pattern System**: Optimized common operations and batch processing
 
 ## Contributing
 

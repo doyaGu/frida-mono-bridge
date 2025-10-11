@@ -17,7 +17,6 @@ npm test                   # Compile test suite to dist/tests.js
 npm run clean              # Remove dist/ directory
 ```
 
-
 ### Testing
 ```bash
 # Compile tests (builds to dist/tests.js)
@@ -25,7 +24,6 @@ npm test
 
 # Run tests against a Mono process
 frida -n "TargetProcess.exe" -l dist/tests.js
-
 ```
 
 ## Architecture
@@ -39,9 +37,17 @@ src/
 │   ├── api.ts        # MonoApi class - function resolution and bindings
 │   ├── guard.ts      # ThreadManager - automatic thread attachment
 │   ├── module.ts     # Mono module detection and discovery
-│   ├── signatures.ts # Mono API function signatures and enums
+│   ├── signatures/   # Mono API function signatures and enums
+│   │   ├── generated.ts  # Auto-generated signatures
+│   │   ├── manual.ts      # Manual signature definitions
+│   │   └── types.ts       # Signature type definitions
+│   ├── version.ts    # Runtime version detection
+│   ├── metadata.ts   # Metadata table access
+│   ├── gchandle.ts   # GC handle management
+│   ├── icall.ts      # Internal call registration
 │   └── ...
 ├── model/            # High-level object model
+│   ├── base.ts       # MonoHandle - base class for all Mono objects
 │   ├── domain.ts     # MonoDomain - application domains
 │   ├── assembly.ts   # MonoAssembly - .NET assemblies
 │   ├── image.ts      # MonoImage - assembly metadata
@@ -49,12 +55,26 @@ src/
 │   ├── method.ts     # MonoMethod - .NET methods
 │   ├── field.ts      # MonoField - .NET fields
 │   ├── delegate.ts   # MonoDelegate - delegate handling
+│   ├── array.ts      # MonoArray - array operations
+│   ├── string.ts     # MonoString - string operations
+│   ├── object.ts     # MonoObject - object operations
+│   ├── property.ts   # MonoProperty - property access
+│   ├── type.ts       # Type system and metadata
+│   ├── collections.ts # Collection utilities
 │   └── ...
+├── patterns/         # Common operation patterns
+│   ├── common.ts     # Reusable operations and utilities
+│   ├── errors.ts     # Structured error handling
+│   └── index.ts      # Pattern exports
 └── utils/            # Utilities and helpers
     ├── find.ts       # Search utilities (wildcard patterns)
     ├── trace.ts      # Method tracing and hooking
     ├── log.ts        # Logger class
     ├── cache.ts      # LRU caching utilities
+    ├── gc.ts         # Garbage collection utilities
+    ├── types.ts      # Type system helpers
+    ├── validation.ts # Input validation
+    ├── thread-context.ts # Thread context management
     └── ...
 ```
 
@@ -62,9 +82,10 @@ src/
 
 #### MonoNamespace (Primary API)
 - **Entry Point**: Main class accessed via `import Mono from "./src"`
-- **Fluent API**: Provides properties like `Mono.domain`, `Mono.api`, `Mono.gc`
+- **Fluent API**: Provides properties like `Mono.domain`, `Mono.api`, `Mono.gc`, `Mono.find`, `Mono.trace`, `Mono.types`
 - **Thread Management**: `Mono.perform(callback)` ensures thread attachment
 - **Lazy Initialization**: Runtime components initialized on first access
+- **Pattern Support**: Built-in patterns for common operations and error handling
 
 #### ThreadManager (runtime/guard.ts)
 - **Automatic Attachment**: Manages Mono thread attachment/detachment
@@ -75,11 +96,19 @@ src/
 - **Function Resolution**: Discovers Mono exports with fallback strategies
 - **LRU Caching**: Caches resolved function pointers for performance
 - **Error Handling**: Custom error types for function resolution and managed exceptions
+- **Signature Management**: Generated and manual Mono API signatures
+
+#### Pattern System (src/patterns/)
+- **Common Operations**: Reusable patterns for frequent Mono operations
+- **Error Handling**: Structured error types and result handling
+- **Batch Operations**: Efficient processing of multiple operations
+- **Safe Operations**: Built-in validation and error recovery
 
 #### Model Hierarchy
 - **Domain → Assembly → Image → Class → Method/Field**
 - **Inheritance**: All model classes extend MonoHandle for pointer management
 - **Type Safety**: Comprehensive TypeScript definitions with generic type parameters
+- **Rich Metadata**: Full access to Mono runtime metadata and type information
 
 ## API Patterns
 
@@ -106,9 +135,27 @@ import { Logger } from "./src/utils";
 Mono.perform(() => {
   const image = MonoImage.fromAssemblyPath(Mono.api, path);
   const method = MonoMethod.find(Mono.api, image, "Class:Method(args)");
-  const logger = new Logger({ tag: "Example" });
+  const logger = new Logger({ tag: "Script" });
   logger.info("Method invoked");
 });
+```
+
+### Pattern-Based Operations
+```typescript
+import { MonoOperation, BatchOperation, withErrorHandling } from "./src/patterns";
+
+// Safe operation with built-in error handling
+const operation = new MonoOperation(() => {
+  const method = playerClass.method("TakeDamage", 1);
+  return method.invoke(instance, [damage]);
+});
+const result = operation.safeExecute("player damage calculation");
+
+// Batch operations for efficiency
+const batch = new BatchOperation();
+batch.add(() => player.method("Update").invoke(player, []));
+batch.add(() => player.method("Render").invoke(player, []));
+const results = batch.executeAll("player frame update");
 ```
 
 ## Testing Structure
@@ -156,4 +203,8 @@ When working with this codebase:
 - The main API is accessed through the default export: `import Mono from "./src"`
 - All Mono operations must be wrapped in `Mono.perform()` for thread safety
 - The codebase maintains backward compatibility but modern patterns are preferred
+- Use patterns from `src/patterns/` for common operations and error handling
 - The test suite validates functionality against real Mono runtimes
+- Built-in search utilities (`Mono.find`) support wildcards and pattern matching
+- Tracing utilities (`Mono.trace`) provide powerful hooking capabilities
+- Type utilities (`Mono.types`) handle boxing, unboxing, and type operations
