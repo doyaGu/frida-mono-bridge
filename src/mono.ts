@@ -129,59 +129,7 @@ export class MonoNamespace {
     return Types;
   }
 
-  /**
-   * Model namespace for accessing Mono objects
-   * Legacy compatibility for tests
-   */
-  get model(): any {
-    try {
-      const modelModule = require("./model");
-      // Add withThread method to the model namespace
-      modelModule.withThread = this.withThread.bind(this);
-      return modelModule;
-    } catch {
-      return { withThread: this.withThread.bind(this) };
-    }
-  }
-
-  /**
-   * Utils namespace for utility functions
-   * Legacy compatibility for tests
-   */
-  get utils(): any {
-    try {
-      const utilsModule = require("./utils");
-      // Add logger property if it doesn't exist
-      if (!utilsModule.logger) {
-        utilsModule.logger = utilsModule.Logger || {};
-      }
-      return utilsModule;
-    } catch {
-      return { logger: {} };
-    }
-  }
-
-  /**
-   * GCHandle namespace for garbage collection handles
-   * Legacy compatibility for tests
-   */
-  get gchandles(): any {
-    try {
-      return require("./runtime/gchandle");
-    } catch {
-      return {};
-    }
-  }
-
-  /**
-   * Execute code within thread context
-   * Legacy compatibility method
-   * @param callback Function to execute
-   */
-  withThread<T>(callback: () => T): T {
-    return this.perform(callback);
-  }
-
+  
   /**
    * Initialize the Mono runtime
    * @internal Called automatically when needed

@@ -21,27 +21,67 @@ export class Logger {
     this.tag = options.tag ?? "Mono";
   }
 
-  debug(message: string): void {
-    this.log("debug", message);
+  debug(message: string, ...args: any[]): void {
+    this.log("debug", message, args);
   }
 
-  info(message: string): void {
-    this.log("info", message);
+  info(message: string, ...args: any[]): void {
+    this.log("info", message, args);
   }
 
-  warn(message: string): void {
-    this.log("warn", message);
+  warn(message: string, ...args: any[]): void {
+    this.log("warn", message, args);
   }
 
-  error(message: string): void {
-    this.log("error", message);
+  error(message: string, ...args: any[]): void {
+    this.log("error", message, args);
   }
 
-  private log(level: LogLevel, message: string): void {
+  private log(level: LogLevel, message: string, args: any[] = []): void {
     if (LEVEL_ORDER[level] < LEVEL_ORDER[this.level]) {
       return;
     }
     const time = new Date().toISOString();
-    console.log(`[${time}] [${this.tag}] [${level.toUpperCase()}] ${message}`);
+    const formattedMessage = args.length > 0
+      ? `${message} ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ')}`
+      : message;
+
+    const logMethod = level === 'error' ? console.error :
+                      level === 'warn' ? console.warn :
+                      console.log;
+
+    logMethod(`[${time}] [${this.tag}] [${level.toUpperCase()}] ${formattedMessage}`);
+  }
+
+  // Static convenience methods
+  static debug(message: string, ...args: any[]): void {
+    new Logger().debug(message, ...args);
+  }
+
+  static info(message: string, ...args: any[]): void {
+    new Logger().info(message, ...args);
+  }
+
+  static warn(message: string, ...args: any[]): void {
+    new Logger().warn(message, ...args);
+  }
+
+  static error(message: string, ...args: any[]): void {
+    new Logger().error(message, ...args);
+  }
+
+  // Create tagged logger instances
+  static withTag(tag: string): Logger {
+    return new Logger({ tag });
+  }
+
+  // Create logger with custom level
+  static withLevel(level: LogLevel): Logger {
+    return new Logger({ level });
+  }
+
+  // Create logger with both tag and level
+  static create(options: LoggerOptions): Logger {
+    return new Logger(options);
   }
 }

@@ -1,8 +1,8 @@
 /**
  * frida-mono-bridge - Main entry point
  *
- * This module provides both the modern fluent API (default export)
- * and legacy API components for backward compatibility.
+ * This module provides the modern fluent API (default export)
+ * and direct access to all underlying components.
  */
 
 // Import the main Mono namespace
@@ -24,3 +24,6 @@ export * from "./model/index";
 
 // Utility exports (helpers, tools, logging, etc.)
 export * from "./utils/index";
+
+// Pattern exports (common operations, error handling, etc.)
+export * from "./patterns/index";

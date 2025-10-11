@@ -1,6 +1,13 @@
 import { MonoApi } from "../runtime/api";
-import { pointerIsNull } from "../runtime/mem";
 import { ThreadContext } from "../utils/thread-context";
+import {
+  isValidPointer,
+  ensurePointer,
+  ERROR_MESSAGES,
+  MONO_TYPE_KIND
+} from "../utils";
+import { MonoError } from "../patterns/errors";
+import { Logger } from "../utils/log";
 
 /**
  * Base class for all Mono handles
@@ -12,8 +19,12 @@ export abstract class MonoHandle<THandle extends NativePointer = NativePointer> 
   private _native: any = null;
 
   constructor(protected readonly _api: MonoApi, protected readonly handle: THandle) {
-    if (pointerIsNull(handle)) {
-      throw new Error(`${this.constructor.name} received a NULL handle.`);
+    if (!isValidPointer(handle)) {
+      throw new MonoError(
+        `${this.constructor.name} received a NULL handle.`,
+        "Handle Creation",
+        undefined
+      );
     }
   }
 
@@ -124,12 +135,3 @@ export class MonoReference<T extends MonoHandle> {
  */
 export type MethodArgument = NativePointer | number | boolean | string | bigint | null | undefined;
 
-/**
- * Ensure pointer is not null
- */
-export function ensurePointer(value: NativePointer | null | undefined, message: string): NativePointer {
-  if (pointerIsNull(value ?? NULL)) {
-    throw new Error(message);
-  }
-  return value as NativePointer;
-}

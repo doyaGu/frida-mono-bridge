@@ -56,41 +56,11 @@ export function pointerIsNull(value: NativePointer | null | number | undefined):
   return false;
 }
 
-/**
- * Read a UTF-8 string from memory
- * @param pointer Pointer to string
- * @returns String value or empty string if null
- */
-export function readUtf8String(pointer: NativePointer | null): string {
-  if (pointerIsNull(pointer ?? NULL)) {
-    return "";
-  }
-  return Memory.readUtf8String(pointer as NativePointer) ?? "";
-}
+// String reading utilities - re-exported from common utilities
+import { readUtf8String, readUtf16String } from "../utils/common-utilities";
 
-export function readUtf16String(pointer: NativePointer | null, length?: number): string {
-  if (pointerIsNull(pointer ?? NULL)) {
-    return "";
-  }
-  const reader = (Memory as any).readUtf16String as
-    | ((address: NativePointer, size?: number) => string | null)
-    | undefined;
-  if (typeof reader === "function") {
-    return reader(pointer as NativePointer, length) ?? "";
-  }
-  const byteLength = typeof length === "number" ? length * 2 : 0;
-  const readBytes = (Memory as any).readByteArray as
-    | ((address: NativePointer, size: number) => ArrayBuffer | null)
-    | undefined;
-  const fallbackLength = byteLength || 256;
-  const buffer = typeof readBytes === "function" ? readBytes(pointer as NativePointer, fallbackLength) : null;
-  if (!buffer) {
-    return "";
-  }
-  const view = new Uint16Array(buffer as ArrayBuffer);
-  const actualLength = typeof length === "number" ? length : view.indexOf(0) >= 0 ? view.indexOf(0) : view.length;
-  return String.fromCharCode(...view.subarray(0, actualLength));
-}
+// Re-export for backward compatibility
+export { readUtf8String, readUtf16String };
 
 export function readU16(pointer: NativePointer): number {
   const reader = (Memory as any).readU16 as ((address: NativePointer) => number) | undefined;
