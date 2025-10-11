@@ -57,25 +57,11 @@ const result = method.invoke(NULL, []);
 # Build the bridge
 npm run build
 
-# Build examples
-npm run build:examples
 
 # Run on a Unity/Mono process
 frida -n "UnityGame.exe" -l dist/agent.js
 ```
 
-## Examples
-
-See the `examples/` directory for practical usage:
-
-- **call-static-method.ts**: Invoke static methods
-- **dump-assemblies.ts**: Enumerate and explore assemblies
-- **hook-runtime-invoke.ts**: Intercept method invocations
-- **invoke-delegate-fast.ts**: High-performance delegate calls
-- **register-icall.ts**: Register custom internal calls
-- **explore-metadata.ts**: Assembly and class discovery
-- **fluent-api-demo.ts**: Modern fluent API usage
-- **thread-management.ts**: Thread management patterns
 
 ## Documentation
 

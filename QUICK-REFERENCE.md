@@ -343,7 +343,6 @@ field.setStaticValue(staticValuePtr);
 npm run build              # Build agent
 npm run watch              # Build with auto-reload
 npm run test               # Build test script
-npm run build:examples     # Build all examples
 
 # Type checking
 npm run lint               # Check types
@@ -379,9 +378,6 @@ frida -n "ProcessName"
 npm run test
 frida -n "UnityApp.exe" -l dist/test-debug.js
 
-# Build example
-npm run build:example:call
-frida -n "UnityApp.exe" -l dist/call-static-method.js
 ```
 
 ## Debugging Tips
@@ -415,5 +411,4 @@ try {
 - `TESTING.md` - Comprehensive testing guide
 - `Design.md` - Architecture documentation
 - `Implementation.md` - Implementation details
-- `examples/` - Usage examples
 

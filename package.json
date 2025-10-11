@@ -10,17 +10,7 @@
     "lint": "tsc --noEmit",
     "test": "frida-compile tests/index.ts -o dist/tests.js",
 
-    "build:examples": "npm run build:example:call-static-method && npm run build:example:dump-assemblies && npm run build:example:hook-runtime-invoke && npm run build:example:invoke-delegate-fast && npm run build:example:register-icall && npm run build:example:explore-metadata && npm run build:example:thread-management && npm run build:example:fluent-api-demo",
-
-    "build:example:call-static-method": "frida-compile examples/call-static-method.ts -o dist/call-static-method.js",
-    "build:example:dump-assemblies": "frida-compile examples/dump-assemblies.ts -o dist/dump-assemblies.js",
-    "build:example:hook-runtime-invoke": "frida-compile examples/hook-runtime-invoke.ts -o dist/hook-runtime-invoke.js",
-    "build:example:invoke-delegate-fast": "frida-compile examples/invoke-delegate-fast.ts -o dist/invoke-delegate-fast.js",
-    "build:example:register-icall": "frida-compile examples/register-icall.ts -o dist/register-icall.js",
-    "build:example:explore-metadata": "frida-compile examples/explore-metadata.ts -o dist/explore-metadata.js",
-    "build:example:thread-management": "frida-compile examples/thread-management.ts -o dist/thread-management.js",
-    "build:example:fluent-api-demo": "frida-compile examples/fluent-api-demo.ts -o dist/fluent-api-demo.js",
-
+  
     "clean": "rimraf dist",
     "generate:enums": "node scripts/generate-enums.ts",
     "generate:signatures": "npx tsx scripts/generate_mono_signatures.ts"

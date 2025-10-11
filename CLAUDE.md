@@ -17,17 +17,6 @@ npm test                   # Compile test suite to dist/tests.js
 npm run clean              # Remove dist/ directory
 ```
 
-### Example Building
-```bash
-npm run build:examples     # Build all examples
-npm run build:example:call     # Build call-static-method.ts
-npm run build:example:dump     # Build dump-assemblies.ts
-npm run build:example:hook     # Build hook-runtime-invoke.ts
-npm run build:example:delegate # Build invoke-delegate-fast.ts
-npm run build:example:icall    # Build register-icall.ts
-npm run build:example:metadata # Build explore-metadata.ts
-npm run build:example:thread   # Build thread-management.ts
-```
 
 ### Testing
 ```bash
@@ -37,8 +26,6 @@ npm test
 # Run tests against a Mono process
 frida -n "TargetProcess.exe" -l dist/tests.js
 
-# Run specific examples
-frida -n "TargetProcess.exe" -l dist/call-static-method.js
 ```
 
 ## Architecture
@@ -138,14 +125,6 @@ Key test files:
 - `tests/test-framework.ts` - Test utilities and framework
 - `tests/test-api.ts` - Core API functionality (60 tests)
 
-## Examples
-
-All examples demonstrate real-world usage patterns:
-- **call-static-method.ts**: Static method invocation with direct imports
-- **hook-runtime-invoke.ts**: Hooking mono_runtime_invoke function
-- **register-icall.ts**: Native callback registration
-- **explore-metadata.ts**: Assembly and class discovery
-- **thread-management.ts**: Modern thread management patterns
 
 ## TypeScript Configuration
 
@@ -177,5 +156,4 @@ When working with this codebase:
 - The main API is accessed through the default export: `import Mono from "./src"`
 - All Mono operations must be wrapped in `Mono.perform()` for thread safety
 - The codebase maintains backward compatibility but modern patterns are preferred
-- Examples are built to `dist/` and can be run with Frida directly
 - The test suite validates functionality against real Mono runtimes

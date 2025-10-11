@@ -917,9 +917,7 @@ class GCUtilities {
    # Lint code
    npm run lint
 
-   # Build examples
-   npm run build:examples
-   ```
+     ```
 
 3. **Project Structure**
    ```
@@ -930,8 +928,7 @@ class GCUtilities {
    ├── runtime/          # Low-level runtime API
    └── utils/            # Utility functions
 
-   examples/             # Usage examples
-   tests/               # Test suite
+      tests/               # Test suite
    dist/                # Built files
    ```
 
@@ -944,8 +941,6 @@ npm run clean
 # Build main library
 npm run build
 
-# Build all examples
-npm run build:examples
 
 # Run test suite
 npm test
@@ -980,4 +975,3 @@ For issues, questions, or contributions:
 - Fluent API inspired by frida-il2cpp-bridge
 - Thread management and garbage collection
 - Comprehensive test suite
-- 7 working examples
