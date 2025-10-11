@@ -5,13 +5,28 @@
     "moduleResolution": "Bundler",
     "lib": ["ES2020"],
     "types": ["./types", "frida-gum", "node"],
+
+    // Enhanced type checking
     "strict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+        
+    // Module configuration
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+
+    // Build configuration
     "rootDir": "src",
-    "outDir": "dist/tmp"
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": false,
+    "importHelpers": true,
+    "resolveJsonModule": true
   },
-  "include": ["src"],
-  "exclude": ["dist", "node_modules"]
+  "include": ["src/**/*"],
+  "exclude": ["dist", "node_modules", "**/*.test.ts"]
 }
