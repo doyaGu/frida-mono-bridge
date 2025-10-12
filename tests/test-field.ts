@@ -4,7 +4,7 @@
  */
 
 import Mono from "../src";
-import { TestResult, TestSuite, createTest, assert, assertPerformWorks, assertApiAvailable, assertDomainAvailable } from "./test-framework";
+import { TestResult, TestSuite, createTest, assert, assertPerformWorks, assertApiAvailable, assertDomainAvailable, createNestedPerformTest, assertDomainCached } from "./test-framework";
 
 export function testFieldOperations(): TestResult {
   console.log("\nField Operations:");
@@ -47,7 +47,8 @@ export function testFieldOperations(): TestResult {
         if (fields.length > 0) {
           const firstField = fields[0];
           assert(typeof firstField.getName === 'function', "Field should have getName method");
-          console.log(`    System.String has ${fields.length} fields, first: ${firstField.getName()}`);
+          assert(firstField.name === firstField.getName(), "name accessor should mirror getName()");
+          console.log(`    System.String has ${fields.length} fields, first: ${firstField.name}`);
         } else {
           console.log("    System.String has no accessible fields");
         }
@@ -68,7 +69,7 @@ export function testFieldOperations(): TestResult {
         if (emptyField) {
           assert(typeof emptyField.getName === 'function', "Field should have getName method");
           assert(typeof emptyField.readValue === 'function', "Field should have readValue method");
-          console.log(`    Found System.String.Empty field: ${emptyField.getName()}`);
+          console.log(`    Found System.String.Empty field: ${emptyField.name}`);
 
           try {
             const value = emptyField.readValue(null);
@@ -83,7 +84,7 @@ export function testFieldOperations(): TestResult {
         // Try other common fields
         const lengthField = stringClass.field("length");
         if (lengthField) {
-          console.log(`    Found length field: ${lengthField.getName()}`);
+          console.log(`    Found length field: ${lengthField.name}`);
         }
       }
     });
@@ -166,19 +167,16 @@ export function testFieldOperations(): TestResult {
     });
   }));
 
-  suite.addResult(createTest("Should support field operations in nested perform calls", () => {
-    Mono.perform(() => {
-      const domain = Mono.domain;
-
-      // Test nested perform calls
-      Mono.perform(() => {
-        const stringClass = domain.class("System.String");
-        if (stringClass) {
-          const fields = stringClass.getFields();
-          assert(Array.isArray(fields), "Field access should work in nested perform calls");
-        }
-      });
-    });
+  suite.addResult(createNestedPerformTest({
+    context: "field operations",
+    testName: "Should support field operations in nested perform calls",
+    validate: domain => {
+      const stringClass = domain.class("System.String");
+      if (stringClass) {
+        const fields = stringClass.getFields();
+        assert(Array.isArray(fields), "Field access should work in nested perform calls");
+      }
+    },
   }));
 
   suite.addResult(createTest("Field operations should be consistent", () => {
@@ -198,10 +196,7 @@ export function testFieldOperations(): TestResult {
         assert(fields1.length === fields2.length, "Field count should be consistent");
       }
 
-      // Test domain caching
-      const domain1 = Mono.domain;
-      const domain2 = Mono.domain;
-      assert(domain1 === domain2, "Domain should be cached instance");
+      assertDomainCached();
     });
   }));
 

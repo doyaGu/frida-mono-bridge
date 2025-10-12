@@ -3,7 +3,7 @@
  * Provides utilities for writing and running tests
  */
 
-import Mono from "../src";
+import Mono, { MonoDomain } from "../src";
 
 export interface TestResult {
   name: string;
@@ -77,7 +77,7 @@ export function createTest(name: string, testFn: () => void): TestResult {
 }
 
 export function createSkippedTest(name: string, reason?: string): TestResult {
-  console.log(`  ⊘ ${name} (skipped${reason ? ': ' + reason : ''})`);
+  console.log(`  - ${name} (skipped${reason ? ": " + reason : ""})`);
   return {
     name,
     passed: false,
@@ -86,6 +86,25 @@ export function createSkippedTest(name: string, reason?: string): TestResult {
     message: reason,
   };
 }
+
+export function createMonoTest<T>(name: string, testFn: () => T): TestResult {
+  return createTest(name, () => Mono.perform(testFn));
+}
+
+export function createDomainTest(name: string, testFn: (domain: MonoDomain) => void): TestResult {
+  return createMonoTest(name, () => {
+    const domain = Mono.domain;
+    testFn(domain);
+  });
+}
+
+/**
+ * Raise an assertion failure with consistent formatting.
+ */
+export function fail(message: string): never {
+  throw new Error(`Assertion failed: ${message}`);
+}
+
 
 export function assert(condition: boolean, message: string): void {
   if (!condition) {
@@ -167,3 +186,85 @@ export function assertThrowsInPerform(fn: () => void, expectedErrorPattern: stri
     }
   }
 }
+
+export interface PerformSmokeTestOptions {
+  testName?: string;
+  message?: string;
+}
+
+export function createPerformSmokeTest(context: string, options: PerformSmokeTestOptions = {}): TestResult {
+  const testName = options.testName ?? `Mono.perform should work for ${context}`;
+  const message = options.message ?? `Mono.perform() should work for ${context}`;
+  return createTest(testName, () => {
+    assertPerformWorks(message);
+  });
+}
+
+export interface ApiAvailabilityTestOptions {
+  context: string;
+  testName?: string;
+  message?: string;
+  requiredExports?: string[];
+  validate?: (api: any) => void;
+}
+
+export function createApiAvailabilityTest(options: ApiAvailabilityTestOptions): TestResult {
+  const {
+    context,
+    testName,
+    message,
+    requiredExports = [],
+    validate,
+  } = options;
+
+  const resolvedTestName = testName ?? "Mono API should be available";
+  const resolvedMessage = message ?? `Mono.api should be accessible for ${context}`;
+
+  return createMonoTest(resolvedTestName, () => {
+    assertApiAvailable(resolvedMessage);
+    const api = Mono.api;
+
+    for (const exportName of requiredExports) {
+      assert(api.hasExport(exportName), `${exportName} should be available`);
+    }
+
+    if (validate) {
+      validate(api);
+    }
+  });
+}
+
+export interface NestedPerformTestOptions {
+  context: string;
+  testName?: string;
+  message?: string;
+  validate?: (domain: MonoDomain) => void;
+}
+
+export function createNestedPerformTest(options: NestedPerformTestOptions): TestResult {
+  const {
+    context,
+    testName = `Should support ${context} in nested perform calls`,
+    message = `Nested Mono.perform should work for ${context}`,
+    validate,
+  } = options;
+
+  return createDomainTest(testName, domain => {
+    Mono.perform(() => {
+      try {
+        validate?.(domain);
+      } catch (error) {
+        throw new Error(`${message}: ${error}`);
+      }
+    });
+  });
+}
+
+export function assertDomainCached(message = "Mono.domain should be cached instance"): void {
+  const domain1 = Mono.domain;
+  const domain2 = Mono.domain;
+  if (domain1 !== domain2) {
+    fail(message);
+  }
+}
+

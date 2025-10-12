@@ -4,7 +4,7 @@
  */
 
 import Mono from "../src";
-import { TestResult, TestSuite, createTest, assert, assertPerformWorks, assertApiAvailable, createSkippedTest } from "./test-framework";
+import { TestResult, TestSuite, createTest, assert, assertPerformWorks, assertApiAvailable, createSkippedTest, createNestedPerformTest, assertDomainCached } from "./test-framework";
 
 export function testDelegates(): TestResult {
   console.log("\nDelegates:");
@@ -124,21 +124,18 @@ export function testDelegates(): TestResult {
     });
   }));
 
-  suite.addResult(createTest("Should support delegate operations in nested perform calls", () => {
-    Mono.perform(() => {
-      // Test nested perform calls
-      Mono.perform(() => {
-        const domain = Mono.domain;
-        const delegateClass = domain.class("System.Delegate");
+  suite.addResult(createNestedPerformTest({
+    context: "delegate operations",
+    testName: "Should support delegate operations in nested perform calls",
+    validate: domain => {
+      const delegateClass = domain.class("System.Delegate");
 
-        if (delegateClass) {
-          assert(typeof delegateClass.getName === 'function', "Delegate access should work in nested perform calls");
-        }
+      if (delegateClass) {
+        assert(typeof delegateClass.getName === 'function', "Delegate access should work in nested perform calls");
+      }
 
-        // Test that delegate APIs are still accessible in nested context
-        assert(Mono.api.hasExport("mono_get_delegate_invoke"), "Delegate APIs should work in nested perform calls");
-      });
-    });
+      assert(Mono.api.hasExport("mono_get_delegate_invoke"), "Delegate APIs should work in nested perform calls");
+    },
   }));
 
   suite.addResult(createTest("Delegate operations should be consistent", () => {
@@ -155,10 +152,7 @@ export function testDelegates(): TestResult {
         assert(name1 === name2, "Delegate class lookups should be consistent");
       }
 
-      // Test domain caching
-      const domain1 = Mono.domain;
-      const domain2 = Mono.domain;
-      assert(domain1 === domain2, "Domain should be cached instance");
+      assertDomainCached();
 
       // Test version consistency
       const version1 = Mono.version;

@@ -4,7 +4,7 @@
  */
 
 import Mono from "../src";
-import { TestResult, TestSuite, createTest, assert, assertThrows, assertPerformWorks } from "./test-framework";
+import { TestResult, TestSuite, createTest, assert, assertThrows, createPerformSmokeTest } from "./test-framework";
 import { LruCache } from "../src/utils/lru-cache";
 
 export function testLruCache(): TestResult {
@@ -13,9 +13,7 @@ export function testLruCache(): TestResult {
   const suite = new TestSuite("LRU Cache Tests");
 
   // Test basic Mono.perform functionality first
-  suite.addResult(createTest("Mono.perform should work for cache tests", () => {
-    assertPerformWorks("Mono.perform() should work for cache tests");
-  }));
+  suite.addResult(createPerformSmokeTest("cache tests"));
 
   suite.addResult(createTest("LRU cache accepts valid capacity", () => {
     Mono.perform(() => {
@@ -120,6 +118,59 @@ export function testLruCache(): TestResult {
       assert(cache.get("a") === undefined, "'a' should be cleared");
       assert(cache.get("b") === undefined, "'b' should be cleared");
       assert(cache.get("c") === undefined, "'c' should be cleared");
+    });
+  }));
+
+  suite.addResult(createTest("LRU cache supports size and delete operations", () => {
+    Mono.perform(() => {
+      const cache = new LruCache<string, number>(3);
+      cache.set("a", 1);
+      cache.set("b", 2);
+      assert(cache.size === 2, "Cache size should reflect inserted entries");
+      assert(cache.delete("a") === true, "delete should remove existing entry");
+      assert(cache.size === 1, "Cache size should update after delete");
+      assert(cache.has("a") === false, "Deleted key should not be present");
+      assert(cache.delete("missing") === false, "delete should return false for unknown keys");
+    });
+  }));
+
+  suite.addResult(createTest("LRU cache getOrCreate memoizes factory results", () => {
+    Mono.perform(() => {
+      const cache = new LruCache<string, number>(3);
+      let factoryCalls = 0;
+      const first = cache.getOrCreate("key", () => {
+        factoryCalls += 1;
+        return 42;
+      });
+      const second = cache.getOrCreate("key", () => {
+        factoryCalls += 1;
+        return 99;
+      });
+      assert(first === 42, "First factory value should be returned");
+      assert(second === 42, "Cached value should be returned on subsequent calls");
+      assert(factoryCalls === 1, "Factory should only be invoked once");
+    });
+  }));
+
+  suite.addResult(createTest("LRU cache triggers eviction callbacks", () => {
+    Mono.perform(() => {
+      const evicted: Array<[string, number]> = [];
+      const cache = new LruCache<string, number>({
+        capacity: 1,
+        onEvict: (key, value) => {
+          evicted.push([key, value]);
+        },
+      });
+
+      cache.set("a", 1);
+      cache.set("b", 2); // Evicts "a"
+      assert(evicted.length === 1, "Eviction callback should run when capacity exceeded");
+      assert(evicted[0][0] === "a", "First evicted key should be 'a'");
+      assert(evicted[0][1] === 1, "First evicted value should be 1");
+
+      cache.clear(); // clearing should evict remaining entry
+      assert(evicted.length === 2, "Eviction callback should run when clearing cache");
+      assert(evicted[1][0] === "b", "Second evicted key should be 'b'");
     });
   }));
 

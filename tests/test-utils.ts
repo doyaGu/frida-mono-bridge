@@ -4,9 +4,11 @@
  */
 
 import Mono from "../src";
-import { TestResult, TestSuite, createTest, assert, assertPerformWorks, assertApiAvailable } from "./test-framework";
-import { pointerIsNull } from "../src/runtime/mem";
+import { TestResult, TestSuite, createTest, assert, assertThrows, assertPerformWorks, assertApiAvailable } from "./test-framework";
+import { pointerIsNull, readUtf8String, readUtf16String } from "../src/runtime/mem";
 import { MonoManagedExceptionError } from "../src/runtime/api";
+import { ensurePointer, unwrapInstance, unwrapInstanceRequired } from "../src/utils/common-utilities";
+import { MonoValidationError } from "../src/patterns/errors";
 
 export function testUtilities(): TestResult {
   console.log("\nUtility Functions:");
@@ -59,6 +61,78 @@ export function testUtilities(): TestResult {
       } else {
         console.log("    (Skipped: NULL not defined)");
       }
+    });
+  }));
+
+  suite.addResult(createTest("ensurePointer throws validation error for invalid input", () => {
+    Mono.perform(() => {
+      let caught = false;
+      try {
+        ensurePointer(null, "Test pointer");
+      } catch (error) {
+        caught = true;
+        assert(error instanceof MonoValidationError, "ensurePointer should throw MonoValidationError");
+      }
+      assert(caught === true, "ensurePointer should throw for null pointer");
+    });
+  }));
+
+  // ============================================================================
+  // String Utility Tests
+  // ============================================================================
+
+  suite.addResult(createTest("readUtf8String reads allocated UTF-8 buffer", () => {
+    Mono.perform(() => {
+      const text = "Hello Mono";
+      const pointer = Memory.allocUtf8String(text);
+      const result = readUtf8String(pointer);
+      assert(result === text, "Should read UTF-8 string from pointer");
+    });
+  }));
+
+  suite.addResult(createTest("readUtf16String reads allocated UTF-16 buffer", () => {
+    Mono.perform(() => {
+      const text = "Unicode test";
+      const pointer = Memory.allocUtf16String(text);
+      const result = readUtf16String(pointer);
+      assert(result === text, "Should read UTF-16 string from pointer");
+    });
+  }));
+
+  suite.addResult(createTest("readUtf*String returns empty for null pointer", () => {
+    Mono.perform(() => {
+      const nullPtr = ptr("0x0");
+      assert(readUtf8String(nullPtr) === "", "UTF-8 reader should return empty string for null pointer");
+      assert(readUtf16String(nullPtr) === "", "UTF-16 reader should return empty string for null pointer");
+    });
+  }));
+
+  // ============================================================================
+  // Instance Unwrap Tests
+  // ============================================================================
+
+  suite.addResult(createTest("unwrapInstance handles Mono handles", () => {
+    Mono.perform(() => {
+      const domain = Mono.domain;
+      const pointer = unwrapInstance(domain);
+      assert(pointer !== null && typeof pointer.isNull === "function" && pointer.isNull() === false, "Should unwrap Mono handle to pointer");
+    });
+  }));
+
+  suite.addResult(createTest("unwrapInstance handles raw pointer holders", () => {
+    Mono.perform(() => {
+      const pointerValue = ptr("0x1234");
+      const holder = { handle: pointerValue };
+      const extracted = unwrapInstance(holder);
+      assert(extracted.toString() === pointerValue.toString(), "Should unwrap handle property pointer");
+    });
+  }));
+
+  suite.addResult(createTest("unwrapInstanceRequired throws for invalid instance", () => {
+    Mono.perform(() => {
+      assertThrows(() => {
+        unwrapInstanceRequired(null, "test context");
+      }, "Should throw when instance is invalid");
     });
   }));
 

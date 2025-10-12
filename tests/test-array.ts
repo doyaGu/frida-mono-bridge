@@ -4,7 +4,7 @@
  */
 
 import Mono from "../src";
-import { TestResult, TestSuite, createTest, assert, assertPerformWorks, assertApiAvailable, assertDomainAvailable } from "./test-framework";
+import { TestResult, TestSuite, createTest, assert, assertPerformWorks, assertApiAvailable, assertDomainAvailable, createNestedPerformTest, assertDomainCached } from "./test-framework";
 
 export function testArrayOperations(): TestResult {
   console.log("\nArray Operations:");
@@ -83,18 +83,13 @@ export function testArrayOperations(): TestResult {
     });
   }));
 
-  suite.addResult(createTest("Should support array operations in nested perform calls", () => {
-    Mono.perform(() => {
-      // Test nested perform calls
-      Mono.perform(() => {
-        const domain = Mono.domain;
-        const arrayClass = domain.class("System.Array");
-
-        if (arrayClass) {
-          assert(typeof arrayClass.getName === 'function', "Array access should work in nested perform calls");
-        }
-      });
-    });
+  suite.addResult(createNestedPerformTest({
+    context: "array operations",
+    testName: "Should support array operations in nested perform calls",
+    validate: domain => {
+      const arrayClass = domain.class("System.Array");
+      assert(arrayClass !== null, "System.Array class should be accessible in nested perform calls");
+    },
   }));
 
   suite.addResult(createTest("Array operations should be consistent", () => {
@@ -112,9 +107,7 @@ export function testArrayOperations(): TestResult {
       }
 
       // Test domain caching
-      const domain1 = Mono.domain;
-      const domain2 = Mono.domain;
-      assert(domain1 === domain2, "Domain should be cached instance");
+      assertDomainCached();
     });
   }));
 
