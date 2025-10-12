@@ -352,7 +352,13 @@ export class MonoMethod extends MonoHandle {
         throw new Error(`Auto-boxing is not supported for parameter type ${effectiveType.getFullName()} on ${this.getFullName()}`);
     }
 
-    const klass = effectiveType.getClass();
+    let klass = effectiveType.getClass();
+    if (!klass) {
+      const klassPtr = this.api.native.mono_class_from_mono_type(effectiveType.pointer);
+      if (!pointerIsNull(klassPtr)) {
+        klass = new MonoClass(this.api, klassPtr);
+      }
+    }
     if (!klass) {
       throw new Error(`Unable to resolve class for parameter type ${effectiveType.getFullName()} on ${this.getFullName()}`);
     }
