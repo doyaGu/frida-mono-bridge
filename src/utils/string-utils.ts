@@ -1,6 +1,5 @@
 /**
  * String reading and writing utilities for Mono
- * Extracted from common-utilities.ts for better organization
  */
 
 import { resolveNativePointer } from "./pointer-utils";

@@ -1,6 +1,5 @@
 /**
  * Method and parameter utilities
- * Extracted from common-utilities.ts for better organization
  */
 
 import { MonoApi } from "../runtime/api";

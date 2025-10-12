@@ -1,6 +1,5 @@
 /**
  * Pointer validation and manipulation utilities
- * Extracted from common-utilities.ts for better organization
  */
 
 import { MonoValidationError } from "../patterns/errors";

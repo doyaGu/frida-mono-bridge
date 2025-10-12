@@ -1,6 +1,5 @@
 /**
  * Type checking and manipulation utilities for Mono types
- * Extracted from common-utilities.ts for better organization
  */
 
 /**

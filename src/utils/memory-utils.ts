@@ -1,6 +1,5 @@
 /**
  * Memory allocation and manipulation utilities
- * Extracted from common-utilities.ts for better organization
  */
 
 import { MonoMemoryError, MonoValidationError } from "../patterns/errors";

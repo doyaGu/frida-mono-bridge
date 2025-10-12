@@ -1,7 +1,6 @@
 /**
  * Enumeration utilities for Mono collections
  * Implements iterator patterns for methods, fields, properties, assemblies, etc.
- * Extracted from common-utilities.ts for better organization
  */
 
 import { MonoApi } from "../runtime/api";

@@ -1,6 +1,5 @@
 /**
  * Formatting and conversion utilities
- * Extracted from common-utilities.ts for better organization
  */
 
 import { MonoError } from "../patterns/errors";
