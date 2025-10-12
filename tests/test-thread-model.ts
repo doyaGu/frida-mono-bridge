@@ -85,12 +85,8 @@ export function testThreadModel(): TestResult {
       assert(MonoThread.isValid(validHandle), "Valid handle should return true");
 
       // Test NULL validation
-      try {
-        const NULL = ptr("0x0");
-        assert(!MonoThread.isValid(NULL), "NULL should return false");
-      } catch (error) {
-        console.log(`    NULL test skipped (ptr function not available): ${error}`);
-      }
+      const nullPointer: NativePointer = NULL;
+      assert(!MonoThread.isValid(nullPointer), "NULL should return false");
 
       assert(!MonoThread.isValid(null), "null should return false");
       assert(!MonoThread.isValid(undefined), "undefined should return false");

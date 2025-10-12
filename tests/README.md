@@ -80,10 +80,10 @@ frida -n "YourMonoApp.exe" -l dist/run-tests-simple.js
 frida -n "YourMonoApp.exe" -l dist/tests.js
 ```
 
-**Example with Timberborn (Unity game):**
+**Example with Platformer.exe (Unity game):**
 ```powershell
 npm test
-frida -n "Timberborn.exe" -l dist/run-tests-simple.js
+frida -n "Platformer.exe" -l dist/run-tests-simple.js
 ```
 
 ### Expected Output
@@ -344,7 +344,7 @@ The test suite comprehensively validates:
 - [TESTED] Version detection and feature flags
 
 ### Integration Scenarios
-- [TESTED] Real Mono runtime interaction (tested with Timberborn.exe Unity game)
+- [TESTED] Real Mono runtime interaction (validated with Platformer.exe Unity game)
 - [TESTED] End-to-end workflows
 - [TESTED] Multiple API call sequences
 - [TESTED] Error handling and recovery

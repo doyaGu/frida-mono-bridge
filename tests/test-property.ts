@@ -40,10 +40,11 @@ export function testPropertyOperations(): TestResult {
       assert(Array.isArray(properties), "Should get properties array from class");
 
       if (properties.length > 0) {
-        const firstProperty = properties[0];
-        assert(typeof firstProperty.getName === 'function', "Property should have getName method");
-        assert(firstProperty.name === firstProperty.getName(), "name accessor should mirror getName()");
-        assert(firstProperty.parent === stringClass, "parent accessor should return declaring class");
+  const firstProperty = properties[0];
+  assert(typeof firstProperty.getName === 'function', "Property should have getName method");
+  assert(firstProperty.name === firstProperty.getName(), "name accessor should mirror getName()");
+  const parentClass = firstProperty.parent;
+  assert(parentClass.equals(stringClass), "Declaring class pointer should match original class");
         console.log(`    System.String has ${properties.length} properties, first: ${firstProperty.name}`);
       } else {
         console.log("    System.String has no accessible properties");

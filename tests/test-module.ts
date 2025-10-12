@@ -22,6 +22,15 @@ export function testModuleDetection(): TestResult {
     });
   }));
 
+  suite.addResult(createTest("Platformer executable should be loaded", () => {
+    Mono.perform(() => {
+      const modules = Process.enumerateModules();
+      const hasPlatformer = modules.some(moduleInfo => moduleInfo.name.toLowerCase() === "platformer.exe");
+      assert(hasPlatformer, "Platformer.exe must be loaded for Mono integration tests");
+      console.log("    Platformer.exe detected in module list");
+    });
+  }));
+
   suite.addResult(createTest("Mono module should be detected", () => {
     Mono.perform(() => {
       assertNotNull(Mono.module, "Module should not be null");

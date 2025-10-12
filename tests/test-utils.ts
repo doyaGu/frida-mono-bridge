@@ -11,6 +11,31 @@ import { MonoManagedExceptionError } from "../src/runtime/api";
 import { ensurePointer, unwrapInstance, unwrapInstanceRequired } from "../src/utils/pointer-utils";
 import { MonoValidationError } from "../src/patterns/errors";
 
+function captureManagedSubstringException(): MonoManagedExceptionError {
+  const stringClass = Mono.domain.class("System.String");
+  if (!stringClass) {
+    throw new Error("System.String class not available");
+  }
+
+  const substring = stringClass.method("Substring", 2);
+  if (!substring) {
+    throw new Error("System.String.Substring(int, int) method not found");
+  }
+
+  const instance = Mono.api.stringNew("capture-managed-exception");
+
+  try {
+    substring.invoke(instance, [10, 5]);
+  } catch (error) {
+    if (error instanceof MonoManagedExceptionError) {
+      return error;
+    }
+    throw error;
+  }
+
+  throw new Error("Managed exception was not thrown by substring invocation");
+}
+
 export function testUtilities(): TestResult {
   console.log("\nUtility Functions:");
 
@@ -46,22 +71,20 @@ export function testUtilities(): TestResult {
     });
   }));
 
-  suite.addResult(createTest("pointerIsNull handles non-zero number", () => {
+  suite.addResult(createTest("pointerIsNull handles non-null pointer", () => {
     Mono.perform(() => {
-      assert(pointerIsNull(1) === false, "Should return false for non-zero");
-      console.log("    pointerIsNull(1) = false");
+      const nonNull = Mono.api.stringNew("pointer check");
+      assert(pointerIsNull(nonNull) === false, "Should return false for real managed pointer");
+      console.log("    pointerIsNull(real object) = false");
     });
   }));
 
   suite.addResult(createTest("pointerIsNull handles NULL pointer", () => {
     Mono.perform(() => {
-      if (typeof NULL !== "undefined" && NULL !== null) {
-        const result = pointerIsNull(NULL);
-        assert(result === true, "Should return true for NULL");
-        console.log("    pointerIsNull(NULL) = true");
-      } else {
-        console.log("    (Skipped: NULL not defined)");
-      }
+      const nullPtr: NativePointer = NULL;
+      const result = pointerIsNull(nullPtr);
+      assert(result === true, "Should return true for NULL");
+      console.log("    pointerIsNull(NULL) = true");
     });
   }));
 
@@ -102,7 +125,7 @@ export function testUtilities(): TestResult {
 
   suite.addResult(createTest("readUtf*String returns empty for null pointer", () => {
     Mono.perform(() => {
-      const nullPtr = ptr("0x0");
+      const nullPtr: NativePointer = NULL;
       assert(readUtf8String(nullPtr) === "", "UTF-8 reader should return empty string for null pointer");
       assert(readUtf16String(nullPtr) === "", "UTF-16 reader should return empty string for null pointer");
     });
@@ -122,10 +145,10 @@ export function testUtilities(): TestResult {
 
   suite.addResult(createTest("unwrapInstance handles raw pointer holders", () => {
     Mono.perform(() => {
-      const pointerValue = ptr("0x1234");
+      const pointerValue = Mono.api.stringNew("holder instance");
       const holder = { handle: pointerValue };
       const extracted = unwrapInstance(holder);
-      assert(extracted.toString() === pointerValue.toString(), "Should unwrap handle property pointer");
+      assert(extracted.equals(pointerValue), "Should unwrap handle property pointer");
     });
   }));
 
@@ -143,51 +166,53 @@ export function testUtilities(): TestResult {
 
   suite.addResult(createTest("MonoManagedExceptionError stores exception pointer", () => {
     Mono.perform(() => {
-      const exceptionPtr = ptr("0x1234");
-      const error = new MonoManagedExceptionError(exceptionPtr);
+      const managedError = captureManagedSubstringException();
+      const mirrored = new MonoManagedExceptionError(
+        managedError.exception,
+        managedError.exceptionType,
+        managedError.exceptionMessage,
+      );
 
-      assert(error.exception.equals(exceptionPtr), "Should store exception pointer");
-      assert(error.name === "MonoManagedExceptionError", "Should have correct name");
+      assert(!mirrored.exception.isNull(), "Exception pointer should not be NULL");
+      assert(mirrored.exception.equals(managedError.exception), "Should store exception pointer");
+      if (managedError.exceptionType) {
+        assert(mirrored.exceptionType === managedError.exceptionType, "Should keep resolved exception type");
+      }
+      if (managedError.exceptionMessage) {
+        assert(mirrored.exceptionMessage === managedError.exceptionMessage, "Should retain exception message");
+      }
       console.log("    MonoManagedExceptionError stores exception pointer correctly");
     });
   }));
 
   suite.addResult(createTest("MonoManagedExceptionError includes type in message", () => {
     Mono.perform(() => {
-      const exceptionPtr = ptr("0x1234");
-      const error = new MonoManagedExceptionError(exceptionPtr, "NullReferenceException");
-
-      assert(error.exceptionType === "NullReferenceException", "Should store exception type");
-      assert(error.message.includes("NullReferenceException"), "Message should include type");
+  const managedError = captureManagedSubstringException();
+  const exceptionType = managedError.exceptionType ?? "";
+  assert(exceptionType.length > 0, "Managed exception should include type information");
+  assert(managedError.message.includes(exceptionType), "Message should include exception type");
       console.log("    MonoManagedExceptionError includes exception type in message");
     });
   }));
 
   suite.addResult(createTest("MonoManagedExceptionError includes message details", () => {
     Mono.perform(() => {
-      const exceptionPtr = ptr("0x1234");
-      const error = new MonoManagedExceptionError(
-        exceptionPtr,
-        "ArgumentException",
-        "Parameter cannot be null"
-      );
-
-      assert(error.exceptionType === "ArgumentException", "Should store exception type");
-      assert(error.exceptionMessage === "Parameter cannot be null", "Should store exception message");
-      assert(error.message.includes("ArgumentException"), "Message should include type");
-      assert(error.message.includes("Parameter cannot be null"), "Message should include details");
+  const managedError = captureManagedSubstringException();
+  const exceptionMessage = managedError.exceptionMessage ?? "";
+  assert(exceptionMessage.length > 0, "Managed exception should include descriptive message");
+  assert(managedError.message.includes(exceptionMessage), "Error message should surface managed exception details");
       console.log("    MonoManagedExceptionError stores full exception details");
     });
   }));
 
   suite.addResult(createTest("MonoManagedExceptionError works with pointer only", () => {
     Mono.perform(() => {
-      const exceptionPtr = ptr("0x1234");
-      const error = new MonoManagedExceptionError(exceptionPtr);
+      const managedError = captureManagedSubstringException();
+      const pointerOnly = new MonoManagedExceptionError(managedError.exception);
 
-      assert(error.exceptionType === undefined, "Type should be undefined");
-      assert(error.exceptionMessage === undefined, "Message should be undefined");
-      assert(error.message.includes("Managed exception thrown"), "Should have default message");
+      assert(pointerOnly.exceptionType === undefined, "Type should be undefined");
+      assert(pointerOnly.exceptionMessage === undefined, "Message should be undefined");
+      assert(pointerOnly.message.includes("Managed exception thrown"), "Should have default message");
       console.log("    MonoManagedExceptionError handles pointer-only construction");
     });
   }));
@@ -329,9 +354,13 @@ export function testUtilities(): TestResult {
       assert(isRootNull === false, "Root domain pointer should not be null");
 
       // Test exception utility in context of API operations
-      const testPtr = ptr("0x123456");
-      const error = new MonoManagedExceptionError(testPtr, "TestException", "Test message");
-      assert(error.message.includes("TestException"), "Exception utility should work with API");
+      const managedError = captureManagedSubstringException();
+      const error = new MonoManagedExceptionError(
+        managedError.exception,
+        managedError.exceptionType,
+        managedError.exceptionMessage ?? "Integration utilities test",
+      );
+      assert(error.exception.equals(managedError.exception), "Exception utility should store real pointer");
 
       console.log("    Utilities integrate properly with fluent API");
     });
@@ -340,11 +369,9 @@ export function testUtilities(): TestResult {
   suite.addResult(createTest("Should test utility consistency", () => {
     Mono.perform(() => {
       // Test that utilities provide consistent results
-      const ptr1 = ptr("0x1234");
-      const ptr2 = ptr("0x1234");
-
-      const null1 = pointerIsNull(ptr1);
-      const null2 = pointerIsNull(ptr2);
+      const persistentPointer = Mono.api.getRootDomain();
+      const null1 = pointerIsNull(persistentPointer);
+      const null2 = pointerIsNull(persistentPointer);
       assert(null1 === null2, "pointerIsNull should be consistent for same pointer");
 
       // Test API consistency
@@ -378,7 +405,10 @@ export function testUtilities(): TestResult {
 
       // Test exception utility with edge cases
       const edgePointers = [
-        ptr("0x0"), ptr("0xFFFFFFFF"), ptr("0x12345678")
+        NULL,
+        Mono.api.getRootDomain(),
+        captureManagedSubstringException().exception,
+        Memory.alloc(Process.pointerSize)
       ];
 
       for (const testPtr of edgePointers) {

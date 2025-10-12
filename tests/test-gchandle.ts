@@ -202,7 +202,7 @@ export function testGCHandles(): TestResult {
     Mono.perform(() => {
       // Test error handling with invalid handles
       try {
-        const nullHandle = ptr("0x0");
+        const nullHandle: NativePointer = NULL;
 
         // Try to get target from null handle (should handle gracefully)
         if (Mono.api.hasExport("mono_gchandle_get_target")) {

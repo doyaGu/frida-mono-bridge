@@ -176,16 +176,15 @@ export function testLruCache(): TestResult {
 
   suite.addResult(createTest("Function cache stores and retrieves NativeFunctions", () => {
     Mono.perform(() => {
-      type VoidFunc = NativeFunction<void, []>;
-      const cache = new LruCache<string, VoidFunc>(10);
-      const fn1 = new NativeFunction(ptr("0x1234"), "void", []) as VoidFunc;
-      const fn2 = new NativeFunction(ptr("0x5678"), "void", []) as VoidFunc;
+      const cache = new LruCache<string, NativeFunction<any, NativePointerValue[]>>(10);
+      const attachFn = Mono.api.getNativeFunction("mono_thread_attach");
+      const detachFn = Mono.api.getNativeFunction("mono_thread_detach");
 
-      cache.set("func1", fn1);
-      cache.set("func2", fn2);
+      cache.set("mono_thread_attach", attachFn);
+      cache.set("mono_thread_detach", detachFn);
 
-      assert(cache.get("func1") === fn1, "Should retrieve func1");
-      assert(cache.get("func2") === fn2, "Should retrieve func2");
+      assert(cache.get("mono_thread_attach") === attachFn, "Should retrieve mono_thread_attach");
+      assert(cache.get("mono_thread_detach") === detachFn, "Should retrieve mono_thread_detach");
     });
   }));
 
@@ -204,10 +203,23 @@ export function testLruCache(): TestResult {
       }
 
       if (api.hasExport("mono_thread_attach")) {
-        const threadAttachPtr = ptr("0x1000"); // Mock pointer
-        cache.set("thread_attach", threadAttachPtr);
+        const moduleHandle = Process.getModuleByName(Mono.module.name);
+        let exportPtr = moduleHandle.findExportByName("mono_thread_attach");
 
-        assert(cache.get("thread_attach") === threadAttachPtr, "Should cache function pointer");
+        if (!exportPtr || exportPtr.isNull()) {
+          const matchingModule = Process.enumerateModules().find(m => m.path === Mono.module.path);
+          if (matchingModule) {
+            exportPtr = Process.getModuleByName(matchingModule.name).findExportByName("mono_thread_attach");
+          }
+        }
+
+        if (exportPtr && !exportPtr.isNull()) {
+          cache.set("thread_attach", exportPtr);
+          const cachedPtr = cache.get("thread_attach");
+          assert(cachedPtr !== undefined && cachedPtr.equals(exportPtr), "Should cache real mono_thread_attach pointer");
+        } else {
+          throw new Error("mono_thread_attach export not found in current module");
+        }
       }
 
       // Test cache functionality
