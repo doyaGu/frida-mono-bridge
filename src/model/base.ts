@@ -1,13 +1,6 @@
 import { MonoApi } from "../runtime/api";
-import { ThreadContext } from "../utils/thread-context";
-import {
-  isValidPointer,
-  ensurePointer,
-  ERROR_MESSAGES,
-  MONO_TYPE_KIND
-} from "../utils";
+import { isValidPointer } from "../utils/common-utilities";
 import { MonoError } from "../patterns/errors";
-import { Logger } from "../utils/log";
 
 /**
  * Base class for all Mono handles
@@ -42,21 +35,7 @@ export abstract class MonoHandle<THandle extends NativePointer = NativePointer> 
    */
   protected get native(): any {
     if (!this._native) {
-      // Create proxy that wraps all function calls with thread attachment when needed
-      this._native = new Proxy(this._api.native, {
-        get: (target, prop) => {
-          const original = (target as any)[prop];
-          if (typeof original === 'function') {
-            return (...args: any[]) => {
-              // Use ThreadContext.maybeExecute to avoid nested attachments
-              return ThreadContext.maybeExecute(this._api, () => {
-                return original.apply(target, args);
-              });
-            };
-          }
-          return original;
-        }
-      });
+      this._native = this._api.native;
     }
     return this._native;
   }

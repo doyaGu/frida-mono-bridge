@@ -62,10 +62,15 @@ export class MonoApi {
   /**
    * Exception slot for mono_runtime_invoke exception handling.
    * Allocated once and reused for session lifetime (pointer size: ~8 bytes).
-   * Not freed as it's needed throughout the entire session and relies on Frida's GC.
    */
   private exceptionSlot: NativePointer | null = null;
   private rootDomain: NativePointer | null = null;
+  
+  /**
+   * Track allocated resources for proper cleanup
+   */
+  private allocatedResources: NativePointer[] = [];
+  private disposed = false;
 
   /**
    * Thread manager for this API instance.
@@ -174,6 +179,8 @@ export class MonoApi {
   }
 
   getDelegateThunk(delegateClass: NativePointer): DelegateThunkInfo {
+    this.ensureNotDisposed();
+    
     const key = delegateClass.toString();
     const cached = this.delegateThunkCache.get(key);
     if (cached) {
@@ -216,6 +223,10 @@ export class MonoApi {
    * Should be called when the API instance is no longer needed.
    */
   dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+
     // Detach threads via thread manager if available
     if (this._threadManager && typeof this._threadManager.detachAll === "function") {
       this._threadManager.detachAll();
@@ -226,8 +237,47 @@ export class MonoApi {
     this.addressCache.clear();
     this.delegateThunkCache.clear();
 
-    // Note: exceptionSlot and rootDomain are not freed as they use Memory.alloc
-    // which relies on Frida's garbage collection
+    // Clean up allocated resources
+    for (const ptr of this.allocatedResources) {
+      try {
+        // Note: We don't explicitly free Memory.alloc pointers as they rely on Frida's GC
+        // But we clear our reference to help with garbage collection
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    }
+    this.allocatedResources = [];
+
+    // Clear pointers
+    this.exceptionSlot = null;
+    this.rootDomain = null;
+    this.moduleHandle = null;
+    
+    this.disposed = true;
+  }
+
+  /**
+   * Check if the API instance has been disposed
+   */
+  get isDisposed(): boolean {
+    return this.disposed;
+  }
+
+  /**
+   * Ensure the API instance is not disposed
+   */
+  private ensureNotDisposed(): void {
+    if (this.disposed) {
+      throw new Error("MonoApi has been disposed");
+    }
+  }
+
+  /**
+   * Track an allocated resource for cleanup
+   */
+  private trackAllocation(ptr: NativePointer): NativePointer {
+    this.allocatedResources.push(ptr);
+    return ptr;
   }
 
   call<T = NativePointer>(name: MonoApiName, ...args: MonoArg[]): T {
@@ -245,6 +295,8 @@ export class MonoApi {
   }
 
   getNativeFunction(name: MonoApiName): AnyNativeFunction {
+    this.ensureNotDisposed();
+    
     let fn = this.functionCache.get(name);
     if (fn) {
       return fn;
@@ -265,7 +317,19 @@ export class MonoApi {
         enumerable: true,
         get: () => {
           const nativeFn = this.getNativeFunction(name);
-          const wrapper = (...args: MonoArg[]) => nativeFn(...args.map(normalizeArg));
+              const wrapper = (...args: MonoArg[]) => {
+                const invoke = () => nativeFn(...args.map(normalizeArg));
+                const manager = (this as any)._threadManager;
+
+                if (manager && typeof manager.withAttachedThread === "function") {
+                  if (typeof manager.isInAttachedContext === "function" && manager.isInAttachedContext()) {
+                    return invoke();
+                  }
+                  return manager.withAttachedThread(invoke);
+                }
+
+                return invoke();
+              };
           Object.defineProperty(target, name, {
             configurable: false,
             enumerable: true,
@@ -280,10 +344,12 @@ export class MonoApi {
   }
 
   private getExceptionSlot(): NativePointer {
+    this.ensureNotDisposed();
+    
     if (this.exceptionSlot && !pointerIsNull(this.exceptionSlot)) {
       return this.exceptionSlot;
     }
-    this.exceptionSlot = Memory.alloc(Process.pointerSize);
+    this.exceptionSlot = this.trackAllocation(Memory.alloc(Process.pointerSize));
     return this.exceptionSlot;
   }
 
@@ -292,6 +358,8 @@ export class MonoApi {
     throwOnMissing: boolean,
     signature: MonoExportSignature = getSignature(name),
   ): NativePointer {
+    this.ensureNotDisposed();
+    
     const cached = this.addressCache.get(name);
     if (cached) {
       return cached;
@@ -375,6 +443,9 @@ export class MonoApi {
 function normalizeArg(arg: MonoArg): any {
   if (arg === null || arg === undefined) {
     return NULL;
+  }
+  if (typeof arg === "boolean") {
+    return arg ? 1 : 0;
   }
   return arg;
 }

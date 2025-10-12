@@ -23,13 +23,19 @@ export class MonoProperty<TValue = any> extends MonoHandle {
     return this.native.mono_property_get_flags(this.pointer) as number;
   }
 
-  getGetter(): MonoMethod {
+  getGetter(): MonoMethod | null {
     const methodPtr = this.native.mono_property_get_get_method(this.pointer);
+    if (pointerIsNull(methodPtr)) {
+      return null;
+    }
     return new MonoMethod(this.api, methodPtr);
   }
 
-  getSetter(): MonoMethod {
+  getSetter(): MonoMethod | null {
     const methodPtr = this.native.mono_property_get_set_method(this.pointer);
+    if (pointerIsNull(methodPtr)) {
+      return null;
+    }
     return new MonoMethod(this.api, methodPtr);
   }
 
@@ -112,9 +118,9 @@ export class MonoProperty<TValue = any> extends MonoHandle {
       throw new Error(`Property ${this.getName()} is not readable`);
     }
 
-  const rawResult = getter.invoke(this.resolveInstance(instance), []);
-  const resultObject = pointerIsNull(rawResult) ? null : new MonoObject(this.api, rawResult);
-  return this.convertResult(resultObject) as TValue;
+    const rawResult = getter.invoke(this.resolveInstance(instance), []);
+    const resultObject = pointerIsNull(rawResult) ? null : new MonoObject(this.api, rawResult);
+    return this.convertResult(resultObject) as TValue;
   }
 
   /**

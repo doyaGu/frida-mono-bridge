@@ -1,8 +1,7 @@
 import { MonoHandle } from "./base";
-import { pointerIsNull, readUtf8String } from "../runtime/mem";
+import { pointerIsNull, readUtf8String, readUtf16String } from "../runtime/mem";
 import { MonoClass } from "./class";
 import { MonoObject } from "./object";
-import { MonoString } from "./string";
 import { MonoDomain } from "./domain";
 import { MonoType, MonoTypeKind, MonoTypeSummary } from "./type";
 import { FieldAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
@@ -304,7 +303,7 @@ export class MonoField<T = any> extends MonoHandle {
       case MonoTypeKind.R8:
         return storage.readDouble();
       case MonoTypeKind.String:
-        return pointerIsNull(valuePointer) ? null : new MonoString(this.api, valuePointer).toString();
+        return pointerIsNull(valuePointer) ? null : this.readMonoString(valuePointer);
       case MonoTypeKind.Pointer:
       case MonoTypeKind.ByRef:
       case MonoTypeKind.FunctionPointer:
@@ -739,7 +738,7 @@ export class MonoField<T = any> extends MonoHandle {
     // Convert primitive types to Mono objects
     switch (kind) {
       case MonoTypeKind.String:
-        return MonoString.new(this.api, String(value));
+        return this.api.stringNew(String(value));
       case MonoTypeKind.Boolean:
       case MonoTypeKind.I1:
       case MonoTypeKind.U1:
@@ -816,6 +815,12 @@ export class MonoField<T = any> extends MonoHandle {
           typeInfo
         };
     }
+  }
+
+  private readMonoString(pointer: NativePointer): string {
+    const chars = this.native.mono_string_chars(pointer);
+    const length = this.native.mono_string_length(pointer) as number;
+    return readUtf16String(chars, length);
   }
 
   private deserializeValue(serializedValue: any): any {

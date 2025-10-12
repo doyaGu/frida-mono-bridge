@@ -48,8 +48,12 @@ export class MonoImage extends MonoHandle {
    * @returns Class if found, null otherwise
    */
   tryClassFromName(namespace: string, name: string): MonoClass | null {
+    const trimmedName = name ? name.trim() : "";
+    if (trimmedName.length === 0) {
+      return null;
+    }
     const nsPtr = namespace ? allocUtf8(namespace) : NULL;
-    const namePtr = allocUtf8(name);
+    const namePtr = allocUtf8(trimmedName);
     const klassPtr = this.native.mono_class_from_name(this.pointer, nsPtr, namePtr);
     return pointerIsNull(klassPtr) ? null : new MonoClass(this.api, klassPtr);
   }
@@ -64,22 +68,30 @@ export class MonoImage extends MonoHandle {
   }
 
   findClassByFullName(fullName: string): MonoClass {
-    const separatorIndex = fullName.lastIndexOf(".");
-    if (separatorIndex === -1) {
-      return this.classFromName("", fullName);
+    const trimmed = fullName ? fullName.trim() : "";
+    if (trimmed.length === 0) {
+      throw new Error("Class name must be non-empty");
     }
-    const namespace = fullName.slice(0, separatorIndex);
-    const name = fullName.slice(separatorIndex + 1);
+    const separatorIndex = trimmed.lastIndexOf(".");
+    if (separatorIndex === -1) {
+      return this.classFromName("", trimmed);
+    }
+    const namespace = trimmed.slice(0, separatorIndex);
+    const name = trimmed.slice(separatorIndex + 1);
     return this.classFromName(namespace, name);
   }
 
   tryFindClassByFullName(fullName: string): MonoClass | null {
-    const separatorIndex = fullName.lastIndexOf(".");
-    if (separatorIndex === -1) {
-      return this.tryClassFromName("", fullName);
+    const trimmed = fullName ? fullName.trim() : "";
+    if (trimmed.length === 0) {
+      return null;
     }
-    const namespace = fullName.slice(0, separatorIndex);
-    const name = fullName.slice(separatorIndex + 1);
+  const separatorIndex = trimmed.lastIndexOf(".");
+    if (separatorIndex === -1) {
+      return this.tryClassFromName("", trimmed);
+    }
+    const namespace = trimmed.slice(0, separatorIndex);
+    const name = trimmed.slice(separatorIndex + 1);
     return this.tryClassFromName(namespace, name);
   }
 

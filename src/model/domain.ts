@@ -86,8 +86,12 @@ export class MonoDomain extends MonoHandle {
    * Find a class by full name across all assemblies
    */
   class(fullName: string): MonoClass | null {
+    const trimmed = fullName ? fullName.trim() : "";
+    if (trimmed.length === 0) {
+      return null;
+    }
     for (const assembly of this.assemblies) {
-      const klass = assembly.image.class(fullName);
+      const klass = assembly.image.class(trimmed);
       if (klass) {
         return klass;
       }
