@@ -273,7 +273,7 @@ export function testVersionDetection(): TestResult {
       // Test that version features correlate with assembly capabilities
       if (assemblies.length > 0) {
         const firstAssembly = assemblies[0];
-        const image = firstAssembly.getImage();
+        const image = firstAssembly.image;
 
         if (image && version.features.metadataTables) {
           // If metadata tables are available, we should be able to get classes

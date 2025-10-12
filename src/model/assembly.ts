@@ -1,5 +1,5 @@
 import { MonoApi } from "../runtime/api";
-import { pointerIsNull, readUtf8String, readU16 } from "../runtime/mem";
+import { readUtf8String } from "../utils/string-utils";
 import { MonoHandle } from "./base";
 import { MonoImage } from "./image";
 import { MonoClass } from "./class";
@@ -22,13 +22,13 @@ export class MonoAssembly extends MonoHandle {
    * Get the image (metadata) for this assembly
    */
   get image(): MonoImage {
-    return this.getImage();
+    return this.#getImage();
   }
 
   /**
-   * Get the image (metadata) for this assembly (legacy method)
+   * Internal method to get the image (metadata) for this assembly
    */
-  getImage(): MonoImage {
+  #getImage(): MonoImage {
     const imagePtr = this.native.mono_assembly_get_image(this.pointer);
     return new MonoImage(this.api, imagePtr);
   }
@@ -122,7 +122,7 @@ export class MonoAssembly extends MonoHandle {
     if (this.#loadState === AssemblyLoadState.Unknown) {
       // Try to determine load state by checking if we can access the image
       try {
-        this.getImage().getClassCount();
+        this.#getImage().getClassCount();
         this.#loadState = AssemblyLoadState.Loaded;
       } catch {
         this.#loadState = AssemblyLoadState.Error;
@@ -137,7 +137,7 @@ export class MonoAssembly extends MonoHandle {
    * Get the total number of classes in this assembly
    */
   getClassCount(): number {
-    return this.getImage().getClassCount();
+    return this.#getImage().getClassCount();
   }
 
   /**
@@ -153,7 +153,6 @@ export class MonoAssembly extends MonoHandle {
    * Get assembly size information
    */
   getSizeInfo(): AssemblySizeInfo {
-    const image = this.getImage();
     const classCount = this.getClassCount();
 
     return {
@@ -429,7 +428,7 @@ export class MonoAssembly extends MonoHandle {
    * @param name Class name
    */
   findClass(namespace: string, name: string): MonoClass {
-    return this.getImage().classFromName(namespace, name);
+    return this.#getImage().classFromName(namespace, name);
   }
 
   /**
@@ -439,7 +438,7 @@ export class MonoAssembly extends MonoHandle {
    * @returns Class if found, null otherwise
    */
   tryFindClass(namespace: string, name: string): MonoClass | null {
-    return this.getImage().tryClassFromName(namespace, name);
+    return this.#getImage().tryClassFromName(namespace, name);
   }
 
   /**
@@ -448,7 +447,7 @@ export class MonoAssembly extends MonoHandle {
    * @returns Class if found, null otherwise
    */
   class(fullName: string): MonoClass | null {
-    return this.getImage().tryFindClassByFullName(fullName);
+    return this.#getImage().tryFindClassByFullName(fullName);
   }
 }
 

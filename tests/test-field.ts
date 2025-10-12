@@ -97,7 +97,7 @@ export function testFieldOperations(): TestResult {
 
       if (assemblies.length > 0) {
         const assembly = assemblies[0];
-        const image = assembly.getImage();
+        const image = assembly.image;
         const classes = image.getClasses();
 
         if (classes.length > 0) {

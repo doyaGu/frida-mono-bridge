@@ -1,12 +1,13 @@
 import { MonoHandle } from "./base";
-import { pointerIsNull, readUtf8String, readUtf16String } from "../runtime/mem";
+import { pointerIsNull } from "../utils/pointer-utils";
+import { readUtf8String, readUtf16String } from "../utils/string-utils";
 import { MonoClass } from "./class";
 import { MonoObject } from "./object";
 import { MonoDomain } from "./domain";
 import { MonoType, MonoTypeKind, MonoTypeSummary } from "./type";
 import { FieldAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
 import { CustomAttribute } from "./assembly";
-import { unwrapInstance, unwrapInstanceRequired } from "../utils/common-utilities";
+import { unwrapInstance, unwrapInstanceRequired } from "../utils/pointer-utils";
 
 export type FieldAccessibility =
   | "private-scope"

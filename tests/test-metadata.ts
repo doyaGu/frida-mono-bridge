@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Metadata Collection Tests
  */
 
@@ -38,7 +38,7 @@ export function testMetadataCollections(): TestResult {
         const assemblySummaries = assemblies.map(assembly => ({
           name: assembly.getName(),
           assembly: assembly,
-          hasImage: !!assembly.getImage()
+          hasImage: !!assembly.image
         }));
 
         assert(Array.isArray(assemblySummaries), "Should create assembly summaries array");
@@ -65,7 +65,7 @@ export function testMetadataCollections(): TestResult {
         const classSummaries = [];
 
         for (const assembly of assemblies) {
-          const image = assembly.getImage();
+          const image = assembly.image;
           if (image) {
             const classes = image.getClasses();
             totalClasses += classes.length;
@@ -107,7 +107,7 @@ export function testMetadataCollections(): TestResult {
 
         // Collect all classes from all assemblies
         for (const assembly of assemblies) {
-          const image = assembly.getImage();
+          const image = assembly.image;
           if (image) {
             const assemblyClasses = image.getClasses();
             classes.push(...assemblyClasses);
@@ -154,7 +154,7 @@ export function testMetadataCollections(): TestResult {
 
         if (assemblies.length > 0) {
           const firstAssembly = assemblies[0];
-          const image = firstAssembly.getImage();
+          const image = firstAssembly.image;
           if (image) {
             const classes = image.getClasses();
             assert(Array.isArray(classes), "Nested perform should allow class access");
@@ -223,14 +223,14 @@ export function testMetadataCollections(): TestResult {
             collect: () => assemblies.map(a => ({
               name: a.getName(),
               assembly: a,
-              image: a.getImage(),
-              hasImage: !!a.getImage()
+              image: a.image,
+              hasImage: !!a.image
             }))
           },
           {
             name: "Assembly + image + classes",
             collect: () => assemblies.map(a => {
-              const image = a.getImage();
+              const image = a.image;
               return {
                 name: a.getName(),
                 assembly: a,

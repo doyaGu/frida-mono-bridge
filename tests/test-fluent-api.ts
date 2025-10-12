@@ -109,7 +109,7 @@ export function testFluentApi(): TestResult {
 
       if (assemblies.length > 0) {
         const firstAssembly = assemblies[0];
-        const image = firstAssembly.getImage();
+        const image = firstAssembly.image;
         assert(image !== null, "Should get assembly image");
 
         const classes = image.getClasses();
@@ -173,7 +173,7 @@ export function testFluentApi(): TestResult {
 
       if (assemblies.length > 0) {
         const assembly = assemblies[0];
-        const image = assembly.getImage();
+        const image = assembly.image;
         assert(image !== null, "Should get assembly image");
         assert(typeof image.getName === "function", "Image should have getName method");
         assert(typeof image.classFromName === "function", "Image should have classFromName method");
@@ -212,7 +212,7 @@ export function testFluentApi(): TestResult {
       if (assemblies.length > 0) {
         // Test complex chaining: domain -> assembly -> image -> class -> method
         const firstAssembly = assemblies[0];
-        const image = firstAssembly.getImage();
+        const image = firstAssembly.image;
         const classes = image.getClasses();
 
         if (classes.length > 0) {

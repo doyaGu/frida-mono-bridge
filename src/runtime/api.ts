@@ -1,4 +1,6 @@
-import { allocPointerArray, allocUtf8, pointerIsNull, readUtf8String, readUtf16String } from "./mem";
+import { allocPointerArray, allocUtf8 } from "./mem";
+import { pointerIsNull } from "../utils/pointer-utils";
+import { readUtf8String, readUtf16String } from "../utils/string-utils";
 import { MonoModuleInfo } from "./module";
 import { ALL_MONO_EXPORTS, MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./signatures";
 import { LruCache } from "../utils/lru-cache";

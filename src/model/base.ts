@@ -1,5 +1,5 @@
 import { MonoApi } from "../runtime/api";
-import { isValidPointer } from "../utils/common-utilities";
+import { isValidPointer } from "../utils/pointer-utils";
 import { MonoError } from "../patterns/errors";
 
 /**

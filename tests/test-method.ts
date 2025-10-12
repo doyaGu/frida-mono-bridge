@@ -5,7 +5,7 @@
 import Mono from "../src";
 import { MonoMethod } from "../src/model/method";
 import { MonoImage } from "../src/model/image";
-import { createMonoString } from "../src/model/string";
+import { MonoString } from "../src/model/string";
 import { MonoManagedExceptionError } from "../src/runtime/api";
 import { TestResult, TestSuite, assert, createTest, assertPerformWorks } from "./test-framework";
 
@@ -175,7 +175,7 @@ export function testMethodOperations(): TestResult {
       const corlib = getCorlibImage();
       const toUpper = MonoMethod.find(Mono.api, corlib, "System.String:ToUpperInvariant()");
 
-      const instance = createMonoString(Mono.api, "Frida Test");
+      const instance = MonoString.new(Mono.api, "Frida Test");
       const resultPtr = toUpper.invoke(instance, []);
       const resultText = readManagedString(resultPtr);
       assert(resultText === "FRIDA TEST", "Instance method should work");

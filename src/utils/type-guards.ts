@@ -17,9 +17,16 @@ function throwValidationError(
 
 /**
  * Check if value is a valid NativePointer
+ * Uses robust instanceof check followed by duck typing validation
  */
 export function isNativePointer(value: any): value is any {
-  return value && typeof value === 'object' && typeof value.isNull === 'function';
+  if (value instanceof NativePointer) {
+    return true;
+  }
+  return value !== null
+    && typeof value === "object"
+    && typeof value.isNull === "function"
+    && typeof value.toString === "function";
 }
 
 /**

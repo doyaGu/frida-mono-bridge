@@ -1,5 +1,7 @@
 import { MonoApi } from "../runtime/api";
-import { allocUtf8, pointerIsNull, readUtf8String } from "../runtime/mem";
+import { allocUtf8 } from "../runtime/mem";
+import { pointerIsNull } from "../utils/pointer-utils";
+import { readUtf8String } from "../utils/string-utils";
 import { MonoHandle } from "./base";
 import { MonoDomain } from "./domain";
 import { MonoClass } from "./class";
@@ -9,7 +11,7 @@ import { MonoClass } from "./class";
  */
 export class MonoImage extends MonoHandle {
   static fromAssemblyPath(api: MonoApi, path: string, domain: MonoDomain = MonoDomain.getRoot(api)): MonoImage {
-    return domain.assemblyOpen(path).getImage();
+    return domain.assemblyOpen(path).image;
   }
 
   /**

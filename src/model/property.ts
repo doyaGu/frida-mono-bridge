@@ -1,5 +1,6 @@
 import { MethodArgument, MonoHandle } from "./base";
-import { pointerIsNull, readUtf8String } from "../runtime/mem";
+import { pointerIsNull } from "../utils/pointer-utils";
+import { readUtf8String } from "../utils/string-utils";
 import { MonoMethod } from "./method";
 import { MonoClass } from "./class";
 import { MonoObject } from "./object";

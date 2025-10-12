@@ -2,7 +2,7 @@
  * Validation utilities for input checking
  */
 
-import { pointerIsNull } from "../runtime/mem";
+import { pointerIsNull } from "./pointer-utils";
 
 /**
  * Validates that a string is non-empty after trimming

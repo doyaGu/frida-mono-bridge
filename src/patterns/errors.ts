@@ -309,3 +309,94 @@ export function asResult<T extends any[], R>(
     }
   };
 }
+
+/**
+ * Validation result interface
+ */
+export interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+/**
+ * Builder for creating validation results with fluent API
+ * Eliminates duplication of validation pattern across model classes
+ */
+export class ValidationBuilder {
+  private errors: string[] = [];
+  private warnings: string[] = [];
+
+  /**
+   * Add a validation check
+   */
+  check(condition: boolean, errorMessage: string): this {
+    if (!condition) {
+      this.errors.push(errorMessage);
+    }
+    return this;
+  }
+
+  /**
+   * Add a warning
+   */
+  warn(condition: boolean, warningMessage: string): this {
+    if (condition) {
+      this.warnings.push(warningMessage);
+    }
+    return this;
+  }
+
+  /**
+   * Execute a function and catch errors as validation failures
+   */
+  execute(fn: () => void, errorPrefix?: string): this {
+    try {
+      fn();
+    } catch (error) {
+      const message = errorPrefix
+        ? `${errorPrefix}: ${error}`
+        : String(error);
+      this.errors.push(message);
+    }
+    return this;
+  }
+
+  /**
+   * Add a custom error
+   */
+  addError(errorMessage: string): this {
+    this.errors.push(errorMessage);
+    return this;
+  }
+
+  /**
+   * Add a custom warning
+   */
+  addWarning(warningMessage: string): this {
+    this.warnings.push(warningMessage);
+    return this;
+  }
+
+  /**
+   * Build and return validation result
+   */
+  build(): ValidationResult {
+    return {
+      isValid: this.errors.length === 0,
+      errors: [...this.errors],
+      warnings: [...this.warnings]
+    };
+  }
+
+  /**
+   * Build and throw if validation failed
+   */
+  buildOrThrow(context?: string): void {
+    const result = this.build();
+    if (!result.isValid) {
+      const message = result.errors.join('; ');
+      throw new MonoValidationError(message, context);
+    }
+  }
+}

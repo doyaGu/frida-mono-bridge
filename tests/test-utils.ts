@@ -5,9 +5,10 @@
 
 import Mono from "../src";
 import { TestResult, TestSuite, createTest, assert, assertThrows, assertPerformWorks, assertApiAvailable } from "./test-framework";
-import { pointerIsNull, readUtf8String, readUtf16String } from "../src/runtime/mem";
+import { pointerIsNull } from "../src/utils/pointer-utils";
+import { readUtf8String, readUtf16String } from "../src/utils/string-utils";
 import { MonoManagedExceptionError } from "../src/runtime/api";
-import { ensurePointer, unwrapInstance, unwrapInstanceRequired } from "../src/utils/common-utilities";
+import { ensurePointer, unwrapInstance, unwrapInstanceRequired } from "../src/utils/pointer-utils";
 import { MonoValidationError } from "../src/patterns/errors";
 
 export function testUtilities(): TestResult {

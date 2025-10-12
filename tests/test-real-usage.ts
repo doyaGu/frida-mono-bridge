@@ -35,7 +35,7 @@ export function testRealUsage(): TestResult {
       if (mscorlib) {
         console.log("    Found mscorlib assembly through domain API");
 
-        const image = mscorlib.getImage();
+        const image = mscorlib.image;
         if (image) {
           console.log("    mscorlib has accessible image");
           assert(!image.pointer.isNull(), "mscorlib image pointer should not be NULL");
@@ -149,7 +149,7 @@ export function testRealUsage(): TestResult {
 
       if (assemblies.length > 0) {
         const firstAssembly = assemblies[0];
-        const image = firstAssembly.getImage();
+        const image = firstAssembly.image;
 
         if (image) {
           const classes = image.getClasses();

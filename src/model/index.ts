@@ -39,7 +39,6 @@ export { MonoDelegate, MonoDelegate as Delegate, DelegateInvokeOptions } from ".
 export { MonoType, MonoType as Type, MonoTypeKind, MonoTypeNameFormat, MonoTypeSummary } from "./type";
 export { registerInternalCall } from "../runtime/icall";
 export * from "./metadata";
-export * from "./signature-infer";
 export * from "./base";
 export * from "./collections";
 export { MonoThread } from "../runtime/thread";

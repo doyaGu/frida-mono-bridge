@@ -76,7 +76,7 @@ export function testClassOperations(): TestResult {
 
       if (assemblies.length > 0) {
         const assembly = assemblies[0];
-        const image = assembly.getImage();
+        const image = assembly.image;
         const classes = image.getClasses();
 
         assert(Array.isArray(classes), "Should get classes array from image");

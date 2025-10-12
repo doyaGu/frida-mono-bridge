@@ -1,4 +1,6 @@
-import { readUtf8String, readU32, pointerIsNull } from "../runtime/mem";
+import { readU32 } from "../runtime/mem";
+import { pointerIsNull } from "../utils/pointer-utils";
+import { readUtf8String } from "../utils/string-utils";
 import { MonoHandle } from "./base";
 import { MonoClass } from "./class";
 import { MonoEnums } from "../runtime/enums";

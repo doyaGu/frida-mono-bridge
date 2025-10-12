@@ -45,7 +45,7 @@ export function testAssemblyOperations(): TestResult {
     const name = coreAssembly.getName();
     console.log(`    Loaded core library: ${name}`);
 
-    const image = coreAssembly.getImage();
+    const image = coreAssembly.image;
     assert(image !== null, "Core library should expose metadata image");
     assert(!image.pointer.isNull(), "Core library image pointer should not be NULL");
 
@@ -72,7 +72,7 @@ export function testAssemblyOperations(): TestResult {
         foundCount++;
         console.log(`    Found ${assemblyName}: ${assembly.getName()}`);
 
-        const image = assembly.getImage();
+        const image = assembly.image;
         if (image) {
           const classes = image.getClasses();
           console.log(`      ${classes.length} classes in ${assemblyName}`);
@@ -97,7 +97,7 @@ export function testAssemblyOperations(): TestResult {
     for (let i = 0; i < Math.min(3, assemblies.length); i++) {
       const assembly = assemblies[i];
       const name = assembly.getName();
-      const image = assembly.getImage();
+      const image = assembly.image;
 
       assert(typeof name === "string", "Assembly name should be string");
       assert(name.length > 0, "Assembly name should not be empty");
@@ -119,7 +119,7 @@ export function testAssemblyOperations(): TestResult {
 
     for (const assembly of assemblies.slice(0, 5)) { // Check first 5 assemblies
       const name = assembly.getName();
-      const image = assembly.getImage();
+      const image = assembly.image;
 
       // Test name properties
       assert(typeof name === "string", "Assembly name should be string");
@@ -197,7 +197,7 @@ export function testAssemblyOperations(): TestResult {
 
     if (assemblies.length > 0) {
       const assembly = assemblies[0];
-      const image = assembly.getImage();
+      const image = assembly.image;
       const classes = image.getClasses();
 
       if (classes.length > 0) {
@@ -241,7 +241,7 @@ export function testAssemblyOperations(): TestResult {
         const assembly = assemblies[0];
         assert(typeof assembly.getName === "function", "Assembly methods should work in nested calls");
 
-        const image = assembly.getImage();
+        const image = assembly.image;
         assert(image !== null, "Image access should work in deeper nesting");
         const classes = image.getClasses();
         assert(Array.isArray(classes), "Class access should work in deeper nesting");
@@ -273,7 +273,7 @@ export function testAssemblyOperations(): TestResult {
     if (unityCore) {
       console.log(`    Found UnityEngine.CoreModule: ${unityCore.getName()}`);
 
-      const image = unityCore.getImage();
+      const image = unityCore.image;
       if (image) {
         // Look for core Unity classes
         const gameObjectClass = image.class("UnityEngine.GameObject");
@@ -293,7 +293,7 @@ export function testAssemblyOperations(): TestResult {
     if (userAssembly) {
       console.log(`    Found Assembly-CSharp: ${userAssembly.getName()}`);
 
-      const image = userAssembly.getImage();
+      const image = userAssembly.image;
       if (image) {
         const classes = image.getClasses();
         console.log(`    User assembly has ${classes.length} classes`);

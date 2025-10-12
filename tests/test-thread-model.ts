@@ -279,7 +279,7 @@ export function testThreadModel(): TestResult {
       const assemblies = domain.getAssemblies();
       if (assemblies.length > 0) {
         const firstAssembly = assemblies[0];
-        const image = firstAssembly.getImage();
+        const image = firstAssembly.image;
 
         if (image) {
           const classes = image.getClasses();

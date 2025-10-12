@@ -2,7 +2,7 @@ import { MonoApi } from "../runtime/api";
 import { MonoObject } from "./object";
 import { MonoClass } from "./class";
 import { MonoTypeKind } from "./type";
-import { pointerIsNull } from "../runtime/mem";
+import { pointerIsNull } from "../utils/pointer-utils";
 
 // ===== TYPE DEFINITIONS AND GUARDS =====
 

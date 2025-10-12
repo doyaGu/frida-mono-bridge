@@ -113,46 +113,6 @@ export class ThreadManager {
   }
 }
 
-/**
- * Legacy helper for backwards compatibility.
- * Prefers using ThreadManager from MonoApi instance.
- */
-export function withAttachedThread<T>(api: MonoApi, fn: () => T): T {
-  const threadManager = (api as any)._threadManager as ThreadManager | undefined;
-  if (threadManager) {
-    return threadManager.run(fn);
-  }
-  // Fallback for old code paths
-  const threadId = getCurrentThreadId();
-  ensureAttached(api, threadId);
-  return fn();
-}
-
-/**
- * Legacy helper for backwards compatibility.
- * Prefers using ThreadManager from MonoApi instance.
- */
-export function detachAll(api: MonoApi): void {
-  const threadManager = (api as any)._threadManager as ThreadManager | undefined;
-  if (threadManager) {
-    threadManager.detachAll();
-    return;
-  }
-}
-
-/**
- * Legacy helper for backwards compatibility.
- * Prefers using ThreadManager from MonoApi instance.
- */
-export function ensureAttached(api: MonoApi, threadId = getCurrentThreadId()): NativePointer {
-  const threadManager = (api as any)._threadManager as ThreadManager | undefined;
-  if (threadManager) {
-    return threadManager.ensureAttached(threadId);
-  }
-  // Fallback - attach without caching (unsafe but maintains compatibility)
-  return api.attachThread();
-}
-
 function getCurrentThreadId(): number {
   if (typeof Process.getCurrentThreadId === "function") {
     return Process.getCurrentThreadId();

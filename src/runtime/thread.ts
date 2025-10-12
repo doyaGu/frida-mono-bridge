@@ -4,7 +4,7 @@
  */
 
 import { MonoApi } from "../runtime/api";
-import { pointerIsNull } from "../runtime/mem";
+import { pointerIsNull } from "../utils/pointer-utils";
 import type { ThreadManager } from "./guard";
 
 /**
@@ -186,9 +186,6 @@ export namespace MonoThread {
     return MonoThread.getId();
   }
 }
-
-// Re-export for convenience
-export { MonoThread as Thread };
 
 function getManager(api: MonoApi): ThreadManager {
   return (api as any)._threadManager as ThreadManager;

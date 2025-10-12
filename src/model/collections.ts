@@ -40,7 +40,7 @@ export function collectAssemblies(api: MonoApi, options: AssemblyCollectionOptio
       continue;
     }
 
-    const image = assembly.getImage();
+    const image = assembly.image;
     let classes: MonoClass[] | undefined;
 
     if (options.includeClasses) {

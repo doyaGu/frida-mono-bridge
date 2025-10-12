@@ -1,5 +1,5 @@
 import { MonoApi } from "../runtime/api";
-import { readUtf16String } from "../runtime/mem";
+import { readUtf16String } from "../utils/string-utils";
 import { MonoObject } from "./object";
 
 /**
@@ -91,15 +91,4 @@ export class MonoString extends MonoObject {
     const pointer = api.stringNew(value);
     return new MonoString(api, pointer);
   }
-}
-
-/**
- * Create a Mono string from a JavaScript string
- * Legacy compatibility function
- * @param api Mono API instance
- * @param value String value
- * @returns New MonoString instance
- */
-export function createMonoString(api: MonoApi, value: string): MonoString {
-  return MonoString.new(api, value);
 }
