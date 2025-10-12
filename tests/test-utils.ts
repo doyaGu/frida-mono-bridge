@@ -250,7 +250,7 @@ export function testUtilities(): TestResult {
 
       // Test pointer utility in context of API operations
       const rootDomain = api.getRootDomain();
-      const isRootNull = pointerIsNull(rootDomain.handle);
+      const isRootNull = pointerIsNull(rootDomain);
       assert(isRootNull === false, "Root domain pointer should not be null");
 
       // Test exception utility in context of API operations

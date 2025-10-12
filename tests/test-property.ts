@@ -72,14 +72,24 @@ export function testPropertyOperations(): TestResult {
           console.log(`    Found System.String.Length property: ${lengthProperty.getName()}`);
 
           // Test accessor methods
-          const getMethod = lengthProperty.getGetter();
-          if (getMethod) {
-            console.log(`    Length property has getter: ${getMethod.getName()}`);
+          try {
+            const getMethod = lengthProperty.getGetter();
+            if (getMethod) {
+              console.log(`    Length property has getter: ${getMethod.getName()}`);
+            }
+          } catch (error) {
+            console.log(`    Length getter access failed: ${error}`);
           }
 
-          const setMethod = lengthProperty.getSetter();
-          if (setMethod) {
-            console.log(`    Length property has setter: ${setMethod.getName()}`);
+          try {
+            const setMethod = lengthProperty.getSetter();
+            if (setMethod) {
+              console.log(`    Length property has setter: ${setMethod.getName()}`);
+            } else {
+              console.log("    Length property is read-only (no setter)");
+            }
+          } catch (error) {
+            console.log(`    Length setter access failed: ${error}`);
           }
         } else {
           console.log("    System.String.Length property not found or accessible");

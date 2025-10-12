@@ -66,12 +66,19 @@ export function testModuleDetection(): TestResult {
       assert(typeof moduleBase === 'object', "Module base should be object");
       assert(!moduleBase.isNull(), "Module base should not be null pointer");
 
-      // Test that base address is within reasonable range
-      const baseValue = moduleBase.toUInt32();
-      assert(baseValue > 0x10000, "Module base should be above typical NULL page");
-      assert(baseValue < 0x7FFFFFFF, "Module base should be in user space");
+      // Test that base address is within a reasonable user-mode range
+      const lowerBound = ptr("0x10000");
+      assert(moduleBase.compare(lowerBound) > 0, "Module base should be above typical NULL page");
 
-      console.log(`    Module base address: 0x${baseValue.toString(16)}`);
+      if (Process.pointerSize === 4) {
+        const upperBound = ptr("0x7FFFFFFF");
+        assert(moduleBase.compare(upperBound) <= 0, "Module base should be in user space");
+      } else {
+        const upperBound = ptr("0x00007FFFFFFFFFFF");
+        assert(moduleBase.compare(upperBound) <= 0, "Module base should be within canonical user address space");
+      }
+
+      console.log(`    Module base address: ${moduleBase}`);
     });
   }));
 

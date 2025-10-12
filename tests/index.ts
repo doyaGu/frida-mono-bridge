@@ -228,5 +228,19 @@ export {
   testUtilities,
 };
 
+const globalScope = globalThis as any;
+const autoRunConfig = globalScope.__monoTestConfig ?? {};
+const shouldAutoRun = globalScope.__monoTestAutoRun !== false;
+
+if (shouldAutoRun) {
+  setTimeout(() => {
+    try {
+      runAllTests(autoRunConfig);
+    } catch (error) {
+      console.error("[MonoTests] Unhandled error during test run:", error);
+    }
+  });
+}
+
 
 

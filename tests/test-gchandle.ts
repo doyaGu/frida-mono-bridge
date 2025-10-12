@@ -76,8 +76,8 @@ export function testGCHandles(): TestResult {
       assert(!testString.isNull(), "Test string should be created");
 
       // Create a GC handle for the string
-      const gcHandle = Mono.api.native.mono_gchandle_new(testString, false);
-      assert(!gcHandle.isNull(), "GC handle should be created");
+      const gcHandle = Mono.api.native.mono_gchandle_new(testString, false) as number;
+      assert(typeof gcHandle === "number" && gcHandle !== 0, "GC handle should be a non-zero integer");
 
       // Test getting the target from GC handle
       const target = Mono.api.native.mono_gchandle_get_target(gcHandle);
@@ -97,8 +97,8 @@ export function testGCHandles(): TestResult {
       assert(!testString.isNull(), "Test string should be created");
 
       // Create a weak reference GC handle
-      const weakHandle = Mono.api.native.mono_gchandle_new_weakref(testString, false);
-      assert(!weakHandle.isNull(), "Weak reference handle should be created");
+      const weakHandle = Mono.api.native.mono_gchandle_new_weakref(testString, false) as number;
+      assert(typeof weakHandle === "number" && weakHandle !== 0, "Weak reference handle should be a non-zero integer");
 
       // Get target from weak reference
       const weakTarget = Mono.api.native.mono_gchandle_get_target(weakHandle);
@@ -121,11 +121,13 @@ export function testGCHandles(): TestResult {
       // Test GC handle methods
       const testString = Mono.api.stringNew("Pool Test");
       const handle = gcUtils.handle(testString);
-      console.log(`    Created GC handle: ${handle}`);
+  assert(handle.handle !== 0, "Handle ID should be non-zero");
+  console.log(`    Created GC handle: ${handle.handle}`);
 
       // Test releasing handle
       gcUtils.releaseHandle(handle);
-      console.log("    Released GC handle");
+  assert(handle.handle === 0, "Handle should be released and zeroed");
+  console.log("    Released GC handle");
     });
   }));
 
@@ -177,11 +179,11 @@ export function testGCHandles(): TestResult {
       const testString1 = Mono.api.stringNew("Consistency Test 1");
       const testString2 = Mono.api.stringNew("Consistency Test 2");
 
-      const handle1 = Mono.api.native.mono_gchandle_new(testString1, false);
-      const handle2 = Mono.api.native.mono_gchandle_new(testString2, false);
+  const handle1 = Mono.api.native.mono_gchandle_new(testString1, false) as number;
+  const handle2 = Mono.api.native.mono_gchandle_new(testString2, false) as number;
 
       // Verify handles are different
-      assert(!handle1.equals(handle2), "Different objects should have different handles");
+  assert(handle1 !== handle2, "Different objects should have different handle values");
 
       // Verify targets are correct
       const target1 = Mono.api.native.mono_gchandle_get_target(handle1);
@@ -221,7 +223,7 @@ export function testGCHandles(): TestResult {
       const testString = Mono.api.stringNew("Domain Integration Test");
 
       // Create GC handle
-      const gcHandle = Mono.api.native.mono_gchandle_new(testString, false);
+  const gcHandle = Mono.api.native.mono_gchandle_new(testString, false) as number;
 
       // Test domain operations with GC handle
       const assemblies = domain.getAssemblies();
@@ -264,7 +266,7 @@ export function testGCHandles(): TestResult {
       // Test nested Mono.perform calls with GC handle operations
       Mono.perform(() => {
         const testString = Mono.api.stringNew("Nested Test");
-        const gcHandle = Mono.api.native.mono_gchandle_new(testString, false);
+        const gcHandle = Mono.api.native.mono_gchandle_new(testString, false) as number;
 
         // Nested operations
         Mono.perform(() => {
