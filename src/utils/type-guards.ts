@@ -3,7 +3,17 @@
  * Provides runtime type checking and validation functions
  */
 
+import { MonoValidationError } from "../patterns/errors";
+
 declare const NativePointer: any;
+
+function throwValidationError(
+  parameter: string,
+  message: string,
+  value?: unknown
+): never {
+  throw new MonoValidationError(message, parameter, value);
+}
 
 /**
  * Check if value is a valid NativePointer
@@ -180,11 +190,11 @@ export function validateRequired<T>(
   validator?: (value: T) => boolean
 ): T {
   if (isNullOrUndefined(value)) {
-    throw new Error(`Required parameter '${name}' is null or undefined`);
+    throwValidationError(name, `Required parameter '${name}' is null or undefined`, value as unknown);
   }
 
   if (validator && !validator(value)) {
-    throw new Error(`Parameter '${name}' failed validation`);
+    throwValidationError(name, `Parameter '${name}' failed validation`, value);
   }
 
   return value;
@@ -199,15 +209,15 @@ export function validateArray<T>(
   minLength: number = 0
 ): T[] {
   if (isNullOrUndefined(value)) {
-    throw new Error(`Parameter '${name}' is null or undefined`);
+    throwValidationError(name, `Parameter '${name}' is null or undefined`, value as unknown);
   }
 
   if (!isArray(value)) {
-    throw new Error(`Parameter '${name}' is not an array`);
+    throwValidationError(name, `Parameter '${name}' is not an array`, value);
   }
 
   if (value.length < minLength) {
-    throw new Error(`Parameter '${name}' must have at least ${minLength} elements`);
+    throwValidationError(name, `Parameter '${name}' must have at least ${minLength} elements`, value);
   }
 
   return value;
@@ -222,25 +232,25 @@ export function validateString(
   options: { minLength?: number; maxLength?: number; pattern?: RegExp } = {}
 ): string {
   if (isNullOrUndefined(value)) {
-    throw new Error(`Parameter '${name}' is null or undefined`);
+    throwValidationError(name, `Parameter '${name}' is null or undefined`, value as unknown);
   }
 
   if (!isString(value)) {
-    throw new Error(`Parameter '${name}' is not a string`);
+    throwValidationError(name, `Parameter '${name}' is not a string`, value);
   }
 
   const { minLength = 0, maxLength = Infinity, pattern } = options;
 
   if (value.length < minLength) {
-    throw new Error(`Parameter '${name}' must be at least ${minLength} characters long`);
+    throwValidationError(name, `Parameter '${name}' must be at least ${minLength} characters long`, value);
   }
 
   if (value.length > maxLength) {
-    throw new Error(`Parameter '${name}' must be no more than ${maxLength} characters long`);
+    throwValidationError(name, `Parameter '${name}' must be no more than ${maxLength} characters long`, value);
   }
 
   if (pattern && !pattern.test(value)) {
-    throw new Error(`Parameter '${name}' does not match required pattern`);
+    throwValidationError(name, `Parameter '${name}' does not match required pattern`, value);
   }
 
   return value;

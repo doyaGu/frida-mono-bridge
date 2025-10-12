@@ -47,7 +47,7 @@ export class MonoNamespace {
       throw new Error("Mono API not initialized");
     }
 
-    return this._api._threadManager.withAttachedThread(callback);
+    return this._api._threadManager.run(callback);
   }
 
   /**
@@ -144,7 +144,7 @@ export class MonoNamespace {
       this._api = createMonoApi(this._module);
 
       // Initialize thread manager
-      (this._api as any)._threadManager = new ThreadManager(this._api);
+      this._api._threadManager = new ThreadManager(this._api);
 
       // Attach current thread
       this._api._threadManager.ensureAttached();

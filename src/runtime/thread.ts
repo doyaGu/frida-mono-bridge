@@ -5,6 +5,7 @@
 
 import { MonoApi } from "../runtime/api";
 import { pointerIsNull } from "../runtime/mem";
+import type { ThreadManager } from "./guard";
 
 /**
  * Represents a thread attached to the Mono runtime.
@@ -37,7 +38,7 @@ export class MonoThread {
    * console.log(`Thread ID: ${thread.getId()}`);
    */
   static current(api: MonoApi): MonoThread {
-    const handle = api.attachThread();
+    const handle = getManager(api).ensureAttached();
     return new MonoThread(api, handle);
   }
 
@@ -57,8 +58,7 @@ export class MonoThread {
    * }
    */
   static attach(api: MonoApi): MonoThread {
-    const handle = api.attachThread();
-    return new MonoThread(api, handle);
+    return MonoThread.current(api);
   }
 
   /**
@@ -76,18 +76,7 @@ export class MonoThread {
    * });
    */
   static withAttached<T>(api: MonoApi, fn: () => T): T {
-    const threadManager = (api as any)._threadManager;
-    if (threadManager && typeof threadManager.withAttachedThread === "function") {
-      return threadManager.withAttachedThread(fn);
-    }
-    // Fallback
-    const thread = MonoThread.attach(api);
-    try {
-      return fn();
-    } finally {
-      // Note: In practice, we don't detach as ThreadManager handles this
-      // This is just for compatibility
-    }
+    return getManager(api).run(fn);
   }
 
   /**
@@ -171,11 +160,7 @@ export namespace MonoThread {
    * const handle = MonoThread.ensureAttached(Mono.api);
    */
   export function ensureAttached(api: MonoApi): NativePointer {
-    const threadManager = (api as any)._threadManager;
-    if (threadManager && typeof threadManager.ensureAttached === "function") {
-      return threadManager.ensureAttached();
-    }
-    return api.attachThread();
+    return getManager(api).ensureAttached();
   }
 
   /**
@@ -189,10 +174,7 @@ export namespace MonoThread {
    * MonoThread.detachAll(Mono.api);
    */
   export function detachAll(api: MonoApi): void {
-    const threadManager = (api as any)._threadManager;
-    if (threadManager && typeof threadManager.detachAll === "function") {
-      threadManager.detachAll();
-    }
+    getManager(api).detachAll();
   }
 
   /**
@@ -207,3 +189,7 @@ export namespace MonoThread {
 
 // Re-export for convenience
 export { MonoThread as Thread };
+
+function getManager(api: MonoApi): ThreadManager {
+  return (api as any)._threadManager as ThreadManager;
+}

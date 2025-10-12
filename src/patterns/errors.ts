@@ -57,6 +57,66 @@ export class MonoError extends Error {
 }
 
 /**
+ * Validation error
+ */
+export class MonoValidationError extends MonoError {
+  constructor(
+    message: string,
+    public readonly parameter?: string,
+    public readonly value?: unknown,
+    cause?: Error
+  ) {
+    const context = parameter ? `Validation: ${parameter}` : "Validation";
+    super(message, context, cause);
+    this.name = "MonoValidationError";
+  }
+
+  override toJSON(): any {
+    const base = super.toJSON();
+    return {
+      ...base,
+      parameter: this.parameter,
+      value: this.value,
+    };
+  }
+}
+
+/**
+ * Helper for building validation errors with consistent messaging
+ */
+export function validationError(
+  parameter: string,
+  reason: string,
+  value?: unknown,
+  cause?: Error
+): MonoValidationError {
+  const message = `Parameter '${parameter}' ${reason}`;
+  return new MonoValidationError(message, parameter, value, cause);
+}
+
+/**
+ * Memory management error
+ */
+export class MonoMemoryError extends MonoError {
+  constructor(message: string, cause?: Error) {
+    super(message, "Memory Management", cause);
+    this.name = "MonoMemoryError";
+  }
+}
+
+/**
+ * Assert helper that throws a MonoError when condition fails
+ */
+export function monoInvariant(
+  condition: unknown,
+  errorFactory: () => MonoError
+): asserts condition {
+  if (!condition) {
+    throw errorFactory();
+  }
+}
+
+/**
  * Runtime initialization error
  */
 export class MonoInitializationError extends MonoError {
@@ -129,16 +189,6 @@ export class MonoTypeError extends MonoError {
 
     super(message, context, cause);
     this.name = "MonoTypeError";
-  }
-}
-
-/**
- * Memory management error
- */
-export class MonoMemoryError extends MonoError {
-  constructor(message: string, cause?: Error) {
-    super(message, "Memory Management", cause);
-    this.name = "MonoMemoryError";
   }
 }
 

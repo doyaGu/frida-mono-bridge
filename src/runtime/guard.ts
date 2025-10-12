@@ -4,6 +4,14 @@ import { MonoApi } from "./api";
  * Thread management helper for Mono runtime.
  * Tracks attached threads per MonoApi instance to avoid redundant attach/detach cycles.
  */
+export interface ThreadRunOptions {
+  /**
+   * Skip ensuring the thread is attached before running.
+   * Only use this for operations that are already guaranteed to be in an attached context.
+   */
+  attachIfNeeded?: boolean;
+}
+
 export class ThreadManager {
   private readonly attachedThreads = new Map<number, NativePointer>();
   private readonly activeAttachments = new Set<number>();
@@ -17,10 +25,23 @@ export class ThreadManager {
    * @returns Result of the callback
    */
   withAttachedThread<T>(fn: () => T): T {
+    return this.run(fn);
+  }
+
+  /**
+   * Preferred execution helper. Ensures the callback executes with the thread attached
+   * unless explicitly disabled via options.
+   */
+  run<T>(fn: () => T, options: ThreadRunOptions = {}): T {
+    const { attachIfNeeded = true } = options;
     const threadId = getCurrentThreadId();
 
     // If thread is already in an attachment context, just execute the function
     if (this.activeAttachments.has(threadId)) {
+      return fn();
+    }
+
+    if (!attachIfNeeded) {
       return fn();
     }
 
@@ -59,6 +80,23 @@ export class ThreadManager {
   }
 
   /**
+   * Execute callback only attaching when the current context is not already attached.
+   */
+  runIfNeeded<T>(fn: () => T): T {
+    if (this.isInAttachedContext()) {
+      return fn();
+    }
+    return this.run(fn);
+  }
+
+  /**
+   * Execute multiple operations with a single attachment.
+   */
+  runBatch<T extends any[]>(...operations: Array<() => any>): T {
+    return this.run(() => operations.map(op => op()) as T);
+  }
+
+  /**
    * Ensures the specified thread is attached to the Mono runtime.
    * Returns the cached handle if already attached, otherwise attaches and caches.
    * @param threadId Thread ID to attach (defaults to current thread)
@@ -82,7 +120,7 @@ export class ThreadManager {
 export function withAttachedThread<T>(api: MonoApi, fn: () => T): T {
   const threadManager = (api as any)._threadManager as ThreadManager | undefined;
   if (threadManager) {
-    return threadManager.withAttachedThread(fn);
+    return threadManager.run(fn);
   }
   // Fallback for old code paths
   const threadId = getCurrentThreadId();

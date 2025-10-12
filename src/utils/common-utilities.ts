@@ -4,6 +4,7 @@
  */
 
 import { MonoApi } from "../runtime/api";
+import { MonoError, MonoMemoryError, MonoValidationError } from "../patterns/errors";
 
 declare const NativePointer: any;
 declare const ptr: any;
@@ -13,21 +14,91 @@ declare const Memory: any;
  * Pointer validation and manipulation utilities
  */
 
+function isNativePointer(value: any): value is NativePointer {
+  if (value instanceof NativePointer) {
+    return true;
+  }
+  return value !== null
+    && typeof value === "object"
+    && typeof value.isNull === "function"
+    && typeof value.toString === "function";
+}
+
+function resolveNativePointer(value: any): NativePointer | null {
+  if (isNativePointer(value)) {
+    return value;
+  }
+
+  if (value && typeof value === "object") {
+    if (isNativePointer((value as any).handle)) {
+      return (value as any).handle;
+    }
+    if (isNativePointer((value as any).pointer)) {
+      return (value as any).pointer;
+    }
+    if (typeof (value as any).toPointer === "function") {
+      const candidate = (value as any).toPointer();
+      if (isNativePointer(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  return null;
+}
+
+function tryMakePointer(value: string | number | bigint): NativePointer | null {
+  try {
+    return ptr(value);
+  } catch (_error) {
+    return null;
+  }
+}
+
+/**
+ * Determine whether a pointer-like value is null
+ */
+export function pointerIsNull(
+  value: NativePointer | number | string | bigint | null | undefined | { handle?: NativePointer; pointer?: NativePointer },
+): boolean {
+  if (value === null || value === undefined) {
+    return true;
+  }
+
+  if (typeof value === "number") {
+    return value === 0;
+  }
+
+  if (typeof value === "string" || typeof value === "bigint") {
+    const pointer = tryMakePointer(value);
+    return pointer ? pointer.isNull() : false;
+  }
+
+  const resolved = resolveNativePointer(value);
+  if (resolved) {
+    return resolved.isNull();
+  }
+
+  return false;
+}
+
 /**
  * Ensure a value is a valid NativePointer, throw error if not
  */
 export function ensurePointer(value: NativePointer | null | undefined, message: string): NativePointer {
-  if (!value || value.isNull()) {
-    throw new Error(message || "Invalid pointer");
+  const pointer = resolveNativePointer(value);
+  if (!pointer || pointer.isNull()) {
+    throw new MonoValidationError(message || "Invalid pointer", "pointer", value ?? null);
   }
-  return value;
+  return pointer;
 }
 
 /**
  * Check if pointer is valid (not null and not undefined)
  */
 export function isValidPointer(pointer: NativePointer | null | undefined): pointer is NativePointer {
-  return pointer !== null && pointer !== undefined && !pointer.isNull();
+  const resolved = resolveNativePointer(pointer);
+  return resolved !== null && !resolved.isNull();
 }
 
 /**
@@ -38,12 +109,13 @@ export function isValidPointer(pointer: NativePointer | null | undefined): point
  * Safely read UTF-8 string from pointer
  */
 export function readUtf8String(pointer: NativePointer | null): string {
-  if (!isValidPointer(pointer)) {
+  const resolved = resolveNativePointer(pointer);
+  if (!resolved || resolved.isNull()) {
     return "";
   }
 
   try {
-    return pointer.readUtf8String() || "";
+    return resolved.readUtf8String() || "";
   } catch (error) {
     return "";
   }
@@ -53,12 +125,13 @@ export function readUtf8String(pointer: NativePointer | null): string {
  * Safely read UTF-16 string from pointer
  */
 export function readUtf16String(pointer: NativePointer | null, length?: number): string {
-  if (!isValidPointer(pointer)) {
+  const resolved = resolveNativePointer(pointer);
+  if (!resolved || resolved.isNull()) {
     return "";
   }
 
   try {
-    return pointer.readUtf16String(length) || "";
+    return resolved.readUtf16String(length) || "";
   } catch (error) {
     return "";
   }
@@ -76,12 +149,17 @@ export function unwrapInstance(instance: any): NativePointer {
     return ptr(0);
   }
 
-  if (instance.handle) {
-    return instance.handle;
+  const resolved = resolveNativePointer(instance);
+  if (resolved) {
+    return resolved;
   }
 
-  if (instance instanceof NativePointer) {
-    return instance;
+  if (typeof instance === "string" || typeof instance === "number") {
+    try {
+      return ptr(instance);
+    } catch (_error) {
+      return ptr(0);
+    }
   }
 
   return ptr(0);
@@ -90,14 +168,60 @@ export function unwrapInstance(instance: any): NativePointer {
 /**
  * Unwrap instance with required validation
  */
-export function unwrapInstanceRequired(instance: any, context: string): NativePointer {
+export function unwrapInstanceRequired(instance: any, context: string | { getFullName?: () => string; getName?: () => string; toString?: () => string }): NativePointer {
   const pointer = unwrapInstance(instance);
 
   if (!isValidPointer(pointer)) {
-    throw new Error(`Invalid instance in ${context}`);
+    const description = describeContext(context);
+    throw new MonoValidationError(
+      `Invalid instance${description ? ` in ${description}` : ""}`,
+      "instance",
+      instance
+    );
   }
 
   return pointer;
+}
+
+function describeContext(context: string | { getFullName?: () => string; getName?: () => string; toString?: () => string }): string {
+  if (typeof context === "string") {
+    return context;
+  }
+
+  if (!context) {
+    return "";
+  }
+
+  try {
+    if (typeof context.getFullName === "function") {
+      const value = context.getFullName();
+      if (typeof value === "string" && value.length > 0) {
+        return value;
+      }
+    }
+  } catch (_error) {
+    // ignore and fall back
+  }
+
+  try {
+    if (typeof context.getName === "function") {
+      const value = context.getName();
+      if (typeof value === "string" && value.length > 0) {
+        return value;
+      }
+    }
+  } catch (_error) {
+    // ignore and fall back
+  }
+
+  if (typeof context.toString === "function") {
+    const value = context.toString();
+    if (typeof value === "string" && value.length > 0 && value !== "[object Object]") {
+      return value;
+    }
+  }
+
+  return "";
 }
 
 /**
@@ -127,13 +251,16 @@ export function isPointerLike(kind: number): boolean {
  */
 export function safeAlloc(size: number): NativePointer {
   if (size <= 0) {
-    throw new Error(`Invalid allocation size: ${size}`);
+    throw new MonoValidationError("Allocation size must be positive", "size", size);
   }
 
   try {
     return Memory.alloc(size);
   } catch (error) {
-    throw new Error(`Failed to allocate ${size} bytes: ${error}`);
+    throw new MonoMemoryError(
+      `Failed to allocate ${size} bytes`,
+      error instanceof Error ? error : undefined
+    );
   }
 }
 
@@ -142,13 +269,16 @@ export function safeAlloc(size: number): NativePointer {
  */
 export function safeWriteMemory(pointer: NativePointer, data: ArrayBuffer | number[]): void {
   if (!isValidPointer(pointer)) {
-    throw new Error("Invalid pointer for memory write");
+    throw new MonoValidationError("Invalid pointer for memory write", "pointer", pointer);
   }
 
   try {
     pointer.writeByteArray(data);
   } catch (error) {
-    throw new Error(`Failed to write memory at ${pointer}: ${error}`);
+    throw new MonoMemoryError(
+      `Failed to write memory at ${pointer}`,
+      error instanceof Error ? error : undefined
+    );
   }
 }
 
@@ -228,7 +358,7 @@ export function verifyParameterCount(api: MonoApi, method: any, expected: number
     const message = context
       ? `${context}: Expected ${expected} parameters, got ${actual}`
       : `Expected ${expected} parameters, got ${actual}`;
-    throw new Error(message);
+    throw new MonoValidationError(message, context ?? "method", method);
   }
 }
 
@@ -289,15 +419,13 @@ export function safeStringify(value: any): string {
 /**
  * Create error with context information
  */
-export function createError(message: string, context?: any, cause?: Error): Error {
-  const error = new Error(message);
-  if (cause) {
-    error.stack = `${error.stack}\nCaused by: ${cause.stack}`;
-  }
-  if (context) {
-    error.message += ` (Context: ${safeStringify(context)})`;
-  }
-  return error;
+export function createError(message: string, context?: any, cause?: Error): MonoError {
+  const hasContext = Boolean(context);
+  const formattedMessage = hasContext
+    ? `${message} (Context: ${safeStringify(context)})`
+    : message;
+  const contextLabel = typeof context === "string" ? context : undefined;
+  return new MonoError(formattedMessage, contextLabel, cause);
 }
 
 /**

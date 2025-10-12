@@ -7,6 +7,7 @@ import { MonoClass } from "./class";
 import { MonoMethodSignature, MonoParameterInfo } from "./method-signature";
 import { MonoType, MonoTypeKind, MonoTypeSummary } from "./type";
 import { MethodAttribute, MethodImplAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
+import { unwrapInstance } from "../utils/common-utilities";
 
 export interface InvokeOptions {
   throwOnManagedException?: boolean;
@@ -628,14 +629,3 @@ function prepareArgumentRaw(api: MonoApi, arg: MethodArgument): NativePointer {
   }
   return arg as NativePointer;
 }
-
-function unwrapInstance(instance: MonoObject | NativePointer | null): NativePointer {
-  if (instance === null || instance === undefined) {
-    return NULL;
-  }
-  if (instance instanceof MonoObject) {
-    return instance.pointer;
-  }
-  return instance as NativePointer;
-}
-

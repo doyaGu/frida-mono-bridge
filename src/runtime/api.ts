@@ -2,6 +2,7 @@ import { allocPointerArray, allocUtf8, pointerIsNull, readUtf8String, readUtf16S
 import { MonoModuleInfo } from "./module";
 import { ALL_MONO_EXPORTS, MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./signatures";
 import { LruCache } from "../utils/lru-cache";
+import type { ThreadManager } from "./guard";
 
 type AnyNativeFunction = NativeFunction<any, NativeFunctionArgumentValue[]>;
 
@@ -76,7 +77,7 @@ export class MonoApi {
    * Thread manager for this API instance.
    * @internal Used by guard.ts to avoid circular dependency
    */
-  public readonly _threadManager: any;
+  public _threadManager!: ThreadManager;
 
   // Lazily bound invokers keyed by Mono export name.
   public readonly native: MonoNativeBindings = this.createNativeBindings();
@@ -182,21 +183,17 @@ export class MonoApi {
     this.ensureNotDisposed();
     
     const key = delegateClass.toString();
-    const cached = this.delegateThunkCache.get(key);
-    if (cached) {
-      return cached;
-    }
-    const invoke = this.native.mono_get_delegate_invoke(delegateClass);
-    if (pointerIsNull(invoke)) {
-      throw new Error("Delegate invoke method not available for provided class");
-    }
-    const thunk = this.native.mono_method_get_unmanaged_thunk(invoke);
-    if (pointerIsNull(thunk)) {
-      throw new Error("mono_method_get_unmanaged_thunk returned NULL. This Mono build may not support unmanaged thunks");
-    }
-    const info = { invoke, thunk } as DelegateThunkInfo;
-    this.delegateThunkCache.set(key, info);
-    return info;
+    return this.delegateThunkCache.getOrCreate(key, () => {
+      const invoke = this.native.mono_get_delegate_invoke(delegateClass);
+      if (pointerIsNull(invoke)) {
+        throw new Error("Delegate invoke method not available for provided class");
+      }
+      const thunk = this.native.mono_method_get_unmanaged_thunk(invoke);
+      if (pointerIsNull(thunk)) {
+        throw new Error("mono_method_get_unmanaged_thunk returned NULL. This Mono build may not support unmanaged thunks");
+      }
+      return { invoke, thunk };
+    });
   }
 
   /**
@@ -296,16 +293,16 @@ export class MonoApi {
 
   getNativeFunction(name: MonoApiName): AnyNativeFunction {
     this.ensureNotDisposed();
-    
-    let fn = this.functionCache.get(name);
-    if (fn) {
-      return fn;
-    }
-    const signature = getSignature(name);
-    const address = this.resolveAddress(name, true, signature);
-    fn = new NativeFunction(address, signature.retType as any, signature.argTypes as any[]) as AnyNativeFunction;
-    this.functionCache.set(name, fn);
-    return fn;
+
+    return this.functionCache.getOrCreate(name, () => {
+      const signature = getSignature(name);
+      const address = this.resolveAddress(name, true, signature);
+      return new NativeFunction(
+        address,
+        signature.retType as any,
+        signature.argTypes as any[],
+      ) as AnyNativeFunction;
+    });
   }
 
   private createNativeBindings(): MonoNativeBindings {
@@ -321,11 +318,16 @@ export class MonoApi {
                 const invoke = () => nativeFn(...args.map(normalizeArg));
                 const manager = (this as any)._threadManager;
 
-                if (manager && typeof manager.withAttachedThread === "function") {
+                if (manager) {
                   if (typeof manager.isInAttachedContext === "function" && manager.isInAttachedContext()) {
                     return invoke();
                   }
-                  return manager.withAttachedThread(invoke);
+                  if (typeof manager.run === "function") {
+                    return manager.run(invoke);
+                  }
+                  if (typeof manager.withAttachedThread === "function") {
+                    return manager.withAttachedThread(invoke);
+                  }
                 }
 
                 return invoke();

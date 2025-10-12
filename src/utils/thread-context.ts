@@ -6,6 +6,7 @@
  */
 
 import { MonoApi } from "../runtime/api";
+import type { ThreadManager } from "../runtime/guard";
 
 export class ThreadContext {
   /**
@@ -15,7 +16,7 @@ export class ThreadContext {
    * @returns Result of function
    */
   static execute<T>(api: MonoApi, fn: () => T): T {
-    return api._threadManager.withAttachedThread(fn);
+    return getManager(api).run(fn);
   }
 
   /**
@@ -25,9 +26,7 @@ export class ThreadContext {
    * @returns Array of results
    */
   static batch<T extends any[]>(api: MonoApi, ...operations: Array<() => any>): T {
-    return this.execute(api, () => {
-      return operations.map(op => op()) as T;
-    });
+    return getManager(api).runBatch(...operations);
   }
 
   /**
@@ -37,12 +36,10 @@ export class ThreadContext {
    * @returns Result of function
    */
   static maybeExecute<T>(api: MonoApi, fn: () => T): T {
-    const threadManager = api._threadManager;
-    if (threadManager && threadManager.isInAttachedContext()) {
-      // Already in attached context, execute directly
-      return fn();
-    }
-    // Not in attached context, use thread manager
-    return this.execute(api, fn);
+    return getManager(api).runIfNeeded(fn);
   }
+}
+
+function getManager(api: MonoApi): ThreadManager {
+  return api._threadManager as ThreadManager;
 }

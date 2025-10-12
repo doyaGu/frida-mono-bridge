@@ -6,6 +6,7 @@ import { MonoDomain } from "./domain";
 import { MonoType, MonoTypeKind, MonoTypeSummary } from "./type";
 import { FieldAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
 import { CustomAttribute } from "./assembly";
+import { unwrapInstance, unwrapInstanceRequired } from "../utils/common-utilities";
 
 export type FieldAccessibility =
   | "private-scope"
@@ -95,6 +96,10 @@ export class MonoField<T = any> extends MonoHandle {
     return this.#name;
   }
 
+  get name(): string {
+    return this.getName();
+  }
+
   getFullName(): string {
     if (this.#fullName !== null) {
       return this.#fullName;
@@ -110,6 +115,10 @@ export class MonoField<T = any> extends MonoHandle {
     } finally {
       this.native.mono_free(namePtr);
     }
+  }
+
+  get fullName(): string {
+    return this.getFullName();
   }
 
   getFlags(): number {
@@ -133,6 +142,10 @@ export class MonoField<T = any> extends MonoHandle {
     return this.#parent;
   }
 
+  get parent(): MonoClass {
+    return this.getParent();
+  }
+
   getTypePointer(): NativePointer {
     return this.getType().pointer;
   }
@@ -144,6 +157,10 @@ export class MonoField<T = any> extends MonoHandle {
     const typePtr = this.native.mono_field_get_type(this.pointer);
     this.#type = new MonoType(this.api, typePtr);
     return this.#type;
+  }
+
+  get type(): MonoType {
+    return this.getType();
   }
 
   getToken(): number {
@@ -1241,24 +1258,6 @@ export interface FieldInfo {
   offset: number;
   token: number;
   declaringType: string;
-}
-
-function unwrapInstance(instance: MonoObject | NativePointer | null | undefined): NativePointer {
-  if (instance instanceof MonoObject) {
-    return instance.pointer;
-  }
-  if (instance === null || instance === undefined) {
-    return NULL;
-  }
-  return instance;
-}
-
-function unwrapInstanceRequired(instance: MonoObject | NativePointer | null | undefined, field: MonoField): NativePointer {
-  const pointer = unwrapInstance(instance);
-  if (pointerIsNull(pointer)) {
-    throw new Error(`Field ${field.getFullName()} requires an instance because it is not static.`);
-  }
-  return pointer;
 }
 
 function isPointerLike(kind: MonoTypeKind): boolean {

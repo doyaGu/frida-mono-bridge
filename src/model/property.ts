@@ -1,22 +1,37 @@
-import { MonoHandle } from "./base";
+import { MethodArgument, MonoHandle } from "./base";
 import { pointerIsNull, readUtf8String } from "../runtime/mem";
 import { MonoMethod } from "./method";
 import { MonoClass } from "./class";
 import { MonoObject } from "./object";
 import { MonoType } from "./type";
+import { MonoValidationError } from "../patterns/errors";
 
 /**
  * Represents a Mono property (System.Reflection.PropertyInfo)
  */
 export class MonoProperty<TValue = any> extends MonoHandle {
+  #name: string | null = null;
+  #parent: MonoClass | null = null;
+  #getter: MonoMethod | null | undefined;
+  #setter: MonoMethod | null | undefined;
+  #type: MonoType | null = null;
+
   getName(): string {
+    if (this.#name !== null) {
+      return this.#name;
+    }
     const namePtr = this.native.mono_property_get_name(this.pointer);
-    return readUtf8String(namePtr);
+    this.#name = readUtf8String(namePtr);
+    return this.#name;
   }
 
   getParent(): MonoClass {
+    if (this.#parent) {
+      return this.#parent;
+    }
     const parentPtr = this.native.mono_property_get_parent(this.pointer);
-    return new MonoClass(this.api, parentPtr);
+    this.#parent = new MonoClass(this.api, parentPtr);
+    return this.#parent;
   }
 
   getFlags(): number {
@@ -24,19 +39,21 @@ export class MonoProperty<TValue = any> extends MonoHandle {
   }
 
   getGetter(): MonoMethod | null {
-    const methodPtr = this.native.mono_property_get_get_method(this.pointer);
-    if (pointerIsNull(methodPtr)) {
-      return null;
+    if (this.#getter !== undefined) {
+      return this.#getter;
     }
-    return new MonoMethod(this.api, methodPtr);
+    const methodPtr = this.native.mono_property_get_get_method(this.pointer);
+    this.#getter = pointerIsNull(methodPtr) ? null : new MonoMethod(this.api, methodPtr);
+    return this.#getter;
   }
 
   getSetter(): MonoMethod | null {
-    const methodPtr = this.native.mono_property_get_set_method(this.pointer);
-    if (pointerIsNull(methodPtr)) {
-      return null;
+    if (this.#setter !== undefined) {
+      return this.#setter;
     }
-    return new MonoMethod(this.api, methodPtr);
+    const methodPtr = this.native.mono_property_get_set_method(this.pointer);
+    this.#setter = pointerIsNull(methodPtr) ? null : new MonoMethod(this.api, methodPtr);
+    return this.#setter;
   }
 
   // ===== ENHANCED PROPERTY METHODS =====
@@ -49,14 +66,59 @@ export class MonoProperty<TValue = any> extends MonoHandle {
   }
 
   /**
+   * Declaring class accessor
+   */
+  get parent(): MonoClass {
+    return this.getParent();
+  }
+
+  /**
+   * Getter method accessor
+   */
+  get getter(): MonoMethod | null {
+    return this.getGetter();
+  }
+
+  /**
+   * Setter method accessor
+   */
+  get setter(): MonoMethod | null {
+    return this.getSetter();
+  }
+
+  /**
    * Get property type
    */
   getType(): MonoType {
-    const getter = this.getGetter();
-    if (!getter) {
-      throw new Error(`Property ${this.getName()} has no getter method`);
+    if (this.#type) {
+      return this.#type;
     }
-    return getter.getReturnType();
+    const getter = this.getGetter();
+    if (getter) {
+      this.#type = getter.getReturnType();
+      return this.#type;
+    }
+
+    const setter = this.getSetter();
+    if (!setter) {
+      throw new MonoValidationError(
+        `Property ${this.getName()} has no getter or setter method`,
+        "property",
+        this
+      );
+    }
+
+    const parameterTypes = setter.getParameterTypes();
+    if (parameterTypes.length === 0) {
+      throw new MonoValidationError(
+        `Property ${this.getName()} setter exposes no parameters to infer type from`,
+        "property",
+        this
+      );
+    }
+
+    this.#type = parameterTypes[parameterTypes.length - 1];
+    return this.#type;
   }
 
   /**
@@ -71,6 +133,13 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    */
   canWrite(): boolean {
     return this.getSetter() !== null;
+  }
+
+  /**
+   * Property type accessor
+   */
+  get type(): MonoType {
+    return this.getType();
   }
 
   /**
@@ -89,9 +158,7 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * Check if property has parameters (indexed property)
    */
   hasParameters(): boolean {
-    const getter = this.getGetter();
-    if (getter) return getter.getParameterCount() > 0;
-    return false;
+    return this.getParameters().length > 0;
   }
 
   /**
@@ -100,10 +167,18 @@ export class MonoProperty<TValue = any> extends MonoHandle {
   getParameters(): MonoType[] {
     const getter = this.getGetter();
     if (getter) {
-      // For now, return empty array as parameter handling needs more implementation
-      // TODO: Implement proper parameter type extraction
-      return [];
+      return [...getter.getParameterTypes()];
     }
+
+    const setter = this.getSetter();
+    if (setter) {
+      const setterParameters = setter.getParameterTypes();
+      if (setterParameters.length <= 1) {
+        return [];
+      }
+      return setterParameters.slice(0, setterParameters.length - 1);
+    }
+
     return [];
   }
 
@@ -112,13 +187,13 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @param instance Object instance (for instance properties)
    * @returns Property value
    */
-  getValue(instance: MonoObject | NativePointer | null = null): TValue {
+  getValue(instance: MonoObject | NativePointer | null = null, parameters: MethodArgument[] = []): TValue {
     const getter = this.getGetter();
     if (!getter) {
       throw new Error(`Property ${this.getName()} is not readable`);
     }
 
-    const rawResult = getter.invoke(this.resolveInstance(instance), []);
+    const rawResult = getter.invoke(this.resolveInstance(instance), parameters);
     const resultObject = pointerIsNull(rawResult) ? null : new MonoObject(this.api, rawResult);
     return this.convertResult(resultObject) as TValue;
   }
@@ -128,13 +203,14 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @param instance Object instance (for instance properties)
    * @param value Value to set
    */
-  setValue(instance: MonoObject | NativePointer | null = null, value: TValue): void {
+  setValue(instance: MonoObject | NativePointer | null = null, value: TValue, parameters: MethodArgument[] = []): void {
     const setter = this.getSetter();
     if (!setter) {
       throw new Error(`Property ${this.getName()} is not writable`);
     }
 
-    setter.invoke(this.resolveInstance(instance), [this.convertValue(value)]);
+    const invocationArgs = [...parameters, this.convertValue(value)];
+    setter.invoke(this.resolveInstance(instance), invocationArgs);
   }
 
   /**
@@ -142,8 +218,8 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @param instance Object instance (optional for static properties)
    * @returns Typed property value
    */
-  getTypedValue(instance: MonoObject | NativePointer | null = null): TValue {
-    return this.getValue(instance);
+  getTypedValue(instance: MonoObject | NativePointer | null = null, parameters: MethodArgument[] = []): TValue {
+    return this.getValue(instance, parameters);
   }
 
   /**
@@ -151,8 +227,8 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @param instance Object instance (optional for static properties)
    * @param value Typed value to set
    */
-  setTypedValue(instance: MonoObject | NativePointer | null = null, value: TValue): void {
-    this.setValue(instance, value);
+  setTypedValue(instance: MonoObject | NativePointer | null = null, value: TValue, parameters: MethodArgument[] = []): void {
+    this.setValue(instance, value, parameters);
   }
 
   private resolveInstance(instance: MonoObject | NativePointer | null): MonoObject | null {
@@ -172,14 +248,16 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * Get property metadata information
    */
   getPropertyInfo(): PropertyInfo {
+    const parameters = this.getParameters();
     return {
       name: this.getName(),
       typeName: this.getType().getName(),
       canRead: this.canRead(),
       canWrite: this.canWrite(),
       isStatic: this.isStatic(),
-      hasParameters: this.hasParameters(),
-      parameterCount: this.getParameters().length,
+      hasParameters: parameters.length > 0,
+      parameterCount: parameters.length,
+      parameterTypeNames: parameters.map(param => param.getName()),
       declaringType: this.getParent().getFullName()
     };
   }
@@ -190,13 +268,15 @@ export class MonoProperty<TValue = any> extends MonoHandle {
   describe(): string {
     const type = this.getType().getName();
     const modifiers = [];
+    const parameters = this.getParameters();
 
     if (this.isStatic()) modifiers.push('static');
     if (!this.canRead()) modifiers.push('writeonly');
     if (!this.canWrite()) modifiers.push('readonly');
 
     const modifierStr = modifiers.length > 0 ? `${modifiers.join(' ')} ` : '';
-    return `${modifierStr}${type} ${this.getName()}`;
+    const parameterList = parameters.length > 0 ? `[${parameters.map(p => p.getName()).join(', ')}]` : '';
+    return `${modifierStr}${type} ${this.getName()}${parameterList}`;
   }
 
   // ===== PRIVATE HELPER METHODS =====
@@ -250,5 +330,6 @@ export interface PropertyInfo {
   isStatic: boolean;
   hasParameters: boolean;
   parameterCount: number;
+  parameterTypeNames: string[];
   declaringType: string;
 }

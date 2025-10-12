@@ -18,7 +18,7 @@ export function createThreadSafeNative(api: MonoApi): any {
       if (typeof original === 'function') {
         // Wrap all function calls with thread attachment
         return function (...args: any[]) {
-          return api._threadManager.withAttachedThread(() => {
+          return api._threadManager.run(() => {
             return original.apply(target, args);
           });
         };

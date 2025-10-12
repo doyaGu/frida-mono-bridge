@@ -1,3 +1,5 @@
+import { pointerIsNull, readUtf8String, readUtf16String } from "../utils/common-utilities";
+
 const POINTER_SIZE = Process.pointerSize;
 
 /**
@@ -43,24 +45,8 @@ export function allocValueBoxBuffer(size: number): NativePointer {
  * @param value Value to check
  * @returns True if pointer is null
  */
-export function pointerIsNull(value: NativePointer | null | number | undefined): boolean {
-  if (value === null || value === undefined) {
-    return true;
-  }
-  if (typeof value === "number") {
-    return value === 0;
-  }
-  if (typeof value === "object" && typeof (value as any).isNull === "function") {
-    return (value as any).isNull();
-  }
-  return false;
-}
-
-// String reading utilities - re-exported from common utilities
-import { readUtf8String, readUtf16String } from "../utils/common-utilities";
-
-// Re-export for backward compatibility
-export { readUtf8String, readUtf16String };
+// Re-export pointer and string utilities for backward compatibility
+export { pointerIsNull, readUtf8String, readUtf16String };
 
 export function readU16(pointer: NativePointer): number {
   const reader = (Memory as any).readU16 as ((address: NativePointer) => number) | undefined;
