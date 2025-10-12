@@ -2,7 +2,7 @@
 import path from "path";
 
 const headersDir = path.resolve(process.cwd(), "data", "include");
-const outputPath = path.resolve(process.cwd(), "src", "model", "enums.ts");
+const outputPath = path.resolve(process.cwd(), "src", "runtime", "enums.ts");
 const headerFiles = fs.readdirSync(headersDir).filter((file) => file.endsWith(".h"));
 
 interface NumericValue {
@@ -182,5 +182,6 @@ for (const item of defines) {
 lines.push("} as const);\n");
 
 fs.writeFileSync(outputPath, lines.join("\n"), "utf8");
+
 console.log(`Generated ${enums.length} enums and ${defines.length} defines.`);
 

@@ -4,6 +4,7 @@
 
 import Mono from "../src";
 import { MonoEnums, MonoDefines } from "../src/runtime/enums";
+import { MonoTypeKind } from "../src/model/type";
 import { TestResult, TestSuite, createTest, assert, assertPerformWorks } from "./test-framework";
 
 export function testDefinitions(): TestResult {
@@ -22,6 +23,15 @@ export function testDefinitions(): TestResult {
       assert(MonoEnums.MonoCallConvention.MONO_CALL_STDCALL === 2, "Call convention enum should match header value");
       assert(MonoEnums.MonoMarshalNative.MONO_NATIVE_UTF8STR === 0x30, "Marshal native enum should include UTF8STR");
       console.log("    Basic enum values are correct");
+    });
+  }));
+
+  suite.addResult(createTest("MonoType values should be consistent", () => {
+    Mono.perform(() => {
+      const monoTypeEnum = MonoEnums.MonoTypeEnum;
+      assert(monoTypeEnum.MONO_TYPE_STRING === MonoTypeKind.String, "String type value should match MonoTypeKind");
+      assert(monoTypeEnum.MONO_TYPE_ENUM === MonoTypeKind.Enum, "Enum type value should match MonoTypeKind");
+      console.log("    MonoTypeEnum values align with MonoTypeKind");
     });
   }));
 

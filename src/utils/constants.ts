@@ -3,44 +3,49 @@
  * Reduces magic numbers and strings throughout the codebase
  */
 
-// Mono type kinds from metadata.h
-export const MONO_TYPE_KIND = {
-  END: 0x00,       // End of List
-  VOID: 0x01,      // void
-  BOOLEAN: 0x02,   // bool
-  CHAR: 0x03,      // char
-  I1: 0x04,        // signed 8-bit integer
-  U1: 0x05,        // unsigned 8-bit integer
-  I2: 0x06,        // signed 16-bit integer
-  U2: 0x07,        // unsigned 16-bit integer
-  I4: 0x08,        // signed 32-bit integer
-  U4: 0x09,        // unsigned 32-bit integer
-  I8: 0x0a,        // signed 64-bit integer
-  U8: 0x0b,        // unsigned 64-bit integer
-  R4: 0x0c,        // 32-bit float
-  R8: 0x0d,        // 64-bit float
-  STRING: 0x0e,    // System.String
-  PTR: 0x0f,       // pointer
-  BYREF: 0x10,     // by reference
-  VALUETYPE: 0x11, // System.ValueType
-  CLASS: 0x12,     // System.Class
-  VAR: 0x13,       // System.__Canon
-  ARRAY: 0x14,     // System.Array
-  GENERICINST: 0x15, // generic instance
-  TYPEDBYREF: 0x16, // typed reference
-  I: 0x18,         // System.IntPtr
-  U: 0x19,         // System.UIntPtr
-  FNPTR: 0x1b,     // function pointer
-  OBJECT: 0x1c,    // System.Object
-  SZARRAY: 0x1d,   // single-dim array with 0 lower bound
-  MVAR: 0x1e,      // generic method parameter
-  CMOD_REQD: 0x1f, // required modifier
-  CMOD_OPT: 0x20,  // optional modifier
-  INTERNAL: 0x21,  // Internal CLR type
-  MODIFIER: 0x40,  // modifier (required or optional)
-  SENTINEL: 0x41,  // sentinel for varargs method signature
-  PINNED: 0x45,    // pinned local variable
-} as const;
+import { MonoEnums } from "../runtime/enums";
+
+// Mono type kinds from authoritative runtime enums
+const MonoTypeEnum = MonoEnums.MonoTypeEnum;
+
+export const MONO_TYPE_KIND = Object.freeze({
+  END: MonoTypeEnum.MONO_TYPE_END,
+  VOID: MonoTypeEnum.MONO_TYPE_VOID,
+  BOOLEAN: MonoTypeEnum.MONO_TYPE_BOOLEAN,
+  CHAR: MonoTypeEnum.MONO_TYPE_CHAR,
+  I1: MonoTypeEnum.MONO_TYPE_I1,
+  U1: MonoTypeEnum.MONO_TYPE_U1,
+  I2: MonoTypeEnum.MONO_TYPE_I2,
+  U2: MonoTypeEnum.MONO_TYPE_U2,
+  I4: MonoTypeEnum.MONO_TYPE_I4,
+  U4: MonoTypeEnum.MONO_TYPE_U4,
+  I8: MonoTypeEnum.MONO_TYPE_I8,
+  U8: MonoTypeEnum.MONO_TYPE_U8,
+  R4: MonoTypeEnum.MONO_TYPE_R4,
+  R8: MonoTypeEnum.MONO_TYPE_R8,
+  STRING: MonoTypeEnum.MONO_TYPE_STRING,
+  PTR: MonoTypeEnum.MONO_TYPE_PTR,
+  BYREF: MonoTypeEnum.MONO_TYPE_BYREF,
+  VALUETYPE: MonoTypeEnum.MONO_TYPE_VALUETYPE,
+  CLASS: MonoTypeEnum.MONO_TYPE_CLASS,
+  VAR: MonoTypeEnum.MONO_TYPE_VAR,
+  ARRAY: MonoTypeEnum.MONO_TYPE_ARRAY,
+  GENERICINST: MonoTypeEnum.MONO_TYPE_GENERICINST,
+  TYPEDBYREF: MonoTypeEnum.MONO_TYPE_TYPEDBYREF,
+  I: MonoTypeEnum.MONO_TYPE_I,
+  U: MonoTypeEnum.MONO_TYPE_U,
+  FNPTR: MonoTypeEnum.MONO_TYPE_FNPTR,
+  OBJECT: MonoTypeEnum.MONO_TYPE_OBJECT,
+  SZARRAY: MonoTypeEnum.MONO_TYPE_SZARRAY,
+  MVAR: MonoTypeEnum.MONO_TYPE_MVAR,
+  CMOD_REQD: MonoTypeEnum.MONO_TYPE_CMOD_REQD,
+  CMOD_OPT: MonoTypeEnum.MONO_TYPE_CMOD_OPT,
+  INTERNAL: MonoTypeEnum.MONO_TYPE_INTERNAL,
+  MODIFIER: MonoTypeEnum.MONO_TYPE_MODIFIER,
+  SENTINEL: MonoTypeEnum.MONO_TYPE_SENTINEL,
+  PINNED: MonoTypeEnum.MONO_TYPE_PINNED,
+  ENUM: MonoTypeEnum.MONO_TYPE_ENUM,
+} as const);
 
 // Pointer-like types that need special handling
 export const POINTER_LIKE_TYPES = new Set([
