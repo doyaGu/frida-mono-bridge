@@ -10,7 +10,7 @@
     "test": "frida-compile tests/index.ts -o dist/tests.js",
     "clean": "rimraf dist",
     "generate:enums": "node scripts/generate-enums.ts",
-    "generate:signatures": "npx tsx scripts/generate_mono_signatures.ts"
+    "generate:signatures": "npx tsx scripts/generate-mono-signatures.ts"
   },
   "devDependencies": {
     "@types/frida-gum": "^19.0.1",
