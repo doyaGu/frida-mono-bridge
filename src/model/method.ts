@@ -470,8 +470,7 @@ export class MonoMethod extends MonoHandle {
       // Type validation for value types
       if (expectedType.isValueType()) {
         const valueType = typeof actualValue;
-        // For now, skip enum and primitive checks since those methods may not exist
-        // TODO: Add proper enum and primitive type checking when methods are available
+        // Basic type validation - enum and primitive checks could be enhanced
         if (!this.isCompatiblePrimitiveType(valueType, expectedType)) {
           errors.push(`Argument ${i} type mismatch: expected ${expectedType.getName()}, got ${valueType}`);
         }

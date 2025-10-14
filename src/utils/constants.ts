@@ -76,44 +76,6 @@ export const PRIMITIVE_TYPE_SIZES = {
   [MONO_TYPE_KIND.U]: 4, // UIntPtr - platform dependent
 } as const;
 
-// Common assembly names
-export const COMMON_ASSEMBLIES = {
-  UNITY_CORE_MODULE: "UnityEngine.CoreModule",
-  ASSEMBLY_CSHARP: "Assembly-CSharp",
-  ASSEMBLY_CSHARP_FIRSTPASS: "Assembly-CSharp-firstpass",
-  SYSTEM_CORE: "System.Core",
-  MSCORLIB: "mscorlib",
-  SYSTEM: "System",
-} as const;
-
-// Common Unity class names
-export const UNITY_CLASSES = {
-  GAME_OBJECT: "UnityEngine.GameObject",
-  COMPONENT: "UnityEngine.Component",
-  TRANSFORM: "UnityEngine.Transform",
-  MONO_BEHAVIOUR: "UnityEngine.MonoBehaviour",
-  SCRIPTABLE_OBJECT: "UnityEngine.ScriptableObject",
-  RESOURCE: "UnityEngine.Resource",
-  ASSET_BUNDLE: "UnityEngine.AssetBundle",
-  SCENE_MANAGER: "UnityEngine.SceneManagement.SceneManager",
-  APPLICATION: "UnityEngine.Application",
-  DEBUG: "UnityEngine.Debug",
-  TIME: "UnityEngine.Time",
-  INPUT: "UnityEngine.Input",
-  CAMERA: "UnityEngine.Camera",
-  AUDIOSOURCE: "UnityEngine.AudioSource",
-  RIGIDBODY: "UnityEngine.Rigidbody",
-  COLLIDER: "UnityEngine.Collider",
-  RENDERER: "UnityEngine.Renderer",
-  MESH_FILTER: "UnityEngine.MeshFilter",
-  MESH_RENDERER: "UnityEngine.MeshRenderer",
-  ANIMATOR: "UnityEngine.Animator",
-  PARTICLE_SYSTEM: "UnityEngine.ParticleSystem",
-  UI_TEXT: "UnityEngine.UI.Text",
-  UI_IMAGE: "UnityEngine.UI.Image",
-  UI_BUTTON: "UnityEngine.UI.Button",
-  UI_CANVAS: "UnityEngine.Canvas",
-} as const;
 
 // Common method patterns
 export const METHOD_PATTERNS = {
@@ -161,12 +123,6 @@ export const CACHE_CONFIG = {
   TTL_MS: 60000, // 1 minute
 } as const;
 
-// Performance thresholds (in milliseconds)
-export const PERFORMANCE_THRESHOLDS = {
-  SLOW_OPERATION: 100,    // Operations taking > 100ms are considered slow
-  VERY_SLOW_OPERATION: 1000, // Operations taking > 1s are very slow
-  MEMORY_THRESHOLD: 1024 * 1024, // 1MB
-} as const;
 
 // Method invocation flags
 export const METHOD_FLAGS = {
@@ -233,15 +189,6 @@ export const REGEX_PATTERNS = {
   GENERIC_TYPE: /`(\d+)$/,
 } as const;
 
-// Default values for various operations
-export const DEFAULTS = {
-  ARRAY_CAPACITY: 16,
-  STRING_BUFFER_SIZE: 256,
-  MAX_RETRY_ATTEMPTS: 3,
-  RETRY_DELAY_MS: 100,
-  TIMEOUT_MS: 5000,
-  BATCH_SIZE: 50,
-} as const;
 
 // Type conversion helpers
 export function isPointerType(typeKind: number): boolean {
@@ -251,12 +198,4 @@ export function isPointerType(typeKind: number): boolean {
 
 export function getPrimitiveTypeSize(typeKind: number): number | null {
   return PRIMITIVE_TYPE_SIZES[typeKind as keyof typeof PRIMITIVE_TYPE_SIZES] || null;
-}
-
-export function isCommonAssembly(name: string): boolean {
-  return Object.values(COMMON_ASSEMBLIES).includes(name as any);
-}
-
-export function isUnityClass(name: string): boolean {
-  return Object.values(UNITY_CLASSES).includes(name as any);
 }

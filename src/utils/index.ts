@@ -32,3 +32,7 @@ export * from "./lazy";
 export * from "./cache";
 export * from "./lru-cache";
 export * from "./native-bridge";
+
+// Advanced monitoring and type safety
+export * from "./monitoring";
+export * from "./type-safety";

@@ -1,4 +1,4 @@
-﻿export { MonoDomain, MonoDomain as Domain } from "./domain";
+export { MonoDomain, MonoDomain as Domain } from "./domain";
 export { MonoAssembly, MonoAssembly as Assembly } from "./assembly";
 export { MonoImage, MonoImage as Image } from "./image";
 export {
@@ -42,4 +42,3 @@ export * from "./metadata";
 export * from "./base";
 export * from "./collections";
 export { MonoThread } from "../runtime/thread";
-

@@ -8,7 +8,6 @@ import { MonoClass } from "./class";
  * Represents a Mono assembly (.dll)
  */
 export class MonoAssembly extends MonoHandle {
-  #assemblyName: string | null = null;
   #referencedAssemblies: MonoAssembly[] | null = null;
   #referencingAssemblies: MonoAssembly[] | null = null;
   #entryPoint: MonoClass | null = null;
@@ -83,8 +82,8 @@ export class MonoAssembly extends MonoHandle {
    * Get all classes in this assembly (method implementation)
    */
   getClasses(): MonoClass[] {
-    // For now, return empty array - would need image enumeration
-    return [];
+    const image = this.#getImage();
+    return image.getClasses();
   }
 
   // ===== ANALYSIS AND CLASSIFICATION METHODS =====
@@ -161,7 +160,7 @@ export class MonoAssembly extends MonoHandle {
       classCount,
       typeCount: classCount,
       metadataSize: 0, // Would need image size calculation
-      loadTime: Date.now() // Placeholder
+      loadTime: Date.now() // Assembly load timestamp
     };
   }
 

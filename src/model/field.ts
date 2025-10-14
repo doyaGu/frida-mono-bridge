@@ -1671,10 +1671,7 @@ export class FieldDebugger {
 
   private static _getDeclaringClass(field: MonoField): string {
     try {
-      // Try to get declaring class from field summary or other means
-      const summary = field.describe();
-      // Since describe() returns a string, we need to extract info differently
-      return "Unknown"; // Placeholder - would need actual implementation
+      return field.getParent().getFullName();
     } catch {
       return "Unknown";
     }
@@ -1697,8 +1694,16 @@ export class FieldDebugger {
 
   private static _getStaticAddress(field: MonoField): NativePointer {
     try {
-      // Get the static field address - this would need actual implementation
-      return ptr(0); // Placeholder
+      if (field.isStatic()) {
+        const domain = field.api.getRootDomain();
+        const klass = field.getParent();
+        const vtable = field.api.native.mono_class_vtable(domain, klass.pointer);
+        if (!pointerIsNull(vtable)) {
+          const offset = field.getOffset();
+          return vtable.add(offset);
+        }
+      }
+      return ptr(0);
     } catch {
       return ptr(0);
     }

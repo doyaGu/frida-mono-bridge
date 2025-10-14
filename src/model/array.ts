@@ -51,8 +51,9 @@ export namespace ArrayTypeGuards {
    */
   export function isOfType<T>(array: MonoArray<any>, expectedType: new (...args: any[]) => T): array is MonoArray<T> {
     const elementClass = array.getElementClass();
-    // This would need proper type comparison in actual implementation
-    return true; // Placeholder
+    // Basic type checking by class name comparison
+    const expectedClassName = expectedType.name;
+    return elementClass.getName().includes(expectedClassName);
   }
 }
 
@@ -228,7 +229,7 @@ export class ArrayChangeTracker<T> {
   private history: ArrayChangeEvent<T>[] = [];
   private maxHistorySize: number;
 
-  constructor(private array: MonoArray<T>, maxHistorySize: number = 100) {
+  constructor(maxHistorySize: number = 100) {
     this.maxHistorySize = maxHistorySize;
   }
 
@@ -632,9 +633,48 @@ export class MonoArray<T = any> extends MonoObject {
    * Enhanced LINQ with type safety
    */
   whereType<S extends T>(predicate: (item: T) => item is S): MonoArray<S> {
-    const filtered = this.where(predicate);
-    // Return as MonoArray<S> - this would need actual array type conversion
-    return this as unknown as MonoArray<S>;
+    const filteredElements: S[] = [];
+
+    // Filter elements that match the predicate
+    for (let i = 0; i < this.length; i++) {
+      const element = this.getTyped(i);
+      if (predicate(element)) {
+        filteredElements.push(element as S);
+      }
+    }
+
+    if (filteredElements.length === 0) {
+      // Return empty array of the appropriate type
+      return MonoArray.new(this.api, this.getElementClass(), 0) as MonoArray<S>;
+    }
+
+    // Determine the element type for the new array
+    // For object arrays, we need to find the actual class of the filtered elements
+    let elementClass = this.getElementClass();
+
+    if (!elementClass.isValueType()) {
+      // For reference types, try to get the more specific type if possible
+      if (filteredElements.length > 0 && filteredElements[0] instanceof MonoObject) {
+        const firstElement = filteredElements[0] as MonoObject;
+        elementClass = firstElement.getClass();
+      }
+    }
+
+    // Create new array with the determined element class
+    const newArray = MonoArray.new(this.api, elementClass, filteredElements.length) as MonoArray<S>;
+
+    // Copy filtered elements to the new array
+    for (let i = 0; i < filteredElements.length; i++) {
+      const element = filteredElements[i];
+      if (element instanceof MonoObject) {
+        newArray.setReference(i, element.pointer);
+      } else {
+        // For value types, use setTyped
+        newArray.setTyped(i, element);
+      }
+    }
+
+    return newArray;
   }
 
   /**
@@ -913,7 +953,7 @@ export class MonoArray<T = any> extends MonoObject {
    * @param maxHistorySize Maximum history size
    */
   enableChangeTracking(maxHistorySize: number = 100): void {
-    this._changeTracker = new ArrayChangeTracker(this, maxHistorySize);
+    this._changeTracker = new ArrayChangeTracker(maxHistorySize);
   }
 
   /**
@@ -1192,7 +1232,7 @@ export class MonoArray<T = any> extends MonoObject {
   /**
    * Record a write access
    */
-  private _recordWrite(index: number, oldValue: T, newValue: T): void {
+  private _recordWrite(index: number, _oldValue: T, _newValue: T): void {
     if (!this._monitoringEnabled) return;
 
     this._accessStats.writes++;
@@ -1302,16 +1342,101 @@ export class MonoArray<T = any> extends MonoObject {
    * Find or create element class from serialized type info
    */
   private static _findOrCreateElementClass(api: MonoApi, elementType: SerializedArray<any>['elementType']): MonoClass {
-    // This would need to be implemented based on the actual Mono API
-    // For now, return a basic implementation
     const domain = api.getRootDomain();
-    const classPtr = api.native.mono_class_from_name(domain, elementType.namespace, elementType.name);
+    let classPtr: NativePointer;
 
-    if (pointerIsNull(classPtr)) {
-      throw new Error(`Could not find class: ${elementType.fullName}`);
+    // Try to find the class using multiple strategies
+
+    // Strategy 1: Direct lookup in root domain
+    classPtr = api.native.mono_class_from_name(domain, elementType.namespace, elementType.name);
+    if (!pointerIsNull(classPtr)) {
+      return new MonoClass(api, classPtr);
     }
 
-    return new MonoClass(api, classPtr);
+    // Strategy 2: Try to enumerate loaded assemblies using available methods
+    try {
+      // Try to get assemblies from the domain using available Mono API calls
+      // Since we don't have a direct enumeration method, we'll try common assembly names
+      const commonAssemblies = [
+        'mscorlib', 'System.Core', 'System', 'System.Runtime',
+        'System.Collections', 'System.Linq', 'System.Text'
+      ];
+
+      for (const assemblyName of commonAssemblies) {
+        const assembly = api.native.mono_domain_assembly_open(domain, assemblyName);
+        if (!pointerIsNull(assembly)) {
+          const image = api.native.mono_assembly_get_image(assembly);
+          if (!pointerIsNull(image)) {
+            classPtr = api.native.mono_class_from_name_case(image, elementType.namespace, elementType.name);
+            if (!pointerIsNull(classPtr)) {
+              return new MonoClass(api, classPtr);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Continue to next strategy if enumeration fails
+    }
+
+    // Strategy 3: Try additional assembly names that might be available
+    const additionalAssemblies = [
+      'System.Runtime.Extensions', 'System.Memory', 'System.Collections.Concurrent',
+      'System.Threading.Tasks', 'System.Text.RegularExpressions', 'System.Linq.Expressions'
+    ];
+
+    for (const assemblyName of additionalAssemblies) {
+      try {
+        const assembly = api.native.mono_domain_assembly_open(domain, assemblyName);
+        if (!pointerIsNull(assembly)) {
+          const image = api.native.mono_assembly_get_image(assembly);
+          if (!pointerIsNull(image)) {
+            classPtr = api.native.mono_class_from_name_case(image, elementType.namespace, elementType.name);
+            if (!pointerIsNull(classPtr)) {
+              return new MonoClass(api, classPtr);
+            }
+          }
+        }
+      } catch (error) {
+        // Continue to next assembly
+        continue;
+      }
+    }
+
+    // Strategy 5: Create a basic class for simple types
+    if (this._isSimpleBuiltinType(elementType.name)) {
+      try {
+        // For basic types, try to find them in mscorlib
+        const mscorlib = api.native.mono_domain_assembly_open(domain, 'mscorlib');
+        if (!pointerIsNull(mscorlib)) {
+          const image = api.native.mono_assembly_get_image(mscorlib);
+          if (!pointerIsNull(image)) {
+            classPtr = api.native.mono_class_from_name_case(image, 'System', elementType.name);
+            if (!pointerIsNull(classPtr)) {
+              return new MonoClass(api, classPtr);
+            }
+          }
+        }
+      } catch (error) {
+        // Final fallback failed
+      }
+    }
+
+    // If all strategies fail, throw a descriptive error
+    throw new Error(
+      `Could not find or create class: ${elementType.fullName} in namespace ${elementType.namespace}. ` +
+      `Attempted multiple search strategies including domain assemblies, system assemblies, and case-insensitive search.`
+    );
+  }
+
+  /**
+   * Check if a type name represents a simple built-in type
+   */
+  private static _isSimpleBuiltinType(typeName: string): boolean {
+    const simpleTypes = [
+      'String', 'Int32', 'Int64', 'Single', 'Double', 'Boolean', 'Byte', 'SByte',
+      'UInt16', 'UInt32', 'UInt64', 'Int16', 'Char', 'Object', 'Decimal'
+    ];
+    return simpleTypes.includes(typeName);
   }
 
   // ===== DEBUGGING AND PROFILING HELPERS =====
@@ -1388,7 +1513,7 @@ export class MonoArray<T = any> extends MonoObject {
       case 'sequential':
         for (let iter = 0; iter < iterations; iter++) {
           for (let i = 0; i < this.length; i++) {
-            const accessed = this._recordRead(i);
+            this._recordRead(i);
             if (this._accessStats.readIndices.has(i)) {
               cacheHits++;
             } else {
@@ -1770,31 +1895,7 @@ export class MonoArray<T = any> extends MonoObject {
     }
   }
 
-  /**
-   * Get element type string for debugging
-   */
-  private _getElementTypeName(): string {
-    try {
-      const elementClass = this.getElementClass();
-      return elementClass.getFullName();
-    } catch {
-      return 'Unknown';
-    }
-  }
-
-  /**
-   * Validate array operation parameters
-   */
-  private _validateOperationParams(index: number, operation: string): void {
-    if (!Number.isInteger(index)) {
-      throw new Error(`${operation}: Index must be an integer, got ${index}`);
-    }
-
-    if (index < 0 || index >= this.length) {
-      throw new Error(`${operation}: Index ${index} out of bounds for array of length ${this.length}`);
-    }
-  }
-
+  
   // ===== PRIVATE DEBUGGING HELPERS =====
 
   /**
