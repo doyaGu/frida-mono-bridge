@@ -5,12 +5,10 @@
 export * from './common';
 export * from './errors';
 export {
-  ErrorRecoveryManager,
-  CircuitBreaker,
-  RecoveryResult,
-  RecoveryStrategy,
-  CommonRecoveryStrategies,
-  globalRecoveryManager,
-  type RetryConfig,
-  type RecoveryStrategy as IRecoveryStrategy
+  ThreadRecovery,
+  ErrorHandler,
+  threadRecovery,
+  errorHandler,
+  type ErrorInfo,
+  type ErrorStats
 } from './recovery';
