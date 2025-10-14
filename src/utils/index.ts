@@ -25,9 +25,6 @@ export * from "./gc";
 
 // Development and debugging
 export * from "./log";
-export * from "./probe";
-export * from "./interceptor";
-export * from "./watcher";
 
 // Infrastructure utilities
 export * from "./thread-context";
