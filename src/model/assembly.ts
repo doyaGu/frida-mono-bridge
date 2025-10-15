@@ -43,8 +43,35 @@ export class MonoAssembly extends MonoHandle {
    * Get assembly name (method implementation)
    */
   getName(): string {
-    const namePtr = this.native.mono_assembly_get_name(this.pointer);
-    return readUtf8String(namePtr) || "Unknown";
+    try {
+      // Primary method: Get name from MonoAssemblyName structure
+      const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
+      if (!assemblyNamePtr.isNull()) {
+        const namePtr = this.native.mono_assembly_name_get_name(assemblyNamePtr);
+        const name = readUtf8String(namePtr);
+        if (name && name !== "") {
+          return name;
+        }
+      }
+    } catch (error) {
+      // Continue to fallback methods
+    }
+
+    try {
+      // Fallback method: Get name from assembly image
+      const image = this.#getImage();
+      const imageNamePtr = this.native.mono_image_get_name(image.pointer);
+      const imageName = readUtf8String(imageNamePtr);
+      if (imageName && imageName !== "") {
+        // Remove .dll extension if present
+        return imageName.replace(/\.dll$/i, '');
+      }
+    } catch (error) {
+      // Continue to final fallback
+    }
+
+    // Final fallback: use pointer-based name
+    return `Assembly_${this.pointer.toString(16)}`;
   }
 
   /**
