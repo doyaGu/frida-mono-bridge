@@ -1,6 +1,6 @@
 import { MonoApi } from "../runtime/api";
-import { pointerIsNull } from "../utils/pointer-utils";
-import { readUtf16String } from "../utils/string-utils";
+import { pointerIsNull } from "../utils/memory";
+import { readUtf16String } from "../utils/string";
 import { MonoHandle } from "./base";
 import { MonoClass } from "./class";
 import { MonoMethod } from "./method";

@@ -4,7 +4,7 @@
  */
 
 import { MonoApi } from "../runtime/api";
-import { pointerIsNull } from "./pointer-utils";
+import { pointerIsNull } from "./memory";
 
 declare const NativePointer: any;
 declare const Memory: any;

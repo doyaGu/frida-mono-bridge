@@ -1,5 +1,5 @@
-import { pointerIsNull } from "../utils/pointer-utils";
-import { readUtf8String } from "../utils/string-utils";
+import { pointerIsNull } from "../utils/memory";
+import { readUtf8String } from "../utils/string";
 import { MonoHandle } from "./base";
 import { MonoEnums } from "../runtime/enums";
 import { MonoType } from "./type";

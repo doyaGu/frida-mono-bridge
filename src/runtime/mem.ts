@@ -1,5 +1,5 @@
-import { pointerIsNull } from "../utils/pointer-utils";
-import { readUtf8String, readUtf16String } from "../utils/string-utils";
+import { pointerIsNull } from "../utils/memory";
+import { readUtf8String, readUtf16String } from "../utils/string";
 
 const POINTER_SIZE = Process.pointerSize;
 

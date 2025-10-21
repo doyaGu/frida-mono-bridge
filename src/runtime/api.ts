@@ -1,10 +1,10 @@
 import { allocPointerArray, allocUtf8 } from "./mem";
-import { pointerIsNull } from "../utils/pointer-utils";
-import { readUtf8String, readUtf16String } from "../utils/string-utils";
+import { pointerIsNull } from "../utils/memory";
+import { readUtf8String, readUtf16String } from "../utils/string";
 import { MonoModuleInfo } from "./module";
 import { ALL_MONO_EXPORTS, MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./signatures";
-import { LruCache } from "../utils/lru-cache";
-import type { ThreadManager } from "./guard";
+import { LruCache } from "../utils/cache";
+import type { ThreadManager } from "./thread";
 
 type AnyNativeFunction = NativeFunction<any, NativeFunctionArgumentValue[]>;
 

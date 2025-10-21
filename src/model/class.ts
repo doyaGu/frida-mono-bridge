@@ -1,6 +1,6 @@
 import { allocUtf8, readU32 } from "../runtime/mem";
-import { pointerIsNull } from "../utils/pointer-utils";
-import { readUtf8String } from "../utils/string-utils";
+import { pointerIsNull } from "../utils/memory";
+import { readUtf8String } from "../utils/string";
 import { MonoHandle } from "./base";
 import { MonoField } from "./field";
 import { MonoMethod } from "./method";

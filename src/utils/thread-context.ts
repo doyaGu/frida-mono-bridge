@@ -6,7 +6,7 @@
  */
 
 import { MonoApi } from "../runtime/api";
-import type { ThreadManager } from "../runtime/guard";
+import type { ThreadManager } from "../runtime/thread";
 
 export class ThreadContext {
   /**

@@ -1,12 +1,17 @@
 /**
- * Pointer validation and manipulation utilities
+ * Memory allocation, pointer validation, and manipulation utilities
  */
 
-import { MonoValidationError } from "../patterns/errors";
-import { isNativePointer } from "./type-guards";
+import { MonoMemoryError, MonoValidationError } from "../patterns/errors";
+import { isNativePointer } from "./type-operations";
 
 declare const NativePointer: any;
+declare const Memory: any;
 declare const ptr: any;
+
+// ============================================================================
+// POINTER UTILITIES
+// ============================================================================
 
 /**
  * Resolve a value to a NativePointer
@@ -196,4 +201,44 @@ function describeContext(
   }
 
   return "";
+}
+
+// ============================================================================
+// MEMORY UTILITIES
+// ============================================================================
+
+/**
+ * Safe memory allocation with validation
+ */
+export function safeAlloc(size: number): NativePointer {
+  if (size <= 0) {
+    throw new MonoValidationError("Allocation size must be positive", "size", size);
+  }
+
+  try {
+    return Memory.alloc(size);
+  } catch (error) {
+    throw new MonoMemoryError(
+      `Failed to allocate ${size} bytes`,
+      error instanceof Error ? error : undefined
+    );
+  }
+}
+
+/**
+ * Safe memory write with validation
+ */
+export function safeWriteMemory(pointer: NativePointer, data: ArrayBuffer | number[]): void {
+  if (!isValidPointer(pointer)) {
+    throw new MonoValidationError("Invalid pointer for memory write", "pointer", pointer);
+  }
+
+  try {
+    pointer.writeByteArray(data);
+  } catch (error) {
+    throw new MonoMemoryError(
+      `Failed to write memory at ${pointer}`,
+      error instanceof Error ? error : undefined
+    );
+  }
 }

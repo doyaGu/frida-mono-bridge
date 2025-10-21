@@ -1,7 +1,7 @@
 import { MonoApi, MonoManagedExceptionError } from "../runtime/api";
 import { allocUtf8, readU32 } from "../runtime/mem";
-import { pointerIsNull } from "../utils/pointer-utils";
-import { readUtf8String } from "../utils/string-utils";
+import { pointerIsNull } from "../utils/memory";
+import { readUtf8String } from "../utils/string";
 import { MonoHandle, MethodArgument } from "./base";
 import { MonoImage } from "./image";
 import { MonoObject } from "./object";
@@ -9,7 +9,7 @@ import { MonoClass } from "./class";
 import { MonoMethodSignature, MonoParameterInfo } from "./method-signature";
 import { MonoType, MonoTypeKind, MonoTypeSummary } from "./type";
 import { MethodAttribute, MethodImplAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
-import { unwrapInstance } from "../utils/pointer-utils";
+import { unwrapInstance } from "../utils/memory";
 
 export interface InvokeOptions {
   throwOnManagedException?: boolean;

@@ -1,6 +1,6 @@
 import { MonoApi } from "../runtime/api";
 import { allocUtf8 } from "../runtime/mem";
-import { pointerIsNull } from "../utils/pointer-utils";
+import { pointerIsNull } from "../utils/memory";
 import { MonoHandle } from "./base";
 import { MonoAssembly } from "./assembly";
 import { MonoClass } from "./class";

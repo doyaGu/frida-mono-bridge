@@ -1,5 +1,5 @@
 import { MonoApi } from "../runtime/api";
-import { readUtf8String } from "../utils/string-utils";
+import { readUtf8String } from "../utils/string";
 import { MonoHandle } from "./base";
 import { MonoImage } from "./image";
 import { MonoClass } from "./class";

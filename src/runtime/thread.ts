@@ -1,192 +1,135 @@
-/**
- * Thread Model
- * High-level abstraction for Mono thread management
- */
-
-import { MonoApi } from "../runtime/api";
-import { pointerIsNull } from "../utils/pointer-utils";
-import type { ThreadManager } from "./guard";
+import { MonoApi } from "./api";
 
 /**
- * Represents a thread attached to the Mono runtime.
- * Provides a high-level interface for thread operations.
+ * Thread management helper for Mono runtime.
+ * Tracks attached threads per MonoApi instance to avoid redundant attach/detach cycles.
  */
-export class MonoThread {
+export interface ThreadRunOptions {
   /**
-   * Creates a MonoThread wrapper from a native MonoThread pointer.
-   * @param api The MonoApi instance
-   * @param handle Native pointer to MonoThread
+   * Skip ensuring the thread is attached before running.
+   * Only use this for operations that are already guaranteed to be in an attached context.
    */
-  constructor(
-    public readonly api: MonoApi,
-    public readonly handle: NativePointer
-  ) {
-    if (pointerIsNull(handle)) {
-      throw new Error("MonoThread handle cannot be NULL");
-    }
-  }
+  attachIfNeeded?: boolean;
+}
+
+export class ThreadManager {
+  private readonly attachedThreads = new Map<number, NativePointer>();
+  private readonly activeAttachments = new Set<number>();
+
+  constructor(private readonly api: MonoApi) {}
 
   /**
-   * Gets the current thread attached to the Mono runtime.
-   * Automatically attaches the thread if not already attached.
-   * 
-   * @param api The MonoApi instance
-   * @returns MonoThread instance representing the current thread
-   * 
-   * @example
-   * const thread = MonoThread.current(Mono.api);
-   * console.log(`Thread ID: ${thread.getId()}`);
-   */
-  static current(api: MonoApi): MonoThread {
-    const handle = getManager(api).ensureAttached();
-    return new MonoThread(api, handle);
-  }
-
-  /**
-   * Attaches the current thread to the Mono runtime.
-   * This is required before making any Mono API calls from a new thread.
-   * 
-   * @param api The MonoApi instance
-   * @returns MonoThread instance representing the attached thread
-   * 
-   * @example
-   * const thread = MonoThread.attach(Mono.api);
-   * try {
-   *   // Use Mono API...
-   * } finally {
-   *   thread.detach();
-   * }
-   */
-  static attach(api: MonoApi): MonoThread {
-    return MonoThread.current(api);
-  }
-
-  /**
-   * Executes a callback with the thread automatically attached.
-   * The thread attachment is managed automatically.
-   * 
-   * @param api The MonoApi instance
-   * @param fn Callback to execute
+   * Ensures the current thread is attached to the Mono runtime and executes the callback.
+   * Avoids nested attachments by tracking active attachment contexts.
+   * @param fn Callback to execute with thread attached
    * @returns Result of the callback
-   * 
-   * @example
-   * const result = MonoThread.withAttached(Mono.api, () => {
-   *   const domain = Mono.api.getRootDomain();
-   *   return domain;
-   * });
    */
-  static withAttached<T>(api: MonoApi, fn: () => T): T {
-    return getManager(api).run(fn);
+  withAttachedThread<T>(fn: () => T): T {
+    return this.run(fn);
   }
 
   /**
-   * Detaches this thread from the Mono runtime.
-   * Should be called when the thread no longer needs to interact with Mono.
-   * 
-   * Note: The ThreadManager handles this automatically in most cases.
-   * Only call this if you're manually managing thread lifecycle.
-   * 
-   * @example
-   * const thread = MonoThread.attach(Mono.api);
-   * try {
-   *   // Use Mono API...
-   * } finally {
-   *   thread.detach();
-   * }
+   * Preferred execution helper. Ensures the callback executes with the thread attached
+   * unless explicitly disabled via options.
    */
-  detach(): void {
+  run<T>(fn: () => T, options: ThreadRunOptions = {}): T {
+    const { attachIfNeeded = true } = options;
+    const threadId = getCurrentThreadId();
+
+    // If thread is already in an attachment context, just execute the function
+    if (this.activeAttachments.has(threadId)) {
+      return fn();
+    }
+
+    if (!attachIfNeeded) {
+      return fn();
+    }
+
+    // Mark thread as actively attached to prevent nested calls
+    this.activeAttachments.add(threadId);
     try {
-      this.api.detachThread(this.handle);
-    } catch (error) {
-      // Best effort detach
-      console.warn("Failed to detach thread:", error);
+      this.ensureAttached(threadId);
+      return fn();
+    } finally {
+      this.activeAttachments.delete(threadId);
     }
   }
 
   /**
-   * Gets the thread ID.
-   * Uses Frida's Process.getCurrentThreadId() if available.
-   * 
-   * @returns Thread ID as a number
+   * Detaches all threads that were attached by this manager.
+   * Should be called during cleanup/disposal.
    */
-  static getId(): number {
-    if (typeof Process.getCurrentThreadId === "function") {
-      return Process.getCurrentThreadId();
+  detachAll(): void {
+    for (const [threadId, threadHandle] of this.attachedThreads.entries()) {
+      try {
+        this.api.detachThread(threadHandle);
+      } catch (_error) {
+        // Best-effort detach; loggers can hook here once logging infrastructure exists.
+      }
+      this.attachedThreads.delete(threadId);
     }
-    return 0; // Fallback for single-threaded Frida environments
   }
 
   /**
-   * Checks if a thread handle is valid (not NULL).
-   * 
-   * @param handle Thread handle to check
-   * @returns True if the handle is valid
+   * Checks if the specified thread is currently in an active attachment context.
+   * @param threadId Thread ID to check (defaults to current thread)
+   * @returns True if thread is in active attachment context
    */
-  static isValid(handle: NativePointer | null | undefined): boolean {
-    return handle != null && !pointerIsNull(handle);
+  isInAttachedContext(threadId = getCurrentThreadId()): boolean {
+    return this.activeAttachments.has(threadId);
   }
 
   /**
-   * Returns a string representation of the thread.
-   * 
-   * @returns String representation
+   * Execute callback only attaching when the current context is not already attached.
    */
-  toString(): string {
-    return `MonoThread(${this.handle})`;
+  runIfNeeded<T>(fn: () => T): T {
+    if (this.isInAttachedContext()) {
+      return fn();
+    }
+    return this.run(fn);
   }
 
   /**
-   * Returns the native pointer to the MonoThread structure.
-   * 
-   * @returns Native pointer
+   * Execute multiple operations with a single attachment.
    */
-  toPointer(): NativePointer {
-    return this.handle;
+  runBatch<T extends any[]>(...operations: Array<() => any>): T {
+    return this.run(() => operations.map(op => op()) as T);
   }
-}
 
-/**
- * Thread utilities and helper functions.
- */
-export namespace MonoThread {
   /**
-   * Ensures the current thread is attached to the Mono runtime.
-   * This is a convenience function that returns the handle directly.
-   * 
-   * @param api The MonoApi instance
+   * Ensures the specified thread is attached to the Mono runtime.
+   * Returns the cached handle if already attached, otherwise attaches and caches.
+   * @param threadId Thread ID to attach (defaults to current thread)
    * @returns Native pointer to the attached thread
-   * 
-   * @example
-   * const handle = MonoThread.ensureAttached(Mono.api);
    */
-  export function ensureAttached(api: MonoApi): NativePointer {
-    return getManager(api).ensureAttached();
-  }
-
-  /**
-   * Detaches all threads managed by the ThreadManager.
-   * This should be called during cleanup/disposal.
-   * 
-   * @param api The MonoApi instance
-   * 
-   * @example
-   * // During cleanup
-   * MonoThread.detachAll(Mono.api);
-   */
-  export function detachAll(api: MonoApi): void {
-    getManager(api).detachAll();
-  }
-
-  /**
-   * Gets the current thread ID.
-   * 
-   * @returns Thread ID as a number
-   */
-  export function getCurrentId(): number {
-    return MonoThread.getId();
+  ensureAttached(threadId = getCurrentThreadId()): NativePointer {
+    const handle = this.attachedThreads.get(threadId);
+    if (handle && !isNull(handle)) {
+      return handle;
+    }
+    const attached = this.api.attachThread();
+    this.attachedThreads.set(threadId, attached);
+    return attached;
   }
 }
 
-function getManager(api: MonoApi): ThreadManager {
-  return (api as any)._threadManager as ThreadManager;
+function getCurrentThreadId(): number {
+  if (typeof Process.getCurrentThreadId === "function") {
+    return Process.getCurrentThreadId();
+  }
+  // As a fallback, use the JavaScript thread id (Frida currently runs agents on a single thread).
+  return 0;
+}
+
+function isNull(pointer: NativePointer | null): boolean {
+  if (pointer === null || pointer === undefined) {
+    return true;
+  }
+  if (typeof pointer === "object" && typeof (pointer as any).isNull === "function") {
+    return (pointer as any).isNull();
+  }
+  if (typeof pointer === "number") {
+    return pointer === 0;
+  }
+  return false;
 }

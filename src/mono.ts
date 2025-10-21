@@ -5,14 +5,14 @@
 
 import { MonoApi, createMonoApi } from "./runtime/api";
 import { findMonoModule, MonoModuleInfo } from "./runtime/module";
-import { ThreadManager } from "./runtime/guard";
+import { ThreadManager } from "./runtime/thread";
 import { MonoDomain } from "./model/domain";
 import { MonoRuntimeVersion } from "./runtime/version";
 
 // Import utilities
 import * as Find from "./utils/find";
 import * as Trace from "./utils/trace";
-import * as Types from "./utils/types-helper";
+import * as Types from "./utils/types";
 import { GCUtilities } from "./utils/gc";
 
 /**
