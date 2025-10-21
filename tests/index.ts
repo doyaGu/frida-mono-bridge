@@ -3,30 +3,15 @@
  * Orchestrates all test modules and provides a unified test runner
  */
 
-import { testModuleDetection } from "./test-module";
-import { testVersionDetection } from "./test-version";
-import { testApiAvailability } from "./test-api";
-import { testThreadManagement } from "./test-thread";
-import { testThreadModel } from "./test-thread-model";
-import { testDomainAccess } from "./test-domain";
-import { testAssemblyOperations } from "./test-assembly";
-import { testClassOperations } from "./test-class";
-import { testMethodOperations } from "./test-method";
-import { testObjectOperations } from "./test-object";
-import { testStringOperations } from "./test-string";
-import { testArrayOperations } from "./test-array";
-import { testFieldOperations } from "./test-field";
-import { testPropertyOperations } from "./test-property";
-import { testGCHandles } from "./test-gchandle";
-import { testDelegates } from "./test-delegate";
-import { testInternalCalls } from "./test-icall";
-import { testLogger } from "./test-logger";
-import { testRealUsage } from "./test-real-usage";
-import { testMetadataCollections } from "./test-metadata";
-import { testDefinitions } from "./test-definitions";
-import { testLruCache } from "./test-cache";
-import { testFluentApi } from "./test-fluent-api";
-import { testUtilities } from "./test-utils";
+// Import consolidated test files
+import { testCoreInfrastructure } from "./test-core-infrastructure";
+import { testThreadManagement } from "./test-thread-management";
+import { testMonoTypes } from "./test-mono-types";
+import { testMonoMembers } from "./test-mono-members";
+import { testDataOperations } from "./test-data-operations";
+import { testAdvancedFeatures } from "./test-advanced-features";
+import { testIntegration } from "./test-integration";
+import { testSupporting } from "./test-supporting";
 import { TestResult, TestSummary, TestSuite } from "./test-framework";
 
 export interface TestSuiteConfig {
@@ -60,113 +45,56 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
 
   // Core Infrastructure Tests
   logSection("Core Infrastructure Tests");
-
-  suite.addResult(testModuleDetection());
+  suite.addResult(testCoreInfrastructure());
   if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
     return suite.getSummary();
   }
 
-  suite.addResult(testVersionDetection());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
-  }
-
-  suite.addResult(testApiAvailability());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
-  }
-
-  suite.addResult(testLogger());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
-  }
-
-  // Runtime Management Tests
-  logSection("Runtime Management Tests");
-
+  // Thread Management Tests
+  logSection("Thread Management Tests");
   suite.addResult(testThreadManagement());
   if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
     return suite.getSummary();
   }
 
-  suite.addResult(testThreadModel());
+  // Mono Types Tests
+  logSection("Mono Types Tests");
+  suite.addResult(testMonoTypes());
   if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
     return suite.getSummary();
   }
 
-  suite.addResult(testDomainAccess());
+  // Mono Members Tests
+  logSection("Mono Members Tests");
+  suite.addResult(testMonoMembers());
   if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
     return suite.getSummary();
   }
 
-  suite.addResult(testGCHandles());
+  // Data Operations Tests
+  logSection("Data Operations Tests");
+  suite.addResult(testDataOperations());
   if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
     return suite.getSummary();
   }
 
-  // Model Tests (Basic Operations)
-  logSection("Basic Model Operations Tests");
-
-  suite.addResult(testAssemblyOperations());
+  // Advanced Features Tests
+  logSection("Advanced Features Tests");
+  suite.addResult(testAdvancedFeatures());
   if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
     return suite.getSummary();
   }
 
-  suite.addResult(testClassOperations());
+  // Integration Tests
+  logSection("Integration Tests");
+  suite.addResult(testIntegration());
   if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
     return suite.getSummary();
   }
 
-  suite.addResult(testMethodOperations());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
-  }
-
-  suite.addResult(testStringOperations());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
-  }
-
-  // Advanced Model Tests
-  if (!config.skipAdvancedTests) {
-    logSection("Advanced Model Operations Tests");
-
-    suite.addResult(testObjectOperations());
-    suite.addResult(testArrayOperations());
-    suite.addResult(testFieldOperations());
-    suite.addResult(testPropertyOperations());
-    suite.addResult(testMetadataCollections());
-    suite.addResult(testDefinitions());
-  }
-
-  // Feature Tests
-  logSection("Feature-Specific Tests");
-
-  suite.addResult(testDelegates());
-  suite.addResult(testInternalCalls());
-
-  // Real Usage Integration Tests
-  logSection("Real Usage Integration Tests");
-
-  suite.addResult(testRealUsage());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
-  }
-
-  // Utility and Infrastructure Tests
-  logSection("Utility and Cache Tests");
-
-  suite.addResult(testLruCache());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
-  }
-
-  suite.addResult(testFluentApi());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
-  }
-
-  suite.addResult(testUtilities());
+  // Supporting Tests
+  logSection("Supporting Tests");
+  suite.addResult(testSupporting());
   if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
     return suite.getSummary();
   }
@@ -200,32 +128,16 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
   return summary;
 }
 
-// Export individual test modules for selective testing
+// Export consolidated test modules for selective testing
 export {
-  testModuleDetection,
-  testVersionDetection,
-  testApiAvailability,
+  testCoreInfrastructure,
   testThreadManagement,
-  testThreadModel,
-  testDomainAccess,
-  testAssemblyOperations,
-  testClassOperations,
-  testMethodOperations,
-  testObjectOperations,
-  testStringOperations,
-  testArrayOperations,
-  testFieldOperations,
-  testPropertyOperations,
-  testMetadataCollections,
-  testDefinitions,
-  testGCHandles,
-  testDelegates,
-  testInternalCalls,
-  testLogger,
-  testRealUsage,
-  testLruCache,
-  testFluentApi,
-  testUtilities,
+  testMonoTypes,
+  testMonoMembers,
+  testDataOperations,
+  testAdvancedFeatures,
+  testIntegration,
+  testSupporting,
 };
 
 const globalScope = globalThis as any;

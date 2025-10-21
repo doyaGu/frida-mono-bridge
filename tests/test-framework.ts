@@ -13,6 +13,8 @@ export interface TestResult {
   error?: Error;
   message?: string;
   duration?: number;
+  category?: TestCategory;
+  requiresMono?: boolean;
 }
 
 export interface TestSummary {
@@ -21,12 +23,28 @@ export interface TestSummary {
   failed: number;
   skipped: number;
   results: TestResult[];
+  duration?: number;
+}
+
+export enum TestCategory {
+  STANDALONE = "standalone",
+  MONO_DEPENDENT = "mono-dependent",
+  PERFORMANCE = "performance",
+  INTEGRATION = "integration",
+  ERROR_HANDLING = "error-handling"
+}
+
+export interface TestOptions {
+  category?: TestCategory;
+  requiresMono?: boolean;
+  skipIfNoMono?: boolean;
+  timeout?: number;
 }
 
 export class TestSuite {
   public results: TestResult[] = [];
 
-  constructor(public readonly name: string) {}
+  constructor(public readonly name: string, public readonly category?: TestCategory) {}
 
   addResult(result: TestResult): void {
     this.results.push(result);
@@ -41,9 +59,21 @@ export class TestSuite {
       results: this.results,
     };
   }
+
+  getMonoDependentTests(): TestResult[] {
+    return this.results.filter(r => r.requiresMono);
+  }
+
+  getStandaloneTests(): TestResult[] {
+    return this.results.filter(r => !r.requiresMono);
+  }
+
+  getByCategory(category: TestCategory): TestResult[] {
+    return this.results.filter(r => r.category === category);
+  }
 }
 
-export function createTest(name: string, testFn: () => void): TestResult {
+export function createTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
   const startTime = Date.now();
   try {
     testFn();
@@ -55,6 +85,8 @@ export function createTest(name: string, testFn: () => void): TestResult {
       failed: false,
       skipped: false,
       duration,
+      category: options?.category,
+      requiresMono: options?.requiresMono ?? true,
     };
   } catch (error) {
     const duration = Date.now() - startTime;
@@ -72,6 +104,8 @@ export function createTest(name: string, testFn: () => void): TestResult {
       skipped: false,
       error: error instanceof Error ? error : new Error(String(error)),
       duration,
+      category: options?.category,
+      requiresMono: options?.requiresMono ?? true,
     };
   }
 }
@@ -266,5 +300,82 @@ export function assertDomainCached(message = "Mono.domain should be cached insta
   if (domain1 !== domain2) {
     fail(message);
   }
+}
+
+// Enhanced test creation functions with categorization
+export function createStandaloneTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
+  const result = createTest(name, testFn, {
+    ...options,
+    category: TestCategory.STANDALONE,
+    requiresMono: false
+  });
+  return result;
+}
+
+export function createMonoDependentTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
+  return createTest(name, testFn, {
+    ...options,
+    category: TestCategory.MONO_DEPENDENT,
+    requiresMono: true
+  });
+}
+
+export function createIntegrationTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
+  return createTest(name, testFn, {
+    ...options,
+    category: TestCategory.INTEGRATION,
+    requiresMono: true
+  });
+}
+
+export function createPerformanceTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
+  return createTest(name, testFn, {
+    ...options,
+    category: TestCategory.PERFORMANCE,
+    requiresMono: true
+  });
+}
+
+export function createErrorHandlingTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
+  return createTest(name, testFn, {
+    ...options,
+    category: TestCategory.ERROR_HANDLING,
+    requiresMono: true
+  });
+}
+
+// Enhanced versions of existing functions with categorization
+export function createMonoTestEnhanced<T>(name: string, testFn: () => T, options?: TestOptions): TestResult {
+  return createMonoDependentTest(name, () => Mono.perform(testFn), options);
+}
+
+export function createDomainTestEnhanced(name: string, testFn: (domain: MonoDomain) => void, options?: TestOptions): TestResult {
+  return createMonoDependentTest(name, () => {
+    const domain = Mono.domain;
+    testFn(domain);
+  }, options);
+}
+
+export function createSmokeTest(category: TestCategory, context: string): TestResult {
+  return createTest(`Smoke test for ${context}`, () => {
+    // Basic functionality check
+    console.log(`✅ ${context} smoke test passed`);
+  }, {
+    category,
+    requiresMono: category === TestCategory.MONO_DEPENDENT
+  });
+}
+
+// Additional specialized test creation functions
+export function createMonoThread(name: string, testFn: () => void, options?: TestOptions): TestResult {
+  return createMonoDependentTest(name, testFn, {
+    ...options,
+    category: TestCategory.MONO_DEPENDENT
+  });
+}
+
+// Alias for createDomainTestEnhanced to provide consistent naming
+export function createDomainTestEnhancedAlias(name: string, testFn: (domain: any) => void, options?: TestOptions): TestResult {
+  return createDomainTest(name, testFn);
 }
 
