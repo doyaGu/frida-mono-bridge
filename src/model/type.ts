@@ -57,6 +57,8 @@ export const MonoTypeNameFormat = Object.freeze({
   AssemblyQualified: MonoTypeNameFormatEnum.MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED,
 } as const);
 
+export type MonoTypeNameFormat = (typeof MonoTypeNameFormat)[keyof typeof MonoTypeNameFormat];
+
 export interface MonoTypeSummary {
   name: string;
   fullName: string;
