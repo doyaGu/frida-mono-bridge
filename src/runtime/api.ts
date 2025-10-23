@@ -2,7 +2,7 @@ import { allocPointerArray, allocUtf8 } from "./mem";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String, readUtf16String } from "../utils/string";
 import { MonoModuleInfo } from "./module";
-import { ALL_MONO_EXPORTS, MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./signatures";
+import { ALL_MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./signatures";
 import { LruCache } from "../utils/cache";
 import type { ThreadManager } from "./thread";
 
@@ -237,14 +237,14 @@ export class MonoApi {
     this.delegateThunkCache.clear();
 
     // Clean up allocated resources
-    for (const ptr of this.allocatedResources) {
-      try {
-        // Note: We don't explicitly free Memory.alloc pointers as they rely on Frida's GC
-        // But we clear our reference to help with garbage collection
-      } catch (error) {
-        // Ignore cleanup errors
-      }
-    }
+    // for (const _ of this.allocatedResources) {
+    //   try {
+    //     // Note: We don't explicitly free Memory.alloc pointers as they rely on Frida's GC
+    //     // But we clear our reference to help with garbage collection
+    //   } catch (error) {
+    //     // Ignore cleanup errors
+    //   }
+    // }
     this.allocatedResources = [];
 
     // Clear pointers

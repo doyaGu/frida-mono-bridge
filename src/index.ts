@@ -22,8 +22,5 @@ export * from "./runtime/index";
 // Model exports (Mono classes, methods, fields, etc.)
 export * from "./model/index";
 
-// Utility exports (helpers, tools, logging, etc.)
+// Utility exports (helpers, tools, logging, error handling, etc.)
 export * from "./utils/index";
-
-// Pattern exports (common operations, error handling, etc.)
-export * from "./patterns/index";

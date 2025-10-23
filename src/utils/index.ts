@@ -12,6 +12,12 @@ export * from "./type-operations";
 // Type definitions
 export * from "./types";
 
+// Error handling and operation patterns
+export * from "./errors";
+export * from "./batch";
+export * from "./retry";
+export * from "./safe-access";
+
 // Mono-specific utilities
 export * from "./find";
 export * from "./trace";

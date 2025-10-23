@@ -10,6 +10,7 @@ import { MonoMethodSignature, MonoParameterInfo } from "./method-signature";
 import { MonoType, MonoTypeKind, MonoTypeSummary } from "./type";
 import { MethodAttribute, MethodImplAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
 import { unwrapInstance } from "../utils/memory";
+import { Logger } from "../utils/log";
 
 export interface InvokeOptions {
   throwOnManagedException?: boolean;
@@ -628,4 +629,100 @@ function prepareArgumentRaw(api: MonoApi, arg: MethodArgument): NativePointer {
     throw new Error("Primitive arguments need manual boxing before invocation");
   }
   return arg as NativePointer;
+}
+
+// ===== METHOD INVOCATION UTILITIES =====
+
+const methodLogger = new Logger({ tag: "MethodInvocation" });
+
+/**
+ * Method invocation operation with standardized error handling
+ * Provides a safe wrapper around method invocation with logging and error handling
+ */
+export class MethodInvocation {
+  constructor(
+    private method: MonoMethod,
+    private instance: MonoObject | NativePointer | null,
+    private args: MethodArgument[] = [],
+    private options: InvokeOptions = {}
+  ) {}
+
+  /**
+   * Execute the method invocation safely
+   */
+  safeExecute(context?: string): any {
+    try {
+      return this.method.invoke(this.instance, this.args, this.options);
+    } catch (error) {
+      const contextStr = context || this.getContextDescription();
+      methodLogger.error(`Method invocation failed in ${contextStr}: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Execute with custom error handler
+   */
+  safeExecuteWithHandler(onError: (error: unknown) => void, context?: string): any {
+    try {
+      return this.method.invoke(this.instance, this.args, this.options);
+    } catch (error) {
+      const contextStr = context || this.getContextDescription();
+      methodLogger.error(`Method invocation failed in ${contextStr}: ${error}`);
+      onError(error);
+      return null;
+    }
+  }
+
+  /**
+   * Execute method without error handling (throws on error)
+   */
+  execute(): any {
+    return this.method.invoke(this.instance, this.args, this.options);
+  }
+
+  /**
+   * Get method information for logging
+   */
+  getMethodInfo(): string {
+    try {
+      return `${this.method.getFullName?.() || 'Unknown method'}(${this.args.length} args)`;
+    } catch {
+      return 'Unknown method';
+    }
+  }
+
+  /**
+   * Get context description for error logging
+   */
+  private getContextDescription(): string {
+    const methodName = this.method.getName();
+    const className = this.method.getDeclaringClass().getName();
+    const instanceDesc = this.instance ? `on instance` : 'static';
+    return `${className}.${methodName} ${instanceDesc}`;
+  }
+
+  /**
+   * Create a new MethodInvocation instance
+   */
+  static create(
+    method: MonoMethod,
+    instance: MonoObject | NativePointer | null = null,
+    args: MethodArgument[] = [],
+    options: InvokeOptions = {}
+  ): MethodInvocation {
+    return new MethodInvocation(method, instance, args, options);
+  }
+}
+
+/**
+ * Helper function to create method invocations
+ */
+export function createMethodInvocation(
+  method: MonoMethod,
+  instance?: MonoObject | NativePointer | null,
+  args?: MethodArgument[],
+  options?: InvokeOptions
+): MethodInvocation {
+  return MethodInvocation.create(method, instance, args, options);
 }

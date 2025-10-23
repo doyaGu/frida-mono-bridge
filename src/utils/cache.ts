@@ -2,7 +2,7 @@
  * Caching utilities including LRU cache implementation and decorators
  */
 
-import { MonoValidationError } from "../patterns/errors";
+import { MonoValidationError } from "./errors";
 
 // ============================================================================
 // LRU CACHE IMPLEMENTATION
@@ -184,7 +184,7 @@ export interface CacheOptions {
  * }
  */
 export function cached(options: CacheOptions = {}) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  return function (_: any, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalGet = descriptor.get;
     if (!originalGet) {
       throw new MonoValidationError("@cached can only be applied to getters", "descriptor", descriptor);

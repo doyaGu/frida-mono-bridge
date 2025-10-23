@@ -5,7 +5,7 @@ import { MonoMethod } from "./method";
 import { MonoClass } from "./class";
 import { MonoObject } from "./object";
 import { MonoType } from "./type";
-import { MonoValidationError } from "../patterns/errors";
+import { MonoValidationError } from "../utils/errors";
 
 /**
  * Represents a Mono property (System.Reflection.PropertyInfo)

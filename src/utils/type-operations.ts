@@ -2,9 +2,9 @@
  * Advanced type operations, guards, and safety utilities for Mono operations
  */
 
-import { MonoValidationError } from "../patterns/errors";
+import { MonoValidationError } from "./errors";
 import { Logger } from "./log";
-import { MonoObject, MonoClass, MonoMethod, MonoField, MonoArray, MonoType, MonoDomain } from "../model";
+import { MonoObject, MonoClass, MonoMethod, MonoField, MonoArray, MonoDomain } from "../model";
 
 const logger = new Logger({ tag: "TypeSafety" });
 
@@ -347,13 +347,11 @@ export class TypeSafeOperations {
     args: any[],
     options: {
       strictTypeChecking?: boolean;
-      allowNullResult?: boolean;
       validateParameters?: boolean;
     } = {}
   ): T {
     const {
       strictTypeChecking = false,
-      allowNullResult = true,
       validateParameters = false
     } = options;
 
@@ -411,10 +409,9 @@ export class TypeSafeOperations {
     instance: MonoObject | null,
     options: {
       strictTypeChecking?: boolean;
-      allowNull?: boolean;
     } = {}
   ): T {
-    const { strictTypeChecking = false, allowNull = true } = options;
+    const { strictTypeChecking = false } = options;
 
     try {
       const result = field.getValue(instance);
@@ -453,10 +450,9 @@ export class TypeSafeOperations {
     value: T,
     options: {
       strictTypeChecking?: boolean;
-      allowCoercion?: boolean;
     } = {}
   ): void {
-    const { strictTypeChecking = false, allowCoercion = true } = options;
+    const { strictTypeChecking = false } = options;
 
     try {
       // Basic validation for field assignment
@@ -542,13 +538,11 @@ export class TypeSafeOperations {
     options: {
       boundsCheck?: boolean;
       strictTypeChecking?: boolean;
-      allowCoercion?: boolean;
     } = {}
   ): void {
     const {
       boundsCheck = true,
-      strictTypeChecking = false,
-      allowCoercion = true
+      strictTypeChecking = false
     } = options;
 
     try {

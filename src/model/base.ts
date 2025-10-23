@@ -1,6 +1,6 @@
 import { MonoApi } from "../runtime/api";
 import { isValidPointer } from "../utils/memory";
-import { MonoError } from "../patterns/errors";
+import { MonoError } from "../utils/errors";
 
 /**
  * Common accessibility levels for Mono members

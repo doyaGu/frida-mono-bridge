@@ -3,7 +3,7 @@
  */
 
 import { resolveNativePointer } from "./memory";
-import { MonoError } from "../patterns/errors";
+import { MonoError } from "./errors";
 
 declare const NativePointer: any;
 

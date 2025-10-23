@@ -9,7 +9,7 @@ import { pointerIsNull } from "../src/utils/memory";
 import { readUtf8String, readUtf16String, safeStringify } from "../src/utils/string";
 import { MonoManagedExceptionError } from "../src/runtime/api";
 import { ensurePointer, unwrapInstance, unwrapInstanceRequired } from "../src/utils/memory";
-import { MonoValidationError } from "../src/patterns/errors";
+import { MonoValidationError } from "../src/utils/errors";
 
 // Import consolidated utilities directly for testing
 import {

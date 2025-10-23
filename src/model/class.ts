@@ -440,7 +440,6 @@ export class MonoClass extends MonoHandle {
   getDescription(): string {
     const name = this.getName();
     const namespace = this.getNamespace();
-    const fullName = this.getFullName();
 
     const modifiers = [];
     if (this.isInterface()) modifiers.push('interface');

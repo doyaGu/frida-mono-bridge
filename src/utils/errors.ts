@@ -1,5 +1,5 @@
 /**
- * Standardized error handling for Mono operations
+ * Comprehensive error handling system for Mono operations
  * Provides consistent error types and handling patterns
  */
 
@@ -289,7 +289,7 @@ export function monoSuccess<T>(data: T): MonoResult<T> {
 /**
  * Create error result
  */
-export function monoError<T>(error: MonoError): MonoResult<T> {
+export function monoErrorResult<T>(error: MonoError): MonoResult<T> {
   return { success: false, error };
 }
 
@@ -305,7 +305,7 @@ export function asResult<T extends any[], R>(
       const result = fn(...args);
       return monoSuccess(result);
     } catch (error) {
-      return monoError(handleMonoError(error, context));
+      return monoErrorResult(handleMonoError(error, context));
     }
   };
 }

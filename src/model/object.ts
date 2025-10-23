@@ -1,4 +1,3 @@
-import { MonoApi } from "../runtime/api";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf16String } from "../utils/string";
 import { MonoHandle } from "./base";

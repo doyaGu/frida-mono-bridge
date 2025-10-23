@@ -3,7 +3,7 @@
  */
 
 import { MonoApi } from "../runtime/api";
-import { MonoValidationError } from "../patterns/errors";
+import { MonoValidationError } from "./errors";
 import { pointerIsNull, safeAlloc } from "./memory";
 
 declare const NativePointer: any;

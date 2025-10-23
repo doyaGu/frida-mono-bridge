@@ -2,7 +2,7 @@
  * Memory allocation, pointer validation, and manipulation utilities
  */
 
-import { MonoMemoryError, MonoValidationError } from "../patterns/errors";
+import { MonoMemoryError, MonoValidationError } from "./errors";
 import { isNativePointer } from "./type-operations";
 
 declare const NativePointer: any;
