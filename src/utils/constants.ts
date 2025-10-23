@@ -5,75 +5,35 @@
 
 import { MonoEnums } from "../runtime/enums";
 
-// Mono type kinds from authoritative runtime enums
-const MonoTypeEnum = MonoEnums.MonoTypeEnum;
-
-export const MONO_TYPE_KIND = Object.freeze({
-  END: MonoTypeEnum.MONO_TYPE_END,
-  VOID: MonoTypeEnum.MONO_TYPE_VOID,
-  BOOLEAN: MonoTypeEnum.MONO_TYPE_BOOLEAN,
-  CHAR: MonoTypeEnum.MONO_TYPE_CHAR,
-  I1: MonoTypeEnum.MONO_TYPE_I1,
-  U1: MonoTypeEnum.MONO_TYPE_U1,
-  I2: MonoTypeEnum.MONO_TYPE_I2,
-  U2: MonoTypeEnum.MONO_TYPE_U2,
-  I4: MonoTypeEnum.MONO_TYPE_I4,
-  U4: MonoTypeEnum.MONO_TYPE_U4,
-  I8: MonoTypeEnum.MONO_TYPE_I8,
-  U8: MonoTypeEnum.MONO_TYPE_U8,
-  R4: MonoTypeEnum.MONO_TYPE_R4,
-  R8: MonoTypeEnum.MONO_TYPE_R8,
-  STRING: MonoTypeEnum.MONO_TYPE_STRING,
-  PTR: MonoTypeEnum.MONO_TYPE_PTR,
-  BYREF: MonoTypeEnum.MONO_TYPE_BYREF,
-  VALUETYPE: MonoTypeEnum.MONO_TYPE_VALUETYPE,
-  CLASS: MonoTypeEnum.MONO_TYPE_CLASS,
-  VAR: MonoTypeEnum.MONO_TYPE_VAR,
-  ARRAY: MonoTypeEnum.MONO_TYPE_ARRAY,
-  GENERICINST: MonoTypeEnum.MONO_TYPE_GENERICINST,
-  TYPEDBYREF: MonoTypeEnum.MONO_TYPE_TYPEDBYREF,
-  I: MonoTypeEnum.MONO_TYPE_I,
-  U: MonoTypeEnum.MONO_TYPE_U,
-  FNPTR: MonoTypeEnum.MONO_TYPE_FNPTR,
-  OBJECT: MonoTypeEnum.MONO_TYPE_OBJECT,
-  SZARRAY: MonoTypeEnum.MONO_TYPE_SZARRAY,
-  MVAR: MonoTypeEnum.MONO_TYPE_MVAR,
-  CMOD_REQD: MonoTypeEnum.MONO_TYPE_CMOD_REQD,
-  CMOD_OPT: MonoTypeEnum.MONO_TYPE_CMOD_OPT,
-  INTERNAL: MonoTypeEnum.MONO_TYPE_INTERNAL,
-  MODIFIER: MonoTypeEnum.MONO_TYPE_MODIFIER,
-  SENTINEL: MonoTypeEnum.MONO_TYPE_SENTINEL,
-  PINNED: MonoTypeEnum.MONO_TYPE_PINNED,
-  ENUM: MonoTypeEnum.MONO_TYPE_ENUM,
-} as const);
+export const MONO_TYPE_KIND = MonoEnums.MonoTypeEnum;
 
 // Pointer-like types that need special handling
 export const POINTER_LIKE_TYPES = new Set([
-  MONO_TYPE_KIND.OBJECT,
-  MONO_TYPE_KIND.SZARRAY,
-  MONO_TYPE_KIND.STRING,
-  MONO_TYPE_KIND.CLASS,
-  MONO_TYPE_KIND.GENERICINST,
-  MONO_TYPE_KIND.ARRAY,
-  MONO_TYPE_KIND.PTR,
+  MONO_TYPE_KIND.MONO_TYPE_OBJECT,
+  MONO_TYPE_KIND.MONO_TYPE_SZARRAY,
+  MONO_TYPE_KIND.MONO_TYPE_STRING,
+  MONO_TYPE_KIND.MONO_TYPE_CLASS,
+  MONO_TYPE_KIND.MONO_TYPE_GENERICINST,
+  MONO_TYPE_KIND.MONO_TYPE_ARRAY,
+  MONO_TYPE_KIND.MONO_TYPE_PTR,
 ]);
 
 // Primitive type sizes (in bytes)
 export const PRIMITIVE_TYPE_SIZES = {
-  [MONO_TYPE_KIND.BOOLEAN]: 1,
-  [MONO_TYPE_KIND.CHAR]: 2,
-  [MONO_TYPE_KIND.I1]: 1,
-  [MONO_TYPE_KIND.U1]: 1,
-  [MONO_TYPE_KIND.I2]: 2,
-  [MONO_TYPE_KIND.U2]: 2,
-  [MONO_TYPE_KIND.I4]: 4,
-  [MONO_TYPE_KIND.U4]: 4,
-  [MONO_TYPE_KIND.I8]: 8,
-  [MONO_TYPE_KIND.U8]: 8,
-  [MONO_TYPE_KIND.R4]: 4,
-  [MONO_TYPE_KIND.R8]: 8,
-  [MONO_TYPE_KIND.I]: 4, // IntPtr - platform dependent
-  [MONO_TYPE_KIND.U]: 4, // UIntPtr - platform dependent
+  [MONO_TYPE_KIND.MONO_TYPE_BOOLEAN]: 1,
+  [MONO_TYPE_KIND.MONO_TYPE_CHAR]: 2,
+  [MONO_TYPE_KIND.MONO_TYPE_I1]: 1,
+  [MONO_TYPE_KIND.MONO_TYPE_U1]: 1,
+  [MONO_TYPE_KIND.MONO_TYPE_I2]: 2,
+  [MONO_TYPE_KIND.MONO_TYPE_U2]: 2,
+  [MONO_TYPE_KIND.MONO_TYPE_I4]: 4,
+  [MONO_TYPE_KIND.MONO_TYPE_U4]: 4,
+  [MONO_TYPE_KIND.MONO_TYPE_I8]: 8,
+  [MONO_TYPE_KIND.MONO_TYPE_U8]: 8,
+  [MONO_TYPE_KIND.MONO_TYPE_R4]: 4,
+  [MONO_TYPE_KIND.MONO_TYPE_R8]: 8,
+  [MONO_TYPE_KIND.MONO_TYPE_I]: 4, // IntPtr - platform dependent
+  [MONO_TYPE_KIND.MONO_TYPE_U]: 4, // UIntPtr - platform dependent
 } as const;
 
 
@@ -192,8 +152,16 @@ export const REGEX_PATTERNS = {
 
 // Type conversion helpers
 export function isPointerType(typeKind: number): boolean {
-  const pointerTypes = [0x1, 0x2, 0x3, 0x4, 0x6, 0x8, 0x1c]; // OBJECT, SZARRAY, STRING, CLASS, GENERICINST, ARRAY, PTR
-  return pointerTypes.includes(typeKind);
+  const pointerTypes = [
+    MONO_TYPE_KIND.MONO_TYPE_OBJECT,     // 0x1c
+    MONO_TYPE_KIND.MONO_TYPE_SZARRAY,   // 0x1d
+    MONO_TYPE_KIND.MONO_TYPE_STRING,    // 0x0e
+    MONO_TYPE_KIND.MONO_TYPE_CLASS,     // 0x12
+    MONO_TYPE_KIND.MONO_TYPE_GENERICINST, // 0x15
+    MONO_TYPE_KIND.MONO_TYPE_ARRAY,     // 0x14
+    MONO_TYPE_KIND.MONO_TYPE_PTR,       // 0x0f
+  ];
+  return pointerTypes.includes(typeKind as any);
 }
 
 export function getPrimitiveTypeSize(typeKind: number): number | null {
