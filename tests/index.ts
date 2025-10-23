@@ -12,6 +12,12 @@ import { testDataOperations } from "./test-data-operations";
 import { testAdvancedFeatures } from "./test-advanced-features";
 import { testIntegration } from "./test-integration";
 import { testSupporting } from "./test-supporting";
+
+// Import Unity-specific test files
+import { testUnityGameObject } from "./test-unity-gameobject";
+import { testUnityComponents } from "./test-unity-components";
+import { testUnityEngineModules } from "./test-unity-engine-modules";
+
 import { TestResult, TestSummary, TestSuite } from "./test-framework";
 
 export interface TestSuiteConfig {
@@ -99,6 +105,27 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
     return suite.getSummary();
   }
 
+  // Unity GameObject Tests
+  logSection("Unity GameObject Tests");
+  suite.addResult(testUnityGameObject());
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Unity Components Tests
+  logSection("Unity Components Tests");
+  suite.addResult(testUnityComponents());
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Unity Engine Modules Tests
+  logSection("Unity Engine Modules Tests");
+  suite.addResult(testUnityEngineModules());
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
   // Print Summary
   const endTime = Date.now();
   const duration = endTime - startTime;
@@ -138,6 +165,9 @@ export {
   testAdvancedFeatures,
   testIntegration,
   testSupporting,
+  testUnityGameObject,
+  testUnityComponents,
+  testUnityEngineModules,
 };
 
 const globalScope = globalThis as any;

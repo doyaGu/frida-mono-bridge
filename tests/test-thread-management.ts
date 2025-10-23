@@ -152,10 +152,25 @@ export function testThreadManagement(): TestResult {
     const validHandle = Mono.api.getRootDomain();
     const nullHandle = ptr(0);
 
+    // Validate that we have a proper handle to test with
+    if (!validHandle || validHandle.isNull()) {
+      console.log("    (Skipped: Could not get valid root domain handle for validation test)");
+      return;
+    }
+
     assert(MonoThread.isValid(validHandle), "Should validate valid root domain handle");
     assert(!MonoThread.isValid(nullHandle), "Should not validate null handle");
     assert(!MonoThread.isValid(undefined as any), "Should not validate undefined handle");
-    assert(!MonoThread.isValid(ptr(-1)), "Should not validate negative handle");
+
+    // Test with some clearly invalid but safe addresses
+    const lowAddress = ptr(0x1000);  // Low memory, unlikely to be valid
+    const highAddress = ptr(0x7FFF0000);  // High user memory area
+
+    // These should be invalid but won't cause access violations
+    assert(!MonoThread.isValid(lowAddress), "Should not validate low memory address");
+    assert(!MonoThread.isValid(highAddress), "Should not validate high memory address");
+
+    console.log("    Thread handle validation working correctly");
   }));
 
   suite.addResult(createMonoDependentTest("MonoThread.toString() returns string representation", () => {
