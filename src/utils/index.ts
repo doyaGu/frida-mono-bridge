@@ -9,9 +9,8 @@ export * from "./enumeration-utils";
 export * from "./validation";
 export * from "./type-operations";
 
-// Type definitions and constants
+// Type definitions
 export * from "./types";
-export * from "./constants";
 
 // Mono-specific utilities
 export * from "./find";
@@ -22,10 +21,4 @@ export * from "./gc";
 export * from "./log";
 
 // Infrastructure utilities
-export * from "./thread-context";
-export * from "./lazy";
 export * from "./cache";
-export * from "./native-bridge";
-
-// Advanced monitoring
-export * from "./monitoring";

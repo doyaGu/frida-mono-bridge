@@ -3,6 +3,18 @@ import { isValidPointer } from "../utils/memory";
 import { MonoError } from "../patterns/errors";
 
 /**
+ * Common accessibility levels for Mono members
+ */
+export type MemberAccessibility =
+  | "private-scope"
+  | "private"
+  | "protected-and-internal"
+  | "internal"
+  | "protected"
+  | "protected-internal"
+  | "public";
+
+/**
  * Base class for all Mono handles
  *
  * Provides automatic thread-safe access to native API.

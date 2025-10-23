@@ -1,4 +1,4 @@
-import { MonoHandle } from "./base";
+import { MonoHandle, MemberAccessibility } from "./base";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String, readUtf16String } from "../utils/string";
 import { MonoClass } from "./class";
@@ -8,14 +8,7 @@ import { MonoType, MonoTypeKind, MonoTypeSummary } from "./type";
 import { FieldAttribute, getMaskedValue, hasFlag } from "../runtime/metadata";
 import { unwrapInstance, unwrapInstanceRequired } from "../utils/memory";
 
-export type FieldAccessibility =
-  | "private-scope"
-  | "private"
-  | "protected-and-internal"
-  | "internal"
-  | "protected"
-  | "protected-internal"
-  | "public";
+export type FieldAccessibility = MemberAccessibility;
 
 export interface FieldAccessOptions {
   domain?: MonoDomain | NativePointer;
@@ -241,7 +234,6 @@ export class MonoField<T = any> extends MonoHandle {
   // Summary and description methods
   getFlagNames(): string[] {
     try {
-      const flags = this.getFlags();
       const flagNames: string[] = [];
       if (this.isStatic()) flagNames.push('static');
       if (this.isInitOnly()) flagNames.push('init-only');

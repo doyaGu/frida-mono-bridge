@@ -41,4 +41,3 @@ export { registerInternalCall } from "../runtime/icall";
 export * from "./metadata";
 export * from "./base";
 export * from "./collections";
-export { MonoThread } from "./thread";

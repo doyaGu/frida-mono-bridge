@@ -2,7 +2,7 @@ import { MonoApi, MonoManagedExceptionError } from "../runtime/api";
 import { allocUtf8, readU32 } from "../runtime/mem";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { MonoHandle, MethodArgument } from "./base";
+import { MonoHandle, MethodArgument, MemberAccessibility } from "./base";
 import { MonoImage } from "./image";
 import { MonoObject } from "./object";
 import { MonoClass } from "./class";
@@ -16,14 +16,7 @@ export interface InvokeOptions {
   autoBoxPrimitives?: boolean;
 }
 
-export type MethodAccessibility =
-  | "private-scope"
-  | "private"
-  | "protected-and-internal"
-  | "internal"
-  | "protected"
-  | "protected-internal"
-  | "public";
+export type MethodAccessibility = MemberAccessibility;
 
 export interface MonoMethodSummary {
   name: string;

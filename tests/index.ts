@@ -5,7 +5,6 @@
 
 // Import consolidated test files
 import { testCoreInfrastructure } from "./test-core-infrastructure";
-import { testThreadManagement } from "./test-thread-management";
 import { testMonoTypes } from "./test-mono-types";
 import { testMonoMembers } from "./test-mono-members";
 import { testDataOperations } from "./test-data-operations";
@@ -18,7 +17,7 @@ import { testUnityGameObject } from "./test-unity-gameobject";
 import { testUnityComponents } from "./test-unity-components";
 import { testUnityEngineModules } from "./test-unity-engine-modules";
 
-import { TestResult, TestSummary, TestSuite } from "./test-framework";
+import { TestSummary, TestSuite } from "./test-framework";
 
 export interface TestSuiteConfig {
   skipSlowTests?: boolean;
@@ -52,13 +51,6 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
   // Core Infrastructure Tests
   logSection("Core Infrastructure Tests");
   suite.addResult(testCoreInfrastructure());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
-  }
-
-  // Thread Management Tests
-  logSection("Thread Management Tests");
-  suite.addResult(testThreadManagement());
   if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
     return suite.getSummary();
   }
@@ -158,7 +150,6 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
 // Export consolidated test modules for selective testing
 export {
   testCoreInfrastructure,
-  testThreadManagement,
   testMonoTypes,
   testMonoMembers,
   testDataOperations,

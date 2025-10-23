@@ -6,6 +6,5 @@ export * from "./mem";
 export * from "./signatures";
 export * from "./version";
 export * from "./enums";
-export * from "./thread";
 export * from "./metadata";
 export * from "./icall";
