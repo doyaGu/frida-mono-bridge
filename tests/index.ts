@@ -17,6 +17,24 @@ import { testUnityGameObject } from "./test-unity-gameobject";
 import { testUnityComponents } from "./test-unity-components";
 import { testUnityEngineModules } from "./test-unity-engine-modules";
 
+// Import comprehensive test files - STANDALONE tests (run first)
+import { testMonoUtils } from "./test-mono-utils";
+import { testMonoErrorHandling } from "./test-mono-error-handling";
+
+// Import comprehensive test files - MONO_DEPENDENT tests (run after Mono runtime)
+import { testMonoApi } from "./test-mono-api";
+import { testMonoDomain } from "./test-mono-domain";
+import { testMonoThreading } from "./test-mono-threading";
+import { testMonoModule } from "./test-mono-module";
+import { createMonoClassTests } from "./test-mono-class";
+import { createMonoMethodTests } from "./test-mono-method";
+import { createMonoFieldTests } from "./test-mono-field";
+import { createMonoPropertyTests } from "./test-mono-property";
+import { createMonoAssemblyTests } from "./test-mono-assembly";
+import { createMonoImageTests } from "./test-mono-image";
+import { testMonoData } from "./test-mono-data";
+import { testMonoAdvanced } from "./test-mono-advanced";
+
 import { TestSummary, TestSuite } from "./test-framework";
 
 export interface TestSuiteConfig {
@@ -48,6 +66,12 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
   const startTime = Date.now();
   const suite = new TestSuite("Frida Mono Bridge");
 
+  // ============================================================================
+  // PHASE 1: STANDALONE TESTS (No Mono runtime dependency)
+  // ============================================================================
+
+  logSection("Phase 1: Standalone Tests (No Mono Dependency)");
+  
   // Core Infrastructure Tests
   logSection("Core Infrastructure Tests");
   suite.addResult(testCoreInfrastructure());
@@ -97,6 +121,26 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
     return suite.getSummary();
   }
 
+  // Comprehensive Utils Tests (STANDALONE)
+  logSection("Comprehensive Utils Tests");
+  suite.addResult(testMonoUtils());
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Error Handling Tests (STANDALONE)
+  logSection("Comprehensive Error Handling Tests");
+  suite.addResult(testMonoErrorHandling());
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // ============================================================================
+  // PHASE 2: MONO_DEPENDENT TESTS (Require Mono runtime)
+  // ============================================================================
+
+  logSection("Phase 2: Mono-Dependent Tests");
+
   // Unity GameObject Tests
   logSection("Unity GameObject Tests");
   suite.addResult(testUnityGameObject());
@@ -114,6 +158,98 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
   // Unity Engine Modules Tests
   logSection("Unity Engine Modules Tests");
   suite.addResult(testUnityEngineModules());
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Mono API Tests
+  logSection("Comprehensive Mono API Tests");
+  suite.addResult(testMonoApi());
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Mono Domain Tests
+  logSection("Comprehensive Mono Domain Tests");
+  suite.addResult(testMonoDomain());
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Mono Threading Tests
+  logSection("Comprehensive Mono Threading Tests");
+  suite.addResult(testMonoThreading());
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Mono Module Tests
+  logSection("Comprehensive Mono Module Tests");
+  suite.addResult(testMonoModule());
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Mono Class Tests
+  logSection("Comprehensive Mono Class Tests");
+  const classTestResults = createMonoClassTests();
+  classTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Mono Method Tests
+  logSection("Comprehensive Mono Method Tests");
+  const methodTestResults = createMonoMethodTests();
+  methodTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Mono Field Tests
+  logSection("Comprehensive Mono Field Tests");
+  const fieldTestResults = createMonoFieldTests();
+  fieldTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Mono Property Tests
+  logSection("Comprehensive Mono Property Tests");
+  const propertyTestResults = createMonoPropertyTests();
+  propertyTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Mono Assembly Tests
+  logSection("Comprehensive Mono Assembly Tests");
+  const assemblyTestResults = createMonoAssemblyTests();
+  assemblyTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Mono Image Tests
+  logSection("Comprehensive Mono Image Tests");
+  const imageTestResults = createMonoImageTests();
+  imageTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Mono Data Tests
+  logSection("Comprehensive Mono Data Tests");
+  const dataTestResults = testMonoData();
+  dataTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive Mono Advanced Tests
+  logSection("Comprehensive Mono Advanced Tests");
+  const advancedTestResults = testMonoAdvanced();
+  advancedTestResults.forEach(result => suite.addResult(result));
   if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
     return suite.getSummary();
   }
@@ -159,6 +295,21 @@ export {
   testUnityGameObject,
   testUnityComponents,
   testUnityEngineModules,
+  // Comprehensive test modules
+  testMonoUtils,
+  testMonoErrorHandling,
+  testMonoApi,
+  testMonoDomain,
+  testMonoThreading,
+  testMonoModule,
+  createMonoClassTests,
+  createMonoMethodTests,
+  createMonoFieldTests,
+  createMonoPropertyTests,
+  createMonoAssemblyTests,
+  createMonoImageTests,
+  testMonoData,
+  testMonoAdvanced,
 };
 
 const globalScope = globalThis as any;
