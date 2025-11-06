@@ -62,10 +62,6 @@ src/
 │   ├── type.ts       # Type system and metadata
 │   ├── collections.ts # Collection utilities
 │   └── ...
-├── patterns/         # Common operation patterns
-│   ├── common.ts     # Reusable operations and utilities
-│   ├── errors.ts     # Structured error handling
-│   └── index.ts      # Pattern exports
 └── utils/            # Utilities and helpers
     ├── find.ts       # Search utilities (wildcard patterns)
     ├── trace.ts      # Method tracing and hooking
@@ -74,6 +70,10 @@ src/
     ├── gc.ts         # Garbage collection utilities
     ├── types.ts      # Type system helpers
     ├── validation.ts # Input validation
+    ├── errors.ts     # Structured error handling
+    ├── batch.ts      # Batch operations
+    ├── retry.ts      # Retry logic
+    ├── safe-access.ts # Safe property access
     ├── thread-context.ts # Thread context management
     └── ...
 ```
@@ -85,9 +85,9 @@ src/
 - **Fluent API**: Provides properties like `Mono.domain`, `Mono.api`, `Mono.gc`, `Mono.find`, `Mono.trace`, `Mono.types`
 - **Thread Management**: `Mono.perform(callback)` ensures thread attachment
 - **Lazy Initialization**: Runtime components initialized on first access
-- **Pattern Support**: Built-in patterns for common operations and error handling
+- **Utility Support**: Built-in utilities for common operations and error handling
 
-#### ThreadManager (runtime/guard.ts)
+#### ThreadManager (runtime/thread.ts)
 - **Automatic Attachment**: Manages Mono thread attachment/detachment
 - **Nested Call Prevention**: Tracks active attachments to avoid redundant operations
 - **Thread Safety**: Each MonoApi instance has its own ThreadManager
@@ -98,11 +98,12 @@ src/
 - **Error Handling**: Custom error types for function resolution and managed exceptions
 - **Signature Management**: Generated and manual Mono API signatures
 
-#### Pattern System (src/patterns/)
-- **Common Operations**: Reusable patterns for frequent Mono operations
-- **Error Handling**: Structured error types and result handling
-- **Batch Operations**: Efficient processing of multiple operations
-- **Safe Operations**: Built-in validation and error recovery
+#### Utility System (src/utils/)
+- **Error Handling**: Structured error types with MonoError hierarchy
+- **Batch Operations**: Efficient processing of multiple operations via BatchOperation
+- **Retry Logic**: RetryOperation for operations that might fail temporarily
+- **Safe Operations**: SafePropertyAccess for safe property/method access
+- **Method Invocation**: MethodInvocation class for safe method execution
 
 #### Model Hierarchy
 - **Domain → Assembly → Image → Class → Method/Field**
@@ -140,22 +141,26 @@ Mono.perform(() => {
 });
 ```
 
-### Pattern-Based Operations
+### Utility-Based Operations
 ```typescript
-import { MonoOperation, BatchOperation, withErrorHandling } from "./src/patterns";
+import { BatchOperation, MethodInvocation, withErrorHandling } from "./src/utils";
 
-// Safe operation with built-in error handling
-const operation = new MonoOperation(() => {
-  const method = playerClass.method("TakeDamage", 1);
-  return method.invoke(instance, [damage]);
-});
-const result = operation.safeExecute("player damage calculation");
+// Safe method invocation with built-in error handling
+const method = playerClass.method("TakeDamage", 1);
+const invocation = new MethodInvocation(method, instance, [damage]);
+const result = invocation.safeExecute("player damage calculation");
 
 // Batch operations for efficiency
 const batch = new BatchOperation();
 batch.add(() => player.method("Update").invoke(player, []));
 batch.add(() => player.method("Render").invoke(player, []));
 const results = batch.executeAll("player frame update");
+
+// Error handling wrapper
+const safeMethod = withErrorHandling(
+  (damage: number) => player.takeDamage(damage),
+  "player damage calculation"
+);
 ```
 
 ## Testing Structure
@@ -202,8 +207,8 @@ When working with this codebase:
 
 - The main API is accessed through the default export: `import Mono from "./src"`
 - All Mono operations must be wrapped in `Mono.perform()` for thread safety
-- The codebase maintains backward compatibility but modern patterns are preferred
-- Use patterns from `src/patterns/` for common operations and error handling
+- The codebase maintains backward compatibility but modern utilities are preferred
+- Use utilities from `src/utils/` for common operations and error handling
 - The test suite validates functionality against real Mono runtimes
 - Built-in search utilities (`Mono.find`) support wildcards and pattern matching
 - Tracing utilities (`Mono.trace`) provide powerful hooking capabilities

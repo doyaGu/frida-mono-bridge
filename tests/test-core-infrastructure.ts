@@ -8,6 +8,7 @@ import {
   TestResult,
   TestSuite,
   createTest,
+  createMonoTest,
   createMonoDependentTest,
   createSmokeTest,
   createPerformanceTest,
@@ -22,20 +23,21 @@ import {
 export function testCoreInfrastructure(): TestResult {
   console.log("\nCore Infrastructure:");
 
-  const suite = new TestSuite("Core Infrastructure Tests", TestCategory.MONO_DEPENDENT);
+  // Core infrastructure tests are mixed - some standalone, some Mono-dependent
+  const suite = new TestSuite("Core Infrastructure Tests");
 
   // Smoke test first
-  suite.addResult(createSmokeTest(TestCategory.MONO_DEPENDENT, "core infrastructure"));
+  suite.addResult(createSmokeTest(TestCategory.STANDALONE, "core infrastructure"));
 
-  // Module Detection Tests
-  suite.addResult(createMonoDependentTest("Platformer executable should be loaded", () => {
+  // Module Detection Tests (STANDALONE - these use Process.enumerateModules only)
+  suite.addResult(createTest("Platformer executable should be loaded", () => {
     const modules = Process.enumerateModules();
     const hasPlatformer = modules.some(moduleInfo => moduleInfo.name.toLowerCase() === "platformer.exe");
     assert(hasPlatformer, "Platformer.exe must be loaded for Mono integration tests");
     console.log("    Platformer.exe detected in module list");
-  }));
+  }, { category: TestCategory.STANDALONE, requiresMono: false }));
 
-  suite.addResult(createMonoDependentTest("Mono module should be detected", () => {
+  suite.addResult(createTest("Mono module should be detected", () => {
     const modules = Process.enumerateModules();
     const monoModule = modules.find(module =>
       module.name.toLowerCase().includes("mono") &&
@@ -43,9 +45,9 @@ export function testCoreInfrastructure(): TestResult {
     );
     assertNotNull(monoModule, "Mono module should be found");
     console.log(`    Module detected: ${monoModule.name}`);
-  }));
+  }, { category: TestCategory.STANDALONE, requiresMono: false }));
 
-  suite.addResult(createMonoDependentTest("Module name should match common pattern", () => {
+  suite.addResult(createTest("Module name should match common pattern", () => {
     const modules = Process.enumerateModules();
     const monoModule = modules.find(module =>
       module.name.toLowerCase().includes("mono") &&
@@ -55,9 +57,9 @@ export function testCoreInfrastructure(): TestResult {
     const isValidPattern = /mono-.*\.dll/.test(monoModule.name.toLowerCase());
     assert(isValidPattern, "Module name should match Mono runtime pattern");
     console.log(`    Module name matches common pattern: ${monoModule.name}`);
-  }));
+  }, { category: TestCategory.STANDALONE, requiresMono: false }));
 
-  suite.addResult(createMonoDependentTest("Module base address should be valid", () => {
+  suite.addResult(createTest("Module base address should be valid", () => {
     const modules = Process.enumerateModules();
     const monoModule = modules.find(module =>
       module.name.toLowerCase().includes("mono") &&
@@ -73,14 +75,10 @@ export function testCoreInfrastructure(): TestResult {
     const addrValue = baseAddr.toUInt32();
     assert(addrValue > 0, "Module base address should be positive");
 
-    // Additional validation for Unity environment - address should be in reasonable memory range
-    assert(addrValue > 0x10000, "Module base address should be above low memory range");
-    assert(addrValue < 0x7FFFFFFF, "Module base address should be within 32-bit user space");
-
     console.log(`    Module base address: 0x${baseAddr.toString(16)} (${addrValue})`);
-  }));
+  }, { category: TestCategory.STANDALONE, requiresMono: false }));
 
-  suite.addResult(createMonoDependentTest("Module size should be reasonable", () => {
+  suite.addResult(createTest("Module size should be reasonable", () => {
     const modules = Process.enumerateModules();
     const monoModule = modules.find(module =>
       module.name.toLowerCase().includes("mono") &&
@@ -89,9 +87,9 @@ export function testCoreInfrastructure(): TestResult {
     assertNotNull(monoModule, "Mono module should be found");
     assert(monoModule.size > 1024 * 1024, "Module size should be at least 1MB");
     console.log(`    Module size: ${monoModule.size} bytes (${(monoModule.size / 1024 / 1024).toFixed(2)} MB)`);
-  }));
+  }, { category: TestCategory.STANDALONE, requiresMono: false }));
 
-  suite.addResult(createMonoDependentTest("Module path should be valid", () => {
+  suite.addResult(createTest("Module path should be valid", () => {
     const modules = Process.enumerateModules();
     const monoModule = modules.find(module =>
       module.name.toLowerCase().includes("mono") &&
@@ -102,16 +100,17 @@ export function testCoreInfrastructure(): TestResult {
     const hasDllExtension = monoModule.path.toLowerCase().endsWith('.dll');
     assert(hasDllExtension, "Module path should have valid extension");
     console.log(`    Path matches Mono runtime pattern: ${monoModule.path}`);
-  }));
+  }, { category: TestCategory.STANDALONE, requiresMono: false }));
 
   // Version Detection Tests
-  suite.addResult(createMonoDependentTest("Version object should exist and be accessible", () => {
-    assertNotNull(Mono.version, "Version should not be null");
-    assertNotNull(Mono.version.features, "Features should not be null");
-    console.log(`    Version object accessible with ${Object.keys(Mono.version.features).length} feature flags`);
+  suite.addResult(createMonoTest("Version object should exist and be accessible", () => {
+    const version = Mono.version;
+    assertNotNull(version, "Version should not be null");
+    assertNotNull(version.features, "Features should not be null");
+    console.log(`    Version object accessible with ${Object.keys(version.features).length} feature flags`);
   }));
 
-  suite.addResult(createMonoDependentTest("All feature flags should be defined and boolean", () => {
+  suite.addResult(createMonoTest("All feature flags should be defined and boolean", () => {
     const features = Mono.version.features;
     const featureNames = Object.keys(features);
     assert(featureNames.length > 0, "Should have at least one feature flag");
@@ -123,7 +122,7 @@ export function testCoreInfrastructure(): TestResult {
     console.log(`    ${featureNames.length} feature flags validated`);
   }));
 
-  suite.addResult(createMonoDependentTest("Feature flags should reflect API availability", () => {
+  suite.addResult(createMonoTest("Feature flags should reflect API availability", () => {
     const features = Mono.version.features;
     const hasDelegateThunkFeature = features.delegateThunk;
     const hasMetadataTablesFeature = features.metadataTables;

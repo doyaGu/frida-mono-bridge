@@ -113,19 +113,67 @@ Mono.dispose();
 
 ## Testing
 
-Run the comprehensive test suite:
+The Frida Mono Bridge includes a comprehensive test suite that can be run in two ways:
 
-```powershell
-# Compile tests
-npx frida-compile tests/index.ts -o dist/tests.js
+### Complete Test Suite
 
-# Run against a Mono process
-frida -n "UnityGame.exe" -l dist/tests.js
+Run all tests together:
+```bash
+npm run test
+frida -n "YourApp.exe" -l dist/tests.js
+```
+
+### Individual Test Categories
+
+Run specific test categories independently for faster feedback and targeted testing:
+
+```bash
+# Build and run Core Infrastructure tests
+npm run test:core-infrastructure
+frida -n "YourApp.exe" -l dist/test-core-infrastructure.js
+
+# Build and run Mono API tests
+npm run test:mono-api
+frida -n "YourApp.exe" -l dist/test-mono-api.js
+
+# Build and run Unity GameObject tests
+npm run test:unity-gameobject
+frida -n "YourUnityApp.exe" -l dist/test-unity-gameobject.js
+```
+
+Available test categories:
+- `test:core-infrastructure` - Core Mono runtime detection and API availability
+- `test:mono-api` - Low-level Mono API functionality
+- `test:mono-class` - Class discovery and metadata operations
+- `test:mono-method` - Method resolution and invocation
+- `test:mono-field` - Field access and operations
+- `test:mono-property` - Property discovery and operations
+- `test:mono-assembly` - Assembly loading and enumeration
+- `test:mono-image` - Image metadata access
+- `test:mono-domain` - Domain management and operations
+- `test:mono-threading` - Thread management and synchronization
+- `test:mono-module` - Module loading and operations
+- `test:mono-data` - Array, string, and object operations
+- `test:mono-advanced` - Complex scenarios and edge cases
+- `test:mono-utils` - Utility functions and validation
+- `test:mono-error-handling` - Error scenarios and exception handling
+- `test:unity-gameobject` - Unity GameObject operations
+- `test:unity-components` - Unity Component operations
+- `test:unity-engine-modules` - Unity Engine module access
+- `test:mono-types` - Type system operations
+- `test:advanced-features` - Advanced functionality
+- `test:data-operations` - Data manipulation operations
+- `test:integration` - End-to-end workflows
+- `test:supporting` - Supporting utilities
+
+Build all individual test runners:
+```bash
+npm run test:build-all
 ```
 
 **Test Coverage**: 187 tests across 23 modules with 100% pass rate.
 
-See **[tests/README.md](tests/README.md)** for detailed documentation.
+See **[tests/README.md](tests/README.md)** for detailed documentation and **[tests/INDIVIDUAL_TEST_RUNNERS.md](tests/INDIVIDUAL_TEST_RUNNERS.md)** for individual test runner instructions.
 
 ## Advanced Features
 

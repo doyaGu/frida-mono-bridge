@@ -75,7 +75,7 @@ export function createMonoClassTests(): TestResult[] {
       const mscorlib = domain.getAssembly("mscorlib");
       const startTime = Date.now();
       
-      const classes = mscorlib.getClasses();
+      const classes = mscorlib!.getClasses();
       const enumerationTime = Date.now() - startTime;
       
       console.log(`  Enumerated ${classes.length} classes in ${enumerationTime}ms`);
@@ -371,7 +371,7 @@ export function createMonoClassTests(): TestResult[] {
       const stringClass = domain.class("System.String");
       const objectClass = domain.class("System.Object");
       
-      const obj = objectClass.alloc();
+      const obj = objectClass!.alloc();
       const validation = stringClass!.validateInstance(obj);
       
       // String should not be assignable from Object (the other way around)

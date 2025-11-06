@@ -177,7 +177,7 @@ export function assertPerformWorks(message: string): void {
 
 export function assertDomainAvailable(message: string): void {
   try {
-    const domain = Mono.domain;
+    const domain = Mono.perform(() => Mono.domain);
     if (!domain) {
       throw new Error(`Mono.domain not available: ${message}`);
     }
@@ -188,7 +188,7 @@ export function assertDomainAvailable(message: string): void {
 
 export function assertApiAvailable(message: string): void {
   try {
-    const api = Mono.api;
+    const api = Mono.perform(() => Mono.api);
     if (!api) {
       throw new Error(`Mono.api not available: ${message}`);
     }
@@ -359,7 +359,7 @@ export function createDomainTestEnhanced(name: string, testFn: (domain: MonoDoma
 export function createSmokeTest(category: TestCategory, context: string): TestResult {
   return createTest(`Smoke test for ${context}`, () => {
     // Basic functionality check
-    console.log(`✅ ${context} smoke test passed`);
+    console.log(`[SUCCESS] ${context} smoke test passed`);
   }, {
     category,
     requiresMono: category === TestCategory.MONO_DEPENDENT
