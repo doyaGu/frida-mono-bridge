@@ -1,6 +1,6 @@
 # Test Suite
 
-Comprehensive test suite for the Frida Mono Bridge with **187 tests** organized into 6 major categories.
+Comprehensive test suite for the Frida Mono Bridge with **500+ tests** organized into 6 major categories across **37+ test files**.
 
 ## Overview
 
@@ -13,10 +13,10 @@ The test suite validates all aspects of the Frida Mono Bridge library:
 - Utility functions and caching
 
 **Test Statistics:**
-- **Total Tests**: 500+ (including new comprehensive tests)
-- **Test Files**: 37+ (including 14 new comprehensive test files)
+- **Total Tests**: 500+ (including comprehensive test coverage)
+- **Test Files**: 37+ (including comprehensive test files)
 - **Pass Rate**: 100%
-- **Duration**: ~800ms (increased due to comprehensive coverage)
+- **Duration**: ~800ms (comprehensive coverage)
 
 ## Structure
 
