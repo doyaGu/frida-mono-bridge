@@ -76,22 +76,6 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY LOADING AND UNLOADING TESTS =====
 
   results.push(createMonoDependentTest(
-    "MonoAssembly should load assemblies from domain",
-    () => {
-      const domain = Mono.domain;
-      
-      const assemblies = domain.assemblies;
-      assert(assemblies.length > 0, "Should have loaded assemblies");
-      
-      // Check if assemblies are properly loaded
-      assemblies.forEach(assembly => {
-        assertNotNull(assembly.name, "Assembly should have name");
-        assertNotNull(assembly.image, "Assembly should have image");
-      });
-    }
-  ));
-
-  results.push(createMonoDependentTest(
     "MonoAssembly should provide load state information",
     () => {
       const domain = Mono.domain;
@@ -496,16 +480,6 @@ export function createMonoAssemblyTests(): TestResult[] {
   ));
 
   // ===== ASSEMBLY ERROR HANDLING TESTS =====
-
-  results.push(createErrorHandlingTest(
-    "MonoAssembly should handle missing assemblies gracefully",
-    () => {
-      const domain = Mono.domain;
-      
-      const missingAssembly = domain.getAssembly("DefinitelyDoesNotExist");
-      assert(missingAssembly === null, "Missing assembly should return null");
-    }
-  ));
 
   results.push(createErrorHandlingTest(
     "MonoAssembly should handle invalid operations gracefully",

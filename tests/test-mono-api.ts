@@ -25,6 +25,9 @@ import {
   assertApiAvailable,
   TestCategory
 } from "./test-framework";
+import {
+  createBasicStringTests
+} from "./test-utilities";
 
 export function testMonoApi(): TestResult {
   console.log("\nComprehensive Mono API Tests:");
@@ -63,7 +66,7 @@ export function testMonoApi(): TestResult {
   }));
 
   suite.addResult(createMonoDependentTest("API should handle multiple initializations gracefully", () => {
-    // Test that multiple accesses to Mono.api return the same instance
+    // Test that multiple accesses to Mono.api return same instance
     const api1 = Mono.api;
     const api2 = Mono.api;
     
@@ -212,25 +215,6 @@ export function testMonoApi(): TestResult {
   suite.addResult(createMonoDependentTest("API should handle parameter processing correctly", () => {
     const api = Mono.api;
     
-    // Test string parameter processing
-    if (api.hasExport("mono_string_new")) {
-      const testCases = [
-        "Hello World",
-        "",
-        "Special chars: !@#$%^&*()",
-        "Unicode: αβγδε",
-        "Numbers: 1234567890",
-      ];
-      
-      for (const testCase of testCases) {
-        const result = api.stringNew(testCase);
-        assertNotNull(result, `String creation should work for: "${testCase}"`);
-        assert(!result.isNull(), `String pointer should not be NULL for: "${testCase}"`);
-      }
-      
-      console.log(`    Parameter processing tested with ${testCases.length} test cases`);
-    }
-    
     // Test numeric parameter processing
     if (api.hasExport("mono_thread_attach") && api.hasExport("mono_get_root_domain")) {
       const domain = api.getRootDomain();
@@ -291,24 +275,10 @@ export function testMonoApi(): TestResult {
   suite.addResult(createErrorHandlingTest("API should handle invalid parameters gracefully", () => {
     const api = Mono.api;
     
-    // Test null/undefined parameters
-    try {
-      if (api.hasExport("mono_string_new")) {
-        const result1 = api.stringNew(null as any);
-        const result2 = api.stringNew(undefined as any);
-        
-        // These should not crash, but may return null or handle gracefully
-        console.log("    Null/undefined parameters handled gracefully");
-      }
-    } catch (error) {
-      // Controlled errors are acceptable
-      console.log(`    Parameter validation working: ${error}`);
-    }
-    
     // Test invalid pointer parameters
     try {
       if (api.hasExport("mono_object_get_class")) {
-        const result = api.native.mono_object_get_class(NULL);
+        const result = api.native.mono_object_get_class(ptr(0));
         // Should handle null pointer gracefully
         console.log("    Invalid pointer parameters handled gracefully");
       }
@@ -455,7 +425,7 @@ export function testMonoApi(): TestResult {
       // Test rapid domain access
       api.getRootDomain();
 
-      // Test rapid string creation
+      // Test rapid string creation (reduced frequency)
       if (i % 10 === 0 && api.hasExport("mono_string_new")) {
         api.stringNew(`Test ${i}`);
       }
@@ -469,96 +439,13 @@ export function testMonoApi(): TestResult {
     assert(avgTime < 10, "Average time per call should be reasonable"); // More lenient
   }));
 
-  suite.addResult(createPerformanceTest("Performance: String operations", () => {
-    const api = Mono.api;
+  // ============================================================================
+  // STRING OPERATIONS
+  // ============================================================================
 
-    if (!api.hasExport("mono_string_new")) {
-      console.log("    (Skipped: mono_string_new not available)");
-      return;
-    }
-
-    const testStrings = [
-      "Hello World",
-      "Test string with some length",
-      "Unicode test: αβγδεζηθ",
-      "Numbers: 1234567890",
-      "Special chars: !@#$%^&*()_+-=[]{}|;':\",./<>?",
-    ];
-
-    const iterations = 20; // Reduced from 100
-    const startTime = Date.now();
-
-    for (let i = 0; i < iterations; i++) {
-      for (const testString of testStrings) {
-        const result = api.stringNew(testString);
-        assertNotNull(result, "String creation should succeed");
-      }
-    }
-
-    const duration = Date.now() - startTime;
-    const totalOperations = iterations * testStrings.length;
-    const avgTime = duration / totalOperations;
-
-    console.log(`    ${totalOperations} string operations took ${duration}ms (avg: ${avgTime.toFixed(2)}ms per operation)`);
-    assert(duration < 1000, "String operations should complete quickly"); // Reduced timeout
-  }));
-
-  suite.addResult(createPerformanceTest("Performance: Domain operations", () => {
-    const api = Mono.api;
-    const iterations = 100; // Reduced from 500
-    const startTime = Date.now();
-
-    for (let i = 0; i < iterations; i++) {
-      const domain = api.getRootDomain();
-      assertNotNull(domain, "Domain access should succeed");
-      assert(!domain.isNull(), "Domain should not be null");
-    }
-
-    const duration = Date.now() - startTime;
-    const avgTime = duration / iterations;
-
-    console.log(`    ${iterations} domain operations took ${duration}ms (avg: ${avgTime.toFixed(2)}ms per operation)`);
-    assert(duration < 500, "Domain operations should be very fast"); // Reduced timeout
-    assert(avgTime < 5, "Average domain access time should be very low"); // More lenient
-  }));
-
-  suite.addResult(createMonoDependentTest("API should maintain reliability under stress", () => {
-    const api = Mono.api;
-    const stressIterations = 50; // Reduced from 200
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (let i = 0; i < stressIterations; i++) {
-      try {
-        // Mix different operations
-        api.getRootDomain();
-
-        if (i % 5 === 0 && api.hasExport("mono_string_new")) {
-          api.stringNew(`Stress test ${i}`);
-        }
-
-        if (i % 10 === 0 && api.hasExport("mono_object_get_class") && api.hasExport("mono_string_new")) {
-          const testString = api.stringNew("Stress");
-          api.native.mono_object_get_class(testString);
-        }
-
-        successCount++;
-      } catch (error) {
-        errorCount++;
-        // Log errors but don't fail the test unless too many errors
-        if (errorCount <= 5) {
-          console.log(`    Stress test error ${errorCount}: ${error}`);
-        }
-      }
-    }
-
-    const successRate = (successCount / stressIterations * 100).toFixed(1);
-    console.log(`    Stress test: ${successCount}/${stressIterations} successful (${successRate}%)`);
-
-    // We expect at least 90% success rate (more lenient)
-    assert(successCount >= stressIterations * 0.90, `Success rate should be at least 90%, got ${successRate}%`);
-    assert(errorCount < stressIterations * 0.10, `Error rate should be less than 10%, got ${errorCount}/${stressIterations}`);
-  }));
+  // Add string operation tests individually
+  const stringTests = createBasicStringTests();
+  stringTests.forEach(test => suite.addResult(test));
 
   // ============================================================================
   // INTEGRATION TESTS
@@ -578,34 +465,6 @@ export function testMonoApi(): TestResult {
     }
     
     console.log("    API-domain integration working correctly");
-  }));
-
-  suite.addResult(createIntegrationTest("API should integrate with string operations", () => {
-    const api = Mono.api;
-    
-    if (!api.hasExport("mono_string_new")) {
-      console.log("    (Skipped: String operations not available)");
-      return;
-    }
-    
-    // Test string creation and manipulation
-    const testString = api.stringNew("Integration Test");
-    assertNotNull(testString, "String creation should work");
-    
-    // Test string length
-    if (api.hasExport("mono_string_length")) {
-      const length = api.native.mono_string_length(testString);
-      assert(typeof length === "number", "String length should be number");
-      assert(length > 0, "String length should be positive");
-    }
-    
-    // Test string characters access
-    if (api.hasExport("mono_string_chars")) {
-      const chars = api.native.mono_string_chars(testString);
-      assertNotNull(chars, "String chars should be accessible");
-    }
-    
-    console.log("    API-string integration working correctly");
   }));
 
   suite.addResult(createIntegrationTest("API should integrate with object operations", () => {

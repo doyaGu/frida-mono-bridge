@@ -7,7 +7,6 @@
 import Mono, { MonoProperty, MonoObject, MonoClass } from "../src";
 import { 
   TestResult, 
-  TestCategory, 
   createMonoDependentTest, 
   createDomainTest, 
   createIntegrationTest,
@@ -18,6 +17,10 @@ import {
   assertThrows,
   createTest
 } from "./test-framework";
+import {
+  createBasicLookupPerformanceTest,
+  createPropertyLookupPerformanceTest
+} from "./test-utilities";
 
 export function createMonoPropertyTests(): TestResult[] {
   const results: TestResult[] = [];
@@ -448,84 +451,6 @@ export function createMonoPropertyTests(): TestResult[] {
     }
   ));
 
-  // ===== UNITY PROPERTY PATTERNS TESTS =====
-
-  results.push(createMonoDependentTest(
-    "MonoProperty should handle Unity transform.position",
-    () => {
-      const domain = Mono.domain;
-      const transformClass = domain.class("UnityEngine.Transform");
-      
-      if (transformClass) {
-        const positionProperty = transformClass.tryGetProperty("position");
-        if (positionProperty) {
-          assert(positionProperty.getName() === "position", "Position property should be found");
-          assert(!positionProperty.isStatic(), "Position should be instance property");
-          assert(positionProperty.canRead(), "Position should be readable");
-          assert(positionProperty.canWrite(), "Position should be writable");
-          
-          const propertyType = positionProperty.getType();
-          if (propertyType) {
-            assert(propertyType.getName().includes("Vector3"), 
-                   "Position type should be Vector3");
-          }
-        } else {
-          console.log("  - Position property not found on Transform");
-        }
-      }
-    }
-  ));
-
-  results.push(createMonoDependentTest(
-    "MonoProperty should handle Unity gameObject.name",
-    () => {
-      const domain = Mono.domain;
-      const gameObjectClass = domain.class("UnityEngine.GameObject");
-      
-      if (gameObjectClass) {
-        const nameProperty = gameObjectClass.tryGetProperty("name");
-        if (nameProperty) {
-          assert(nameProperty.getName() === "name", "Name property should be found");
-          assert(!nameProperty.isStatic(), "Name should be instance property");
-          assert(nameProperty.canRead(), "Name should be readable");
-          assert(nameProperty.canWrite(), "Name should be writable");
-          
-          const propertyType = nameProperty.getType();
-          if (propertyType) {
-            assert(propertyType.getName() === "String", "Name type should be String");
-          }
-        } else {
-          console.log("  - Name property not found on GameObject");
-        }
-      }
-    }
-  ));
-
-  results.push(createMonoDependentTest(
-    "MonoProperty should handle Unity component.enabled",
-    () => {
-      const domain = Mono.domain;
-      const behaviourClass = domain.class("UnityEngine.Behaviour");
-      
-      if (behaviourClass) {
-        const enabledProperty = behaviourClass.tryGetProperty("enabled");
-        if (enabledProperty) {
-          assert(enabledProperty.getName() === "enabled", "Enabled property should be found");
-          assert(!enabledProperty.isStatic(), "Enabled should be instance property");
-          assert(enabledProperty.canRead(), "Enabled should be readable");
-          assert(enabledProperty.canWrite(), "Enabled should be writable");
-          
-          const propertyType = enabledProperty.getType();
-          if (propertyType) {
-            assert(propertyType.getName() === "Boolean", "Enabled type should be Boolean");
-          }
-        } else {
-          console.log("  - Enabled property not found on Behaviour");
-        }
-      }
-    }
-  ));
-
   // ===== TYPED PROPERTY ACCESS TESTS =====
 
   results.push(createMonoDependentTest(
@@ -573,47 +498,23 @@ export function createMonoPropertyTests(): TestResult[] {
 
   // ===== PERFORMANCE TESTS =====
 
-  results.push(createPerformanceTest(
-    "MonoProperty lookup performance",
-    () => {
-      const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
-      
-      if (stringClass) {
-        const startTime = Date.now();
-        for (let i = 0; i < 1000; i++) {
-          stringClass.tryGetProperty("Length");
-        }
-        const lookupTime = Date.now() - startTime;
-        
-        console.log(`  1000 property lookups took ${lookupTime}ms`);
-        assert(lookupTime < 1000, "Property lookup should be fast (cached)");
-      }
-    }
-  ));
+  results.push(createPropertyLookupPerformanceTest("System.String", "Length"));
 
-  results.push(createPerformanceTest(
-    "MonoProperty value access performance",
+  results.push(createBasicLookupPerformanceTest(
+    "Property value access performance for System.String.Length",
     () => {
       const domain = Mono.domain;
       const stringClass = domain.class("System.String");
-      
-      const lengthProperty = stringClass!.tryGetProperty("Length");
-      if (lengthProperty && lengthProperty.canRead()) {
-        const testString = Mono.api.stringNew("Hello");
-        
-        const startTime = Date.now();
-        for (let i = 0; i < 100; i++) {
+      if (stringClass) {
+        const property = stringClass.tryGetProperty("Length");
+        if (property) {
           try {
-            lengthProperty.getValue(testString);
+            const testString = Mono.api.stringNew("Hello");
+            property.getValue(testString);
           } catch (error) {
             // Ignore access errors for performance test
           }
         }
-        const accessTime = Date.now() - startTime;
-        
-        console.log(`  100 property value accesses took ${accessTime}ms`);
-        assert(accessTime < 2000, "Property value access should be reasonably fast");
       }
     }
   ));

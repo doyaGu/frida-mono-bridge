@@ -623,7 +623,7 @@ export function testMonoThreading(): TestResult {
     
     // Test attachment with invalid domain
     try {
-      const invalidThread = api.native.mono_thread_attach(NULL);
+      const invalidThread = api.native.mono_thread_attach(ptr(0));
       if (invalidThread && !invalidThread.isNull()) {
         // If it succeeds, try to detach
         api.native.mono_thread_detach(invalidThread);
@@ -637,7 +637,7 @@ export function testMonoThreading(): TestResult {
     
     // Test detachment with invalid thread
     try {
-      api.native.mono_thread_detach(NULL);
+      api.native.mono_thread_detach(ptr(0));
       console.log("    Invalid thread detachment handled");
     } catch (error) {
       console.log(`    Invalid thread detachment error handled: ${error}`);

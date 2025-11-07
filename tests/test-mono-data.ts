@@ -439,7 +439,7 @@ export function testMonoData(): TestResult[] {
     assert(objectSize > 0, `Object size should be positive, got ${objectSize}`);
     
     // Test object to string conversion
-    const stringPtr = Mono.api.native.mono_object_to_string(objectPtr, NULL);
+    const stringPtr = Mono.api.native.mono_object_to_string(objectPtr, ptr(0));
     if (stringPtr && !stringPtr.isNull()) {
       const objLength = Mono.api.native.mono_string_length(stringPtr);
       const objChars = Mono.api.native.mono_string_chars(stringPtr);
@@ -689,7 +689,7 @@ export function testMonoData(): TestResult[] {
     
     // Test with invalid element class
     try {
-      const invalidArray = Mono.api.native.mono_array_new(domain.pointer, NULL, 5);
+      const invalidArray = Mono.api.native.mono_array_new(domain.pointer, ptr(0), 5);
       console.log("    Invalid array creation handled gracefully");
     } catch (error) {
       console.log(`    Invalid array creation threw expected error: ${error}`);
@@ -730,7 +730,7 @@ export function testMonoData(): TestResult[] {
     
     // Test with invalid class
     try {
-      const invalidObject = Mono.api.native.mono_object_new(domain.pointer, NULL);
+      const invalidObject = Mono.api.native.mono_object_new(domain.pointer, ptr(0));
       console.log("    Invalid object creation handled gracefully");
     } catch (error) {
       console.log(`    Invalid object creation threw expected error: ${error}`);
@@ -744,21 +744,21 @@ export function testMonoData(): TestResult[] {
   suite.addResult(createErrorHandlingTest("Should handle memory management errors", () => {
     // Test operations with null pointers
     try {
-      const nullStringLength = Mono.api.native.mono_string_length(NULL);
+      const nullStringLength = Mono.api.native.mono_string_length(ptr(0));
       console.log(`    Null string length: ${nullStringLength}`);
     } catch (error) {
       console.log(`    Null string length threw expected error: ${error}`);
     }
     
     try {
-      const nullArrayLength = Mono.api.native.mono_array_length(NULL);
+      const nullArrayLength = Mono.api.native.mono_array_length(ptr(0));
       console.log(`    Null array length: ${nullArrayLength}`);
     } catch (error) {
       console.log(`    Null array length threw expected error: ${error}`);
     }
     
     try {
-      const nullObjectClass = Mono.api.native.mono_object_get_class(NULL);
+      const nullObjectClass = Mono.api.native.mono_object_get_class(ptr(0));
       console.log(`    Null object class: ${nullObjectClass}`);
     } catch (error) {
       console.log(`    Null object class threw expected error: ${error}`);

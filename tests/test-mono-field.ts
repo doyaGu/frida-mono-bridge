@@ -7,7 +7,6 @@
 import Mono, { MonoField, MonoObject, MonoClass } from "../src";
 import { 
   TestResult, 
-  TestCategory, 
   createMonoDependentTest, 
   createDomainTest, 
   createIntegrationTest,
@@ -18,6 +17,10 @@ import {
   assertThrows,
   createTest
 } from "./test-framework";
+import {
+  createBasicLookupPerformanceTest,
+  createFieldLookupPerformanceTest
+} from "./test-utilities";
 
 export function createMonoFieldTests(): TestResult[] {
   const results: TestResult[] = [];
@@ -125,7 +128,7 @@ export function createMonoFieldTests(): TestResult[] {
         const field = testClass.tryGetField("CurrentThread");
         if (field && field.isStatic()) {
           try {
-            // This might not work due to security, but test the API
+            // This might not work due to security, but test API
             const originalValue = field.getStaticValue();
             // field.setStaticValue(newValue); // This might fail
             console.log("  - Found static field for testing");
@@ -179,7 +182,7 @@ export function createMonoFieldTests(): TestResult[] {
         
         if (xField && !xField.isStatic()) {
           try {
-            // Try to set the field value
+            // Try to set field value
             const newValue = Mono.api.stringNew("42");
             xField.setValue(obj, newValue);
             console.log("  - Successfully set instance field value");
@@ -303,7 +306,7 @@ export function createMonoFieldTests(): TestResult[] {
           try {
             const value = maxValueField.getStaticValue();
             assertNotNull(value, "Should get static field value");
-            
+
             // Test typed access
             const typedValue = maxValueField.getTypedStaticValue();
             assertNotNull(typedValue, "Should get typed static field value");
@@ -331,7 +334,7 @@ export function createMonoFieldTests(): TestResult[] {
           try {
             const value = field.getValue(obj);
             assertNotNull(value, "Should get instance field value");
-            
+
             // Test typed access
             const typedValue = field.getTypedValue(obj);
             assertNotNull(typedValue, "Should get typed instance field value");
@@ -455,56 +458,6 @@ export function createMonoFieldTests(): TestResult[] {
     }
   ));
 
-  // ===== UNITY-SPECIFIC FIELD PATTERNS TESTS =====
-
-  results.push(createMonoDependentTest(
-    "MonoField should handle Unity serialized fields",
-    () => {
-      const domain = Mono.domain;
-      const monoBehaviourClass = domain.class("UnityEngine.MonoBehaviour");
-      
-      if (monoBehaviourClass) {
-        const fields = monoBehaviourClass.getFields();
-        
-        // Look for common Unity field patterns
-        const serializedFields = fields.filter(f => {
-          try {
-            // Check if field might be serialized (has SerializeField attribute)
-            const flagNames = f.getFlagNames();
-            return flagNames.some(name => name.includes("public") || name.includes("static"));
-          } catch {
-            return false;
-          }
-        });
-        
-        console.log(`  - Found ${serializedFields.length} potentially serialized fields`);
-      }
-    }
-  ));
-
-  results.push(createMonoDependentTest(
-    "MonoField should handle Unity component fields",
-    () => {
-      const domain = Mono.domain;
-      const gameObjectClass = domain.class("UnityEngine.GameObject");
-      
-      if (gameObjectClass) {
-        const fields = gameObjectClass.getFields();
-        
-        // Look for common GameObject fields
-        const transformField = fields.find(f => f.getName().toLowerCase().includes("transform"));
-        const nameField = fields.find(f => f.getName().toLowerCase().includes("name"));
-        
-        if (transformField) {
-          console.log("  - Found transform-related field");
-        }
-        if (nameField) {
-          console.log("  - Found name-related field");
-        }
-      }
-    }
-  ));
-
   // ===== FIELD OFFSET AND MEMORY LAYOUT TESTS =====
 
   results.push(createMonoDependentTest(
@@ -589,46 +542,21 @@ export function createMonoFieldTests(): TestResult[] {
 
   // ===== PERFORMANCE TESTS =====
 
-  results.push(createPerformanceTest(
-    "MonoField lookup performance",
-    () => {
-      const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
-      
-      if (int32Class) {
-        const startTime = Date.now();
-        for (let i = 0; i < 1000; i++) {
-          int32Class.tryGetField("MaxValue");
-        }
-        const lookupTime = Date.now() - startTime;
-        
-        console.log(`  1000 field lookups took ${lookupTime}ms`);
-        assert(lookupTime < 1000, "Field lookup should be fast (cached)");
-      }
-    }
-  ));
+  results.push(createFieldLookupPerformanceTest("System.Int32", "MaxValue"));
 
-  results.push(createPerformanceTest(
-    "MonoField value access performance",
+  results.push(createBasicLookupPerformanceTest(
+    "Field value access performance for System.Int32.MaxValue",
     () => {
       const domain = Mono.domain;
       const int32Class = domain.class("System.Int32");
-      
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
-        if (maxValueField && maxValueField.isStatic()) {
-          const startTime = Date.now();
-          for (let i = 0; i < 100; i++) {
-            try {
-              maxValueField.getStaticValue();
-            } catch (error) {
-              // Ignore access errors for performance test
-            }
+        const field = int32Class.tryGetField("MaxValue");
+        if (field && field.isStatic()) {
+          try {
+            field.getStaticValue();
+          } catch (error) {
+            // Ignore access errors for performance test
           }
-          const accessTime = Date.now() - startTime;
-          
-          console.log(`  100 field value accesses took ${accessTime}ms`);
-          assert(accessTime < 2000, "Field value access should be reasonably fast");
         }
       }
     }

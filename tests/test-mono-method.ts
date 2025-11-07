@@ -7,7 +7,6 @@
 import Mono, { MonoMethod, MonoObject, MonoClass } from "../src";
 import { 
   TestResult, 
-  TestCategory, 
   createMonoDependentTest, 
   createDomainTest, 
   createIntegrationTest,
@@ -18,6 +17,10 @@ import {
   assertThrows,
   createTest
 } from "./test-framework";
+import {
+  createBasicLookupPerformanceTest,
+  createMethodLookupPerformanceTest
+} from "./test-utilities";
 
 export function createMonoMethodTests(): TestResult[] {
   const results: TestResult[] = [];
@@ -139,7 +142,7 @@ export function createMonoMethodTests(): TestResult[] {
       const isNullOrEmptyMethod = stringClass!.tryGetMethod("IsNullOrEmpty", 1);
       if (isNullOrEmptyMethod) {
         try {
-          const result = isNullOrEmptyMethod.invoke(null, [NULL]);
+          const result = isNullOrEmptyMethod.invoke(null, [null]);
           assertNotNull(result, "IsNullOrEmpty should return a result");
         } catch (error) {
           console.log(`  - IsNullOrEmpty test failed: ${error}`);
@@ -365,65 +368,6 @@ export function createMonoMethodTests(): TestResult[] {
     }
   ));
 
-  // ===== UNITY METHOD PATTERNS TESTS =====
-
-  results.push(createMonoDependentTest(
-    "MonoMethod should handle Unity Update pattern",
-    () => {
-      const domain = Mono.domain;
-      const monoBehaviourClass = domain.class("UnityEngine.MonoBehaviour");
-      
-      if (monoBehaviourClass) {
-        const updateMethod = monoBehaviourClass.tryGetMethod("Update");
-        if (updateMethod) {
-          assert(updateMethod.getName() === "Update", "Update method should be found");
-          assert(!updateMethod.isStatic(), "Update should be instance method");
-          assert(updateMethod.getParameterCount() === 0, "Update should have no parameters");
-        } else {
-          console.log("  - Update method not found in MonoBehaviour");
-        }
-      }
-    }
-  ));
-
-  results.push(createMonoDependentTest(
-    "MonoMethod should handle Unity Start pattern",
-    () => {
-      const domain = Mono.domain;
-      const monoBehaviourClass = domain.class("UnityEngine.MonoBehaviour");
-      
-      if (monoBehaviourClass) {
-        const startMethod = monoBehaviourClass.tryGetMethod("Start");
-        if (startMethod) {
-          assert(startMethod.getName() === "Start", "Start method should be found");
-          assert(!startMethod.isStatic(), "Start should be instance method");
-          assert(startMethod.getParameterCount() === 0, "Start should have no parameters");
-        } else {
-          console.log("  - Start method not found in MonoBehaviour");
-        }
-      }
-    }
-  ));
-
-  results.push(createMonoDependentTest(
-    "MonoMethod should handle Unity Awake pattern",
-    () => {
-      const domain = Mono.domain;
-      const monoBehaviourClass = domain.class("UnityEngine.MonoBehaviour");
-      
-      if (monoBehaviourClass) {
-        const awakeMethod = monoBehaviourClass.tryGetMethod("Awake");
-        if (awakeMethod) {
-          assert(awakeMethod.getName() === "Awake", "Awake method should be found");
-          assert(!awakeMethod.isStatic(), "Awake should be instance method");
-          assert(awakeMethod.getParameterCount() === 0, "Awake should have no parameters");
-        } else {
-          console.log("  - Awake method not found in MonoBehaviour");
-        }
-      }
-    }
-  ));
-
   // ===== METHOD VALIDATION TESTS =====
 
   results.push(createMonoDependentTest(
@@ -471,45 +415,25 @@ export function createMonoMethodTests(): TestResult[] {
 
   // ===== PERFORMANCE TESTS =====
 
-  results.push(createPerformanceTest(
-    "MonoMethod lookup performance",
-    () => {
-      const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
-      
-      const startTime = Date.now();
-      for (let i = 0; i < 1000; i++) {
-        stringClass!.getMethod("Concat", 2);
-      }
-      const lookupTime = Date.now() - startTime;
-      
-      console.log(`  1000 method lookups took ${lookupTime}ms`);
-      assert(lookupTime < 1000, "Method lookup should be fast (cached)");
-    }
-  ));
+  results.push(createMethodLookupPerformanceTest("System.String", "Concat", 2));
 
-  results.push(createPerformanceTest(
-    "MonoMethod invocation performance",
+  results.push(createBasicLookupPerformanceTest(
+    "Method invocation performance for System.String.Concat",
     () => {
       const domain = Mono.domain;
       const stringClass = domain.class("System.String");
-      
-      const concatMethod = stringClass!.getMethod("Concat", 2);
-      const str1 = Mono.api.stringNew("Hello");
-      const str2 = Mono.api.stringNew(" World");
-      
-      const startTime = Date.now();
-      for (let i = 0; i < 100; i++) {
-        try {
-          concatMethod.invoke(null, [str1, str2]);
-        } catch (error) {
-          // Ignore invocation errors for performance test
+      if (stringClass) {
+        const concatMethod = stringClass.getMethod("Concat", 2);
+        if (concatMethod) {
+          try {
+            const str1 = Mono.api.stringNew("Hello");
+            const str2 = Mono.api.stringNew(" World");
+            concatMethod.invoke(null, [str1, str2]);
+          } catch (error) {
+            // Ignore invocation errors for performance test
+          }
         }
       }
-      const invocationTime = Date.now() - startTime;
-      
-      console.log(`  100 method invocations took ${invocationTime}ms`);
-      assert(invocationTime < 5000, "Method invocation should be reasonably fast");
     }
   ));
 

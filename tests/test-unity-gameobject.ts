@@ -19,6 +19,11 @@ import {
   assertDomainAvailable,
   TestCategory
 } from "./test-framework";
+import {
+  createGameObjectTest,
+  createUnityTypeTest,
+  UNITY_TEST_DATA
+} from "./test-utilities";
 
 export function testUnityGameObject(): TestResult {
   console.log("\nUnity GameObject Tests:");
@@ -29,25 +34,21 @@ export function testUnityGameObject(): TestResult {
   suite.addResult(createSmokeTest(TestCategory.MONO_DEPENDENT, "Unity GameObject operations"));
 
   // Basic GameObject class availability
-  suite.addResult(createMonoDependentTest("UnityEngine.GameObject class should be available", () => {
-    assertDomainAvailable("Domain should be available for GameObject tests");
-
-    const domain = Mono.domain;
-    const gameObjectClass = domain.class("UnityEngine.GameObject");
-    assertNotNull(gameObjectClass, "UnityEngine.GameObject class should be found");
-
-    if (gameObjectClass) {
-      console.log(`    GameObject class found: ${gameObjectClass.getName?.() || 'GameObject'}`);
-      const assembly = (gameObjectClass as any).image?.assembly;
-      console.log(`    Assembly: ${assembly?.name || 'Unknown'}`);
+  suite.addResult(createUnityTypeTest(
+    "UnityEngine.GameObject",
+    ["Find", "Instantiate"],
+    ["name", "activeSelf", "tag", "layer"],
+    (gameObjectClass) => {
+      if (gameObjectClass) {
+        console.log(`    GameObject class found: ${gameObjectClass.getName?.() || 'GameObject'}`);
+        const assembly = (gameObjectClass as any).image?.assembly;
+        console.log(`    Assembly: ${assembly?.name || 'Unknown'}`);
+      }
     }
-  }));
+  ));
 
   // GameObject static methods
-  suite.addResult(createMonoDependentTest("GameObject static methods should be available", () => {
-    const domain = Mono.domain;
-    const gameObjectClass = domain.class("UnityEngine.GameObject");
-
+  suite.addResult(createGameObjectTest("GameObject static methods should be available", (gameObjectClass) => {
     if (!gameObjectClass) {
       console.log("    (Skipped: GameObject class not available)");
       return;
@@ -69,10 +70,7 @@ export function testUnityGameObject(): TestResult {
   }));
 
   // GameObject creation methods
-  suite.addResult(createMonoDependentTest("GameObject creation methods should be available", () => {
-    const domain = Mono.domain;
-    const gameObjectClass = domain.class("UnityEngine.GameObject");
-
+  suite.addResult(createGameObjectTest("GameObject creation methods should be available", (gameObjectClass) => {
     if (!gameObjectClass) {
       console.log("    (Skipped: GameObject class not available)");
       return;
@@ -94,10 +92,7 @@ export function testUnityGameObject(): TestResult {
   }));
 
   // GameObject instance methods
-  suite.addResult(createMonoDependentTest("GameObject instance methods should be available", () => {
-    const domain = Mono.domain;
-    const gameObjectClass = domain.class("UnityEngine.GameObject");
-
+  suite.addResult(createGameObjectTest("GameObject instance methods should be available", (gameObjectClass) => {
     if (!gameObjectClass) {
       console.log("    (Skipped: GameObject class not available)");
       return;
@@ -122,10 +117,7 @@ export function testUnityGameObject(): TestResult {
   }));
 
   // GameObject component operations
-  suite.addResult(createMonoDependentTest("GameObject component methods should be available", () => {
-    const domain = Mono.domain;
-    const gameObjectClass = domain.class("UnityEngine.GameObject");
-
+  suite.addResult(createGameObjectTest("GameObject component methods should be available", (gameObjectClass) => {
     if (!gameObjectClass) {
       console.log("    (Skipped: GameObject class not available)");
       return;
@@ -148,10 +140,7 @@ export function testUnityGameObject(): TestResult {
   }));
 
   // GameObject transform operations
-  suite.addResult(createMonoDependentTest("GameObject transform operations should be available", () => {
-    const domain = Mono.domain;
-    const gameObjectClass = domain.class("UnityEngine.GameObject");
-
+  suite.addResult(createGameObjectTest("GameObject transform operations should be available", (gameObjectClass) => {
     if (!gameObjectClass) {
       console.log("    (Skipped: GameObject class not available)");
       return;
@@ -163,6 +152,7 @@ export function testUnityGameObject(): TestResult {
 
     if (getTransformMethod) {
       // Also test Transform class availability
+      const domain = Mono.domain;
       const transformClass = domain.class("UnityEngine.Transform");
       console.log(`    Transform class: ${transformClass ? 'Available' : 'Not available'}`);
 
@@ -232,10 +222,7 @@ export function testUnityGameObject(): TestResult {
   }));
 
   // GameObject property access tests
-  suite.addResult(createMonoDependentTest("GameObject properties should be accessible", () => {
-    const domain = Mono.domain;
-    const gameObjectClass = domain.class("UnityEngine.GameObject");
-
+  suite.addResult(createGameObjectTest("GameObject properties should be accessible", (gameObjectClass) => {
     if (!gameObjectClass) {
       console.log("    (Skipped: GameObject class not available)");
       return;

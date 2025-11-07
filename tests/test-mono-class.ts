@@ -7,7 +7,6 @@
 import Mono, { MonoClass, MonoObject } from "../src";
 import { 
   TestResult, 
-  TestCategory, 
   createMonoDependentTest, 
   createDomainTest, 
   createIntegrationTest,
@@ -18,6 +17,10 @@ import {
   assertThrows,
   createTest
 } from "./test-framework";
+import {
+  createBasicLookupPerformanceTest,
+  createMethodLookupPerformanceTest
+} from "./test-utilities";
 
 export function createMonoClassTests(): TestResult[] {
   const results: TestResult[] = [];
@@ -39,21 +42,6 @@ export function createMonoClassTests(): TestResult[] {
   ));
 
   results.push(createMonoDependentTest(
-    "MonoClass should discover Unity classes",
-    () => {
-      const domain = Mono.domain;
-      
-      const gameObjectClass = domain.class("UnityEngine.GameObject");
-      if (gameObjectClass) {
-        assert(gameObjectClass.getName() === "GameObject", "GameObject class name should be correct");
-        assert(gameObjectClass.getNamespace() === "UnityEngine", "GameObject namespace should be UnityEngine");
-      } else {
-        console.log("  - GameObject class not found (Unity may not be loaded)");
-      }
-    }
-  ));
-
-  results.push(createMonoDependentTest(
     "MonoClass should enumerate all classes in assembly",
     () => {
       const domain = Mono.domain;
@@ -68,18 +56,16 @@ export function createMonoClassTests(): TestResult[] {
     }
   ));
 
-  results.push(createPerformanceTest(
+  // Optimized performance test using shared helper
+  results.push(createBasicLookupPerformanceTest(
     "MonoClass enumeration performance test",
     () => {
       const domain = Mono.domain;
       const mscorlib = domain.getAssembly("mscorlib");
-      const startTime = Date.now();
-      
-      const classes = mscorlib!.getClasses();
-      const enumerationTime = Date.now() - startTime;
-      
-      console.log(`  Enumerated ${classes.length} classes in ${enumerationTime}ms`);
-      assert(enumerationTime < 5000, "Class enumeration should complete within 5 seconds");
+      if (mscorlib) {
+        return mscorlib.getClasses();
+      }
+      return [];
     }
   ));
 
@@ -285,68 +271,6 @@ export function createMonoClassTests(): TestResult[] {
     }
   ));
 
-  // ===== UNITY-SPECIFIC CLASS FEATURES TESTS =====
-
-  results.push(createMonoDependentTest(
-    "MonoClass should handle Unity MonoBehaviour",
-    () => {
-      const domain = Mono.domain;
-      const monoBehaviourClass = domain.class("UnityEngine.MonoBehaviour");
-      
-      if (monoBehaviourClass) {
-        assert(monoBehaviourClass.getName() === "MonoBehaviour", "MonoBehaviour name should be correct");
-        
-        // Check for common Unity methods
-        const startMethod = monoBehaviourClass.tryGetMethod("Start");
-        const updateMethod = monoBehaviourClass.tryGetMethod("Update");
-        const awakeMethod = monoBehaviourClass.tryGetMethod("Awake");
-        
-        // At least some of these should exist
-        assert(!!startMethod || !!updateMethod || !!awakeMethod,
-               "MonoBehaviour should have common Unity methods");
-      }
-    }
-  ));
-
-  results.push(createMonoDependentTest(
-    "MonoClass should handle Unity Component",
-    () => {
-      const domain = Mono.domain;
-      const componentClass = domain.class("UnityEngine.Component");
-      
-      if (componentClass) {
-        assert(componentClass.getName() === "Component", "Component name should be correct");
-        
-        // Check for transform property
-        const transformProperty = componentClass.tryGetProperty("transform");
-        if (transformProperty) {
-          assert(transformProperty.getName() === "transform", "Transform property should exist");
-        }
-      }
-    }
-  ));
-
-  results.push(createMonoDependentTest(
-    "MonoClass should handle Unity GameObject",
-    () => {
-      const domain = Mono.domain;
-      const gameObjectClass = domain.class("UnityEngine.GameObject");
-      
-      if (gameObjectClass) {
-        assert(gameObjectClass.getName() === "GameObject", "GameObject name should be correct");
-        
-        // Check for common GameObject methods
-        const addComponentMethod = gameObjectClass.tryGetMethod("AddComponent");
-        const getComponentMethod = gameObjectClass.tryGetMethod("GetComponent");
-        
-        if (addComponentMethod && getComponentMethod) {
-          assert(addComponentMethod.getName() === "AddComponent", "AddComponent method should exist");
-          assert(getComponentMethod.getName() === "GetComponent", "GetComponent method should exist");
-        }
-      }
-    }
-  ));
-
   // ===== CLASS INSTANCE CREATION TESTS =====
 
   results.push(createMonoDependentTest(
@@ -450,37 +374,17 @@ export function createMonoClassTests(): TestResult[] {
 
   // ===== PERFORMANCE AND CACHING TESTS =====
 
-  results.push(createPerformanceTest(
-    "MonoClass method lookup performance",
-    () => {
-      const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
-      
-      const startTime = Date.now();
-      for (let i = 0; i < 1000; i++) {
-        stringClass!.getMethod("Concat", 2);
-      }
-      const lookupTime = Date.now() - startTime;
-      
-      console.log(`  1000 method lookups took ${lookupTime}ms`);
-      assert(lookupTime < 1000, "Method lookup should be fast (cached)");
-    }
-  ));
+  results.push(createMethodLookupPerformanceTest("System.String", "Concat", 2));
 
-  results.push(createPerformanceTest(
+  results.push(createBasicLookupPerformanceTest(
     "MonoClass property enumeration performance",
     () => {
       const domain = Mono.domain;
       const stringClass = domain.class("System.String");
-      
-      const startTime = Date.now();
-      for (let i = 0; i < 100; i++) {
-        stringClass!.getProperties();
+      if (stringClass) {
+        return stringClass.getProperties();
       }
-      const enumerationTime = Date.now() - startTime;
-      
-      console.log(`  100 property enumerations took ${enumerationTime}ms`);
-      assert(enumerationTime < 2000, "Property enumeration should be reasonably fast");
+      return [];
     }
   ));
 

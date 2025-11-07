@@ -120,7 +120,7 @@ export function testIntegration(): TestResult {
   }));
 
   suite.addResult(createMonoDependentTest("pointerIsNull handles NULL pointer", () => {
-    const nullPtr: NativePointer = NULL;
+    const nullPtr: NativePointer = ptr(0);
     const result = pointerIsNull(nullPtr);
     assert(result === true, "Should return true for NULL");
     console.log("    pointerIsNull(NULL) = true");
@@ -153,7 +153,7 @@ export function testIntegration(): TestResult {
   }));
 
   suite.addResult(createMonoDependentTest("readUtf*String returns empty for null pointer", () => {
-    const nullPtr: NativePointer = NULL;
+    const nullPtr: NativePointer = ptr(0);
     assert(readUtf8String(nullPtr) === "", "UTF-8 reader should return empty string for null pointer");
     assert(readUtf16String(nullPtr) === "", "UTF-16 reader should return empty string for null pointer");
   }));
@@ -757,7 +757,7 @@ export function testIntegration(): TestResult {
 
     // Test exception utility with edge cases
     const edgePointers = [
-      NULL,
+      ptr(0),
       Mono.api.getRootDomain(),
       captureManagedSubstringException().exception,
       Memory.alloc(Process.pointerSize)

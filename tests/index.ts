@@ -3,7 +3,11 @@
  * Orchestrates all test modules and provides a unified test runner
  */
 
-// Import consolidated test files
+// Import test setup files
+import "./test-common";
+import "./test-utilities";
+
+// Import basic test files
 import { testCoreInfrastructure } from "./test-core-infrastructure";
 import { testMonoTypes } from "./test-mono-types";
 import { testMonoMembers } from "./test-mono-members";
@@ -40,8 +44,11 @@ import { TestSummary, TestSuite } from "./test-framework";
 export interface TestSuiteConfig {
   skipSlowTests?: boolean;
   skipAdvancedTests?: boolean;
+  skipUnityTests?: boolean;
+  skipPerformanceTests?: boolean;
   verbose?: boolean;
   stopOnFirstFailure?: boolean;
+  categories?: string[];
 }
 
 function logHeader(title: string): void {
@@ -71,7 +78,7 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
   // ============================================================================
 
   logSection("Phase 1: Standalone Tests (No Mono Dependency)");
-  
+
   // Core Infrastructure Tests
   logSection("Core Infrastructure Tests");
   suite.addResult(testCoreInfrastructure());
@@ -101,10 +108,12 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
   }
 
   // Advanced Features Tests
-  logSection("Advanced Features Tests");
-  suite.addResult(testAdvancedFeatures());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
+  if (!config.skipAdvancedTests) {
+    logSection("Advanced Features Tests");
+    suite.addResult(testAdvancedFeatures());
+    if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+      return suite.getSummary();
+    }
   }
 
   // Integration Tests
@@ -142,24 +151,26 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
   logSection("Phase 2: Mono-Dependent Tests");
 
   // Unity GameObject Tests
-  logSection("Unity GameObject Tests");
-  suite.addResult(testUnityGameObject());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
-  }
+  if (!config.skipUnityTests) {
+    logSection("Unity GameObject Tests");
+    suite.addResult(testUnityGameObject());
+    if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+      return suite.getSummary();
+    }
 
-  // Unity Components Tests
-  logSection("Unity Components Tests");
-  suite.addResult(testUnityComponents());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
-  }
+    // Unity Components Tests
+    logSection("Unity Components Tests");
+    suite.addResult(testUnityComponents());
+    if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+      return suite.getSummary();
+    }
 
-  // Unity Engine Modules Tests
-  logSection("Unity Engine Modules Tests");
-  suite.addResult(testUnityEngineModules());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
+    // Unity Engine Modules Tests
+    logSection("Unity Engine Modules Tests");
+    suite.addResult(testUnityEngineModules());
+    if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+      return suite.getSummary();
+    }
   }
 
   // Comprehensive Mono API Tests
@@ -239,19 +250,23 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
   }
 
   // Comprehensive Mono Data Tests
-  logSection("Comprehensive Mono Data Tests");
-  const dataTestResults = testMonoData();
-  dataTestResults.forEach(result => suite.addResult(result));
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
+  if (!config.skipPerformanceTests) {
+    logSection("Comprehensive Mono Data Tests");
+    const dataTestResults = testMonoData();
+    dataTestResults.forEach(result => suite.addResult(result));
+    if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+      return suite.getSummary();
+    }
   }
 
   // Comprehensive Mono Advanced Tests
-  logSection("Comprehensive Mono Advanced Tests");
-  const advancedTestResults = testMonoAdvanced();
-  advancedTestResults.forEach(result => suite.addResult(result));
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
+  if (!config.skipAdvancedTests) {
+    logSection("Comprehensive Mono Advanced Tests");
+    const advancedTestResults = testMonoAdvanced();
+    advancedTestResults.forEach(result => suite.addResult(result));
+    if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+      return suite.getSummary();
+    }
   }
 
   // Print Summary
@@ -263,7 +278,7 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
   const summary = suite.getSummary();
   
   const pct = (value: number) => (summary.total === 0 ? "0.0" : ((value / summary.total) * 100).toFixed(1));
-
+  
   console.log(`Total Tests: ${summary.total}`);
   console.log(`  Passed:  ${summary.passed} (${pct(summary.passed)}%)`);
   console.log(`  Failed:  ${summary.failed} (${pct(summary.failed)}%)`);
@@ -325,6 +340,3 @@ if (shouldAutoRun) {
     }
   });
 }
-
-
-

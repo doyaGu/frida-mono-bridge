@@ -405,7 +405,7 @@ export function testAdvancedFeatures(): TestResult {
     suite.addResult(createErrorHandlingTest("Should test GC handle error handling", () => {
       // Test error handling with invalid handles
       try {
-        const nullHandle: NativePointer = NULL;
+        const nullHandle: NativePointer = ptr(0);
 
         // Try to get target from null handle (should handle gracefully)
         if (Mono.api.hasExport("mono_gchandle_get_target")) {

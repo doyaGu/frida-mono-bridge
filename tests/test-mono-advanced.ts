@@ -489,7 +489,7 @@ export function testMonoAdvanced(): TestResult[] {
         
         // Test with null callback (should handle gracefully)
         try {
-          Mono.api.native.mono_add_internal_call("Test::Null", NULL);
+          Mono.api.native.mono_add_internal_call("Test::Null", ptr(0));
           console.log("    Null callback handled gracefully");
         } catch (error) {
           console.log(`    Null callback threw expected error: ${error}`);
@@ -530,7 +530,7 @@ export function testMonoAdvanced(): TestResult[] {
         
         // Test object to string conversion with exception handling
         const exceptionSlot = Memory.alloc(Process.pointerSize);
-        exceptionSlot.writePointer(NULL);
+        exceptionSlot.writePointer(ptr(0));
         
         const stringResult = Mono.api.native.mono_object_to_string(testObject, exceptionSlot);
         const exception = exceptionSlot.readPointer();
