@@ -9,21 +9,14 @@ import { pointerIsNull } from "../src/utils/memory";
 import {
   TestResult,
   TestSuite,
-  createTest,
   createMonoDependentTest,
-  createDomainTest,
   createSmokeTest,
   createIntegrationTest,
-  createErrorHandlingTest,
   createPerformanceTest,
   createNestedPerformTest,
   assert,
   assertNotNull,
-  assertThrows,
-  assertPerformWorks,
   assertApiAvailable,
-  assertDomainAvailable,
-  assertDomainCached,
   TestCategory
 } from "./test-framework";
 

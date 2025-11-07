@@ -7,22 +7,17 @@ import Mono from "../src";
 import {
   TestResult,
   TestSuite,
-  createTest,
   createMonoDependentTest,
   createSmokeTest,
   createIntegrationTest,
   createErrorHandlingTest,
   createPerformanceTest,
   assert,
-  assertNotNull,
-  assertApiAvailable,
-  assertDomainAvailable,
   TestCategory
 } from "./test-framework";
 import {
   createGameObjectTest,
   createUnityTypeTest,
-  UNITY_TEST_DATA
 } from "./test-utilities";
 
 export function testUnityGameObject(): TestResult {

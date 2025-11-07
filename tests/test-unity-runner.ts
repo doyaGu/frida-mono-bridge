@@ -1,5 +1,4 @@
 // Simple Unity test runner
-import { TestSuite } from "./test-framework";
 
 // Import Unity test suites
 import { testUnityGameObject } from "./test-unity-gameobject";

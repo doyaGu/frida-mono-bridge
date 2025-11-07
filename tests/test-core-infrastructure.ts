@@ -13,9 +13,6 @@ import {
   createMonoDependentTest,
   createSmokeTest,
   assert,
-  assertPerformWorks,
-  assertApiAvailable,
-  assertDomainAvailable,
   assertNotNull,
   TestCategory
 } from "./test-framework";

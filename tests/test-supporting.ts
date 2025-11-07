@@ -10,7 +10,6 @@ import { Logger } from "../src/utils/log";
 import {
   TestResult,
   TestSuite,
-  createTest,
   createMonoDependentTest,
   createStandaloneTest,
   createDomainTest,
@@ -23,7 +22,6 @@ import {
   assertPerformWorks,
   assertApiAvailable,
   assertDomainAvailable,
-  assertDomainCached,
   TestCategory
 } from "./test-framework";
 

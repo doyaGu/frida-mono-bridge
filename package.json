@@ -8,7 +8,6 @@
     "watch": "frida-compile -w src/index.ts -o dist/agent.js",
     "lint": "tsc --noEmit",
     "test": "frida-compile tests/index.ts -o dist/tests.js",
-    "test:all": "npm run test",
     "test:core-infrastructure": "frida-compile tests/runners/test-core-infrastructure.ts -o dist/test-core-infrastructure.js",
     "test:mono-api": "frida-compile tests/runners/test-mono-api.ts -o dist/test-mono-api.js",
     "test:mono-class": "frida-compile tests/runners/test-mono-class.ts -o dist/test-mono-class.js",
@@ -32,7 +31,7 @@
     "test:data-operations": "frida-compile tests/runners/test-data-operations.ts -o dist/test-data-operations.js",
     "test:integration": "frida-compile tests/runners/test-integration.ts -o dist/test-integration.js",
     "test:supporting": "frida-compile tests/runners/test-supporting.ts -o dist/test-supporting.js",
-    "test:build-all": "npm run test:core-infrastructure && npm run test:mono-api && npm run test:mono-class && npm run test:mono-method && npm run test:mono-field && npm run test:mono-property && npm run test:mono-assembly && npm run test:mono-image && npm run test:mono-domain && npm run test:mono-threading && npm run test:mono-module && npm run test:mono-data && npm run test:mono-advanced && npm run test:mono-utils && npm run test:mono-error-handling && npm run test:unity-gameobject && npm run test:unity-components && npm run test:unity-engine-modules && npm run test:mono-types && npm run test:advanced-features && npm run test:data-operations && npm run test:integration && npm run test:supporting",
+    "test:all": "npm run test:core-infrastructure && npm run test:mono-api && npm run test:mono-class && npm run test:mono-method && npm run test:mono-field && npm run test:mono-property && npm run test:mono-assembly && npm run test:mono-image && npm run test:mono-domain && npm run test:mono-threading && npm run test:mono-module && npm run test:mono-data && npm run test:mono-advanced && npm run test:mono-utils && npm run test:mono-error-handling && npm run test:unity-gameobject && npm run test:unity-components && npm run test:unity-engine-modules && npm run test:mono-types && npm run test:advanced-features && npm run test:data-operations && npm run test:integration && npm run test:supporting",
     "clean": "rimraf dist",
     "generate:enums": "node scripts/generate-enums.ts",
     "generate:signatures": "npx tsx scripts/generate-mono-signatures.ts"

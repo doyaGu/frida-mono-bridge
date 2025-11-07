@@ -14,7 +14,6 @@ import {
   assert,
   assertNotNull,
   assertThrows,
-  createTest
 } from "./test-framework";
 
 // Import all error handling and logging modules
@@ -36,8 +35,6 @@ import {
   monoErrorResult,
   asResult,
   ValidationBuilder,
-  ValidationResult,
-  MonoResult
 } from "../src/utils/errors";
 
 // Define MonoManagedExceptionError locally since it's not exported

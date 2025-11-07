@@ -7,7 +7,6 @@ import Mono from "../src";
 import {
   TestResult,
   TestSuite,
-  createTest,
   createMonoDependentTest,
   createSmokeTest,
   createIntegrationTest,
@@ -15,7 +14,6 @@ import {
   createPerformanceTest,
   assert,
   assertNotNull,
-  assertApiAvailable,
   assertDomainAvailable,
   TestCategory
 } from "./test-framework";

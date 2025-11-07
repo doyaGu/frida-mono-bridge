@@ -3,7 +3,7 @@
  * Shared utilities for running individual test categories
  */
 
-import { TestResult, TestSummary } from "./test-framework";
+import { TestResult } from "./test-framework";
 
 // Re-export TestResult for use in individual runners
 export { TestResult };

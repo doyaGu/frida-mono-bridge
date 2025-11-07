@@ -4,7 +4,7 @@
  */
 
 import Mono from "../src";
-import { TestResult, TestSuite, createTest, createMonoDependentTest, createStandaloneTest, createDomainTest, createSmokeTest, createIntegrationTest, createErrorHandlingTest, createNestedPerformTest, assert, assertNotNull, assertPerformWorks, assertApiAvailable, assertDomainAvailable, assertDomainCached, TestCategory } from "./test-framework";
+import { TestResult, TestSuite, createMonoDependentTest, createStandaloneTest, createDomainTest, createSmokeTest, createIntegrationTest, createErrorHandlingTest, createNestedPerformTest, assert, assertNotNull, assertPerformWorks, assertApiAvailable, assertDomainAvailable, assertDomainCached, TestCategory } from "./test-framework";
 import { pointerIsNull } from "../src/utils/memory";
 import { readUtf8String, readUtf16String, safeStringify } from "../src/utils/string";
 import { MonoManagedExceptionError } from "../src/runtime/api";
@@ -14,30 +14,22 @@ import { MonoValidationError } from "../src/utils/errors";
 // Import consolidated utilities directly for testing
 import {
   isValidPointer,
-  resolveNativePointer,
   safeAlloc
 } from "../src/utils/memory";
-
-import {
-  readMonoString
-} from "../src/utils/string";
 
 import {
   isPointerLike,
   isNativePointer,
   validateRequired,
-  TypeValidator
 } from "../src/utils/type-operations";
 
 import {
   validateNonEmptyString,
   prepareDelegateArgument,
-  verifyParameterCount
 } from "../src/utils/validation";
 
 import {
   LruCache,
-  cached
 } from "../src/utils/cache";
 
 function captureManagedSubstringException(): MonoManagedExceptionError {

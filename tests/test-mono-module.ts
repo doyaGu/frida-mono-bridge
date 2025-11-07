@@ -12,14 +12,12 @@ import Mono from "../src";
 import {
   TestResult,
   TestSuite,
-  createTest,
   createMonoDependentTest,
   createPerformanceTest,
   createErrorHandlingTest,
   createIntegrationTest,
   assert,
   assertNotNull,
-  assertThrows,
   assertPerformWorks,
   TestCategory
 } from "./test-framework";

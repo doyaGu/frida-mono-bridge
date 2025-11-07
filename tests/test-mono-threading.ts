@@ -12,7 +12,6 @@ import Mono from "../src";
 import {
   TestResult,
   TestSuite,
-  createTest,
   createMonoDependentTest,
   createPerformanceTest,
   createErrorHandlingTest,
@@ -20,7 +19,6 @@ import {
   createApiAvailabilityTest,
   assert,
   assertNotNull,
-  assertThrows,
   assertPerformWorks,
   assertApiAvailable,
   TestCategory

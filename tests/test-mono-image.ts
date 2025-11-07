@@ -4,19 +4,15 @@
  * loading/validation, image-to-assembly relationships, and Unity image handling
  */
 
-import Mono, { MonoImage, MonoClass, MonoAssembly } from "../src";
+import Mono, { MonoImage } from "../src";
 import { 
   TestResult, 
-  TestCategory, 
   createMonoDependentTest, 
-  createDomainTest, 
-  createIntegrationTest,
   createPerformanceTest,
   createErrorHandlingTest,
   assert, 
   assertNotNull, 
   assertThrows,
-  createTest
 } from "./test-framework";
 
 export function createMonoImageTests(): TestResult[] {

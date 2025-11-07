@@ -8,9 +8,7 @@ import { readUtf16String } from "../src/utils/string";
 import {
   TestResult,
   TestSuite,
-  createTest,
   createMonoDependentTest,
-  createDomainTest,
   createSmokeTest,
   createIntegrationTest,
   createErrorHandlingTest,
@@ -18,11 +16,7 @@ import {
   createNestedPerformTest,
   assert,
   assertNotNull,
-  assertThrows,
-  assertPerformWorks,
   assertApiAvailable,
-  assertDomainAvailable,
-  assertDomainCached,
   TestCategory
 } from "./test-framework";
 

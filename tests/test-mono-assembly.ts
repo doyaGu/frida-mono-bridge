@@ -4,19 +4,14 @@
  * dependency resolution, metadata access, and Unity assembly handling
  */
 
-import Mono, { MonoAssembly, MonoClass, MonoImage } from "../src";
+import Mono from "../src";
 import { 
   TestResult, 
-  TestCategory, 
   createMonoDependentTest, 
-  createDomainTest, 
-  createIntegrationTest,
   createPerformanceTest,
   createErrorHandlingTest,
   assert, 
   assertNotNull, 
-  assertThrows,
-  createTest
 } from "./test-framework";
 
 export function createMonoAssemblyTests(): TestResult[] {
