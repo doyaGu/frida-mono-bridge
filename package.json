@@ -2,9 +2,43 @@
   "name": "frida-mono-bridge",
   "version": "0.1.0",
   "description": "TypeScript bridge for instrumenting Mono runtimes with Frida",
+  "keywords": [
+    "frida",
+    "mono",
+    "unity",
+    "xamarin",
+    "instrumentation",
+    "reverse-engineering",
+    "dynamic-analysis",
+    "hooking"
+  ],
+  "author": "doyaGu",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/doyaGu/frida-mono-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/doyaGu/frida-mono-bridge/issues"
+  },
+  "homepage": "https://github.com/doyaGu/frida-mono-bridge#readme",
+  "main": "dist/agent.js",
+  "files": [
+    "dist/agent.js",
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "DEVELOPER_GUIDE.md",
+    "QUICK-REFERENCE.md"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  },
   "scripts": {
-    "build": "frida-compile src/index.ts -o dist/agent.js",
+    "prepublishOnly": "npm run clean && npm run build && npm run lint && node scripts/pre-publish.js",
+    "prepack": "npm run build",
+    "build": "mkdir -p dist && frida-compile src/index.ts -o dist/agent.js",
     "watch": "frida-compile -w src/index.ts -o dist/agent.js",
     "lint": "tsc --noEmit",
     "test": "frida-compile tests/index.ts -o dist/tests.js",
@@ -38,8 +72,10 @@
   },
   "devDependencies": {
     "@types/frida-gum": "^19.0.1",
+    "@types/node": "^24.10.1",
     "frida-compile": "^19.0.4",
     "rimraf": "^6.0.1",
+    "tslib": "^2.8.1",
     "typescript": "^5.9.3"
   }
 }
