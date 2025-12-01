@@ -80,7 +80,15 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
+dist/
+
+# Build outputs (keep dist/agent.js for release)
+dist/*.js
+!dist/agent.js
+
+# OS files
+.DS_Store
+Thumbs.db
 
 # Gatsby files
 .cache/
