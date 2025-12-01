@@ -28,9 +28,7 @@
     "src/**/*.ts",
     "README.md",
     "LICENSE",
-    "CHANGELOG.md",
-    "DEVELOPER_GUIDE.md",
-    "QUICK-REFERENCE.md"
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=16.0.0"
