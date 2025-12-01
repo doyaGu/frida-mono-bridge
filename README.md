@@ -64,10 +64,10 @@ frida -n "UnityGame.exe" -l dist/agent.js
 
 ## Documentation
 
-- **[CLAUDE.md](CLAUDE.md)**: Development guidance and project instructions
-- **[QUICK-REFERENCE.md](QUICK-REFERENCE.md)**: Quick API reference
-- **[COMPREHENSIVE-GUIDE.md](COMPREHENSIVE-GUIDE.md)**: Comprehensive usage guide
-- **[MONO-API-DOCUMENTATION.md](MONO-API-DOCUMENTATION.md)**: Mono API documentation
+- **[Quick Reference](QUICK-REFERENCE.md)**: Fast API lookup and common patterns
+- **[Developer Guide](DEVELOPER_GUIDE.md)**: Complete development guide
+
+For detailed technical documentation, see the [docs](docs/) directory.
 
 ## Architecture
 
