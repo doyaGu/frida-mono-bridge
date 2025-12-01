@@ -3,6 +3,7 @@ import { MonoObject } from "./object";
 import { MonoClass } from "./class";
 import { MonoTypeKind } from "./type";
 import { pointerIsNull } from "../utils/memory";
+import { setArrayReferenceWithBarrier } from "../utils/write-barrier";
 
 /**
  * Type guards for MonoArray operations
@@ -154,10 +155,12 @@ export class MonoArray<T = any> extends MonoObject {
 
   /**
    * Set a reference element (for object arrays)
+   * Uses write barrier for SGen GC compatibility
+   * @see WRITE_BARRIER_ANALYSIS.md for details
    */
   setReference(index: number, value: NativePointer): void {
     const address = this.getElementAddress(index);
-    address.writePointer(value);
+    setArrayReferenceWithBarrier(this.api, this.pointer, address, value);
   }
 
   /**

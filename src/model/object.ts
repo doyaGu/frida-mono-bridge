@@ -122,7 +122,15 @@ export class MonoObject extends MonoHandle {
    * Convert this object to a string representation
    */
   toString(): string {
-    const strPtr = this.native.mono_object_to_string(this.pointer, NULL);
+    const excSlot = Memory.alloc(Process.pointerSize);
+    excSlot.writePointer(NULL);
+    const strPtr = this.native.mono_object_to_string(this.pointer, excSlot);
+    
+    // Check if ToString threw an exception
+    if (!pointerIsNull(excSlot.readPointer())) {
+      return `[${this.getClass().fullName}]`;
+    }
+    
     if (pointerIsNull(strPtr)) {
       return `[${this.getClass().fullName}]`;
     }

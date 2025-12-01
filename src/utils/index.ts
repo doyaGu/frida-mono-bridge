@@ -22,6 +22,7 @@ export * from "./safe-access";
 export * from "./find";
 export * from "./trace";
 export * from "./gc";
+export * from "./write-barrier";
 
 // Development and debugging
 export * from "./log";
