@@ -73,7 +73,7 @@ export class MonoMethodSignature extends MonoHandle {
     try {
       return readUtf8String(descPtr);
     } finally {
-      this.native.mono_free(descPtr);
+      this.api.tryFree(descPtr);
     }
   }
 

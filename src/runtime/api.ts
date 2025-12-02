@@ -160,18 +160,33 @@ export class MonoApi {
       const typeNamePtr = this.native.mono_class_get_name(klass);
       const type = readUtf8String(typeNamePtr);
 
-      // Try to extract message using ToString if available
+      // Try to extract message using mono_object_to_string if available
       if (this.hasExport("mono_object_to_string")) {
         const excSlot = Memory.alloc(Process.pointerSize);
         excSlot.writePointer(NULL);
         const msgObj = this.native.mono_object_to_string(exception, excSlot);
 
         if (!pointerIsNull(msgObj) && pointerIsNull(excSlot.readPointer())) {
-          const chars = this.native.mono_string_chars(msgObj);
-          const length = this.native.mono_string_length(msgObj) as number;
-          const message = readUtf16String(chars, length);
+          const message = this.monoStringToJs(msgObj);
           return { type, message };
         }
+      }
+      
+      // Fallback: Try to invoke ToString() method directly
+      try {
+        const toStringMethod = this.native.mono_class_get_method_from_name(klass, Memory.allocUtf8String("ToString"), 0);
+        if (!pointerIsNull(toStringMethod)) {
+          const excSlot = Memory.alloc(Process.pointerSize);
+          excSlot.writePointer(NULL);
+          const strPtr = this.native.mono_runtime_invoke(toStringMethod, exception, NULL, excSlot);
+          
+          if (!pointerIsNull(strPtr) && pointerIsNull(excSlot.readPointer())) {
+            const message = this.monoStringToJs(strPtr);
+            return { type, message };
+          }
+        }
+      } catch (_) {
+        // Fallback failed, just return type
       }
 
       return { type };
@@ -179,6 +194,38 @@ export class MonoApi {
       // Best effort - return empty if extraction fails
       return {};
     }
+  }
+
+  /**
+   * Convert a MonoString pointer to JavaScript string
+   * Uses available Mono API with fallbacks
+   */
+  private monoStringToJs(strPtr: NativePointer): string {
+    // Try mono_string_to_utf8 first (most common and available in Unity)
+    if (this.hasExport("mono_string_to_utf8")) {
+      const utf8Ptr = this.native.mono_string_to_utf8(strPtr);
+      if (!pointerIsNull(utf8Ptr)) {
+        const result = utf8Ptr.readUtf8String();
+        return result || "";
+      }
+    }
+    
+    // Fallback: Try mono_string_to_utf16
+    if (this.hasExport("mono_string_to_utf16")) {
+      const utf16Ptr = this.native.mono_string_to_utf16(strPtr);
+      if (!pointerIsNull(utf16Ptr)) {
+        return readUtf16String(utf16Ptr);
+      }
+    }
+    
+    // Last resort: Try mono_string_chars + mono_string_length
+    if (this.hasExport("mono_string_chars") && this.hasExport("mono_string_length")) {
+      const chars = this.native.mono_string_chars(strPtr);
+      const length = this.native.mono_string_length(strPtr) as number;
+      return readUtf16String(chars, length);
+    }
+    
+    return "";
   }
 
   getDelegateThunk(delegateClass: NativePointer): DelegateThunkInfo {
@@ -284,6 +331,19 @@ export class MonoApi {
     return fn(...args);
   }
 
+  /**
+   * Safely free memory allocated by Mono (e.g., from mono_string_to_utf8)
+   * Does nothing if mono_free is not available (Unity Mono doesn't export it)
+   */
+  tryFree(ptr: NativePointer): void {
+    if (pointerIsNull(ptr)) return;
+    if (this.hasExport("mono_free")) {
+      this.native.mono_free(ptr);
+    }
+    // If mono_free is not available, the memory will leak but won't crash
+    // This is acceptable for short-lived scripts
+  }
+
   hasExport(name: MonoApiName): boolean {
     try {
       const address = this.resolveAddress(name, false);
@@ -378,53 +438,14 @@ export class MonoApi {
       }
     }
 
-    const nearMatch = this.findNearExport(signature.name);
-    if (nearMatch) {
-      this.addressCache.set(name, nearMatch);
-      return nearMatch;
-    }
-
     if (throwOnMissing) {
       throw new MonoFunctionResolutionError(
         signature.name,
-        `Unable to resolve Mono export ${signature.name} in ${this.module.name}. Consider providing an alias or enabling probing tools.`,
+        `Unable to resolve Mono export ${signature.name} in ${this.module.name}. Consider adding an alias in manual.ts.`,
       );
     }
 
     return NULL;
-  }
-
-  /**
-   * Attempts to find an export using normalization and fuzzy matching.
-   * Logs warnings when non-exact matches are used.
-   *
-   * @param exportName Export name to find
-   * @returns Export address or null if not found
-   */
-  private findNearExport(exportName: string): NativePointer | null {
-    try {
-      const exports = this.getModuleHandle().enumerateExports();
-      const canonical = normalizeExportName(exportName);
-
-      // Try normalized match first
-      for (const item of exports) {
-        if (normalizeExportName(item.name) === canonical) {
-          console.warn(`[Mono] Export "${exportName}" resolved via normalization to "${item.name}"`);
-          return item.address;
-        }
-      }
-
-      // Fall back to fuzzy substring match
-      const fuzzy = exports.find((exp) => exp.name.includes(exportName));
-      if (fuzzy) {
-        console.warn(`[Mono] Export "${exportName}" resolved via fuzzy match to "${fuzzy.name}" (consider adding as alias)`);
-        return fuzzy.address;
-      }
-
-      return null;
-    } catch (_error) {
-      return null;
-    }
   }
 
   private getModuleHandle(): Module {
@@ -452,10 +473,6 @@ function normalizeArg(arg: MonoArg): any {
     return arg ? 1 : 0;
   }
   return arg;
-}
-
-function normalizeExportName(name: string): string {
-  return name.replace(/[_-]/g, "").toLowerCase();
 }
 
 export function createMonoApi(module: MonoModuleInfo): MonoApi {

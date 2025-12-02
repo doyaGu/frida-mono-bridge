@@ -1,6 +1,88 @@
 import type { MonoSignatureMap, MonoSignatureOverrides } from "./types";
 
-export const MANUAL_ADDITIONS: MonoSignatureMap = {};
+export const MANUAL_ADDITIONS: MonoSignatureMap = {
+  // Unity-specific or internal Mono APIs not in public headers
+  mono_get_array_class: {
+    name: "mono_get_array_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_boolean_class: {
+    name: "mono_get_boolean_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_byte_class: {
+    name: "mono_get_byte_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_char_class: {
+    name: "mono_get_char_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_int16_class: {
+    name: "mono_get_int16_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_int32_class: {
+    name: "mono_get_int32_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_int64_class: {
+    name: "mono_get_int64_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_single_class: {
+    name: "mono_get_single_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_double_class: {
+    name: "mono_get_double_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_string_class: {
+    name: "mono_get_string_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_object_class: {
+    name: "mono_get_object_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_enum_class: {
+    name: "mono_get_enum_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_exception_class: {
+    name: "mono_get_exception_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_void_class: {
+    name: "mono_get_void_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_intptr_class: {
+    name: "mono_get_intptr_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+  mono_get_uintptr_class: {
+    name: "mono_get_uintptr_class",
+    retType: "pointer",
+    argTypes: [],
+  },
+};
 
 export const MANUAL_OVERRIDES: MonoSignatureOverrides = {
   mono_get_root_domain: {

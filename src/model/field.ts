@@ -83,7 +83,7 @@ export class MonoField<T = any> extends MonoHandle {
       this.#fullName = readUtf8String(namePtr);
       return this.#fullName;
     } finally {
-      this.native.mono_free(namePtr);
+      this.api.tryFree(namePtr);
     }
   }
 
@@ -413,10 +413,35 @@ export class MonoField<T = any> extends MonoHandle {
     }
   }
 
+  /**
+   * Read a MonoString to JavaScript string using available API
+   */
   private readMonoString(pointer: NativePointer): string {
-    const chars = this.native.mono_string_chars(pointer);
-    const length = this.native.mono_string_length(pointer) as number;
-    return readUtf16String(chars, length);
+    // Try mono_string_to_utf8 first (most common)
+    if (this.api.hasExport("mono_string_to_utf8")) {
+      const utf8Ptr = this.native.mono_string_to_utf8(pointer);
+      if (!pointerIsNull(utf8Ptr)) {
+        const result = utf8Ptr.readUtf8String();
+        return result || "";
+      }
+    }
+    
+    // Fallback: Try mono_string_to_utf16
+    if (this.api.hasExport("mono_string_to_utf16")) {
+      const utf16Ptr = this.native.mono_string_to_utf16(pointer);
+      if (!pointerIsNull(utf16Ptr)) {
+        return readUtf16String(utf16Ptr);
+      }
+    }
+    
+    // Last resort: Try mono_string_chars + mono_string_length
+    if (this.api.hasExport("mono_string_chars") && this.api.hasExport("mono_string_length")) {
+      const chars = this.native.mono_string_chars(pointer);
+      const length = this.native.mono_string_length(pointer) as number;
+      return readUtf16String(chars, length);
+    }
+    
+    return "";
   }
 }
 

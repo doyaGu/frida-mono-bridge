@@ -148,10 +148,29 @@ export class MonoType extends MonoHandle {
 
   isValueType(): boolean {
     const kind = this.getKind();
-    if (kind === MonoTypeKind.ValueType || kind === MonoTypeKind.Enum) {
-      return true;
+    // 基于类型种类判断是否是值类型
+    // ValueType, Enum, Primitive types (Boolean, Char, I1-I8, U1-U8, R4, R8) 都是值类型
+    switch (kind) {
+      case MonoTypeKind.ValueType:
+      case MonoTypeKind.Enum:
+      case MonoTypeKind.Boolean:
+      case MonoTypeKind.Char:
+      case MonoTypeKind.I1:
+      case MonoTypeKind.U1:
+      case MonoTypeKind.I2:
+      case MonoTypeKind.U2:
+      case MonoTypeKind.I4:
+      case MonoTypeKind.U4:
+      case MonoTypeKind.I8:
+      case MonoTypeKind.U8:
+      case MonoTypeKind.R4:
+      case MonoTypeKind.R8:
+      case MonoTypeKind.Int:   // native int
+      case MonoTypeKind.UInt:  // native uint
+        return true;
+      default:
+        return false;
     }
-    return (this.native.mono_type_is_struct(this.pointer) as number) !== 0;
   }
 
   isVoid(): boolean {
@@ -206,7 +225,7 @@ export class MonoType extends MonoHandle {
     try {
       return readUtf8String(namePtr);
     } finally {
-      this.native.mono_free(namePtr);
+      this.api.tryFree(namePtr);
     }
   }
 }

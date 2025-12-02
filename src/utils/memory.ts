@@ -112,10 +112,16 @@ export function isValidPointer(pointer: NativePointer | null | undefined): point
 /**
  * Unwrap instance to NativePointer with null checks
  * Returns ptr(0) for null/undefined values
+ * For value types (structs), returns the unboxed pointer
  */
 export function unwrapInstance(instance: any): NativePointer {
   if (instance === null || instance === undefined) {
     return ptr(0);
+  }
+
+  // Check if it's a MonoObject with getInstancePointer method (handles value types correctly)
+  if (typeof instance === "object" && typeof instance.getInstancePointer === "function") {
+    return instance.getInstancePointer();
   }
 
   const resolved = resolveNativePointer(instance);

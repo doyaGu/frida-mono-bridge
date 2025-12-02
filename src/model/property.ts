@@ -232,17 +232,19 @@ export class MonoProperty<TValue = any> extends MonoHandle {
     this.setValue(instance, value, parameters);
   }
 
-  private resolveInstance(instance: MonoObject | NativePointer | null): MonoObject | null {
+  private resolveInstance(instance: MonoObject | NativePointer | null): NativePointer | null {
     if (instance === null) {
       return null;
     }
     if (instance instanceof MonoObject) {
-      return instance;
+      // For value types, use the unboxed pointer; for reference types, use the object pointer
+      return instance.getInstancePointer();
     }
     if (instance.isNull()) {
       return null;
     }
-    return new MonoObject(this.api, instance);
+    // If it's a raw NativePointer, use it directly (caller is responsible for correctness)
+    return instance;
   }
 
   /**

@@ -1,11 +1,14 @@
 import { MonoApi } from "../runtime/api";
-import { readUtf16String } from "../utils/string";
+import { readUtf16String, readUtf8String } from "../utils/string";
+import { pointerIsNull } from "../utils/memory";
 import { MonoObject } from "./object";
 
 /**
  * Represents a Mono string object (System.String)
  */
 export class MonoString extends MonoObject {
+  private _cachedString: string | null = null;
+
   /**
    * Get the length of the string in characters
    */
@@ -15,9 +18,14 @@ export class MonoString extends MonoObject {
 
   /**
    * Get the length of the string in characters
+   * Uses mono_string_length if available, otherwise gets from converted string
    */
   getLength(): number {
-    return this.native.mono_string_length(this.pointer) as number;
+    if (this.api.hasExport("mono_string_length")) {
+      return this.native.mono_string_length(this.pointer) as number;
+    }
+    // Fallback: get length from string conversion
+    return this.toString().length;
   }
 
   /**
@@ -26,12 +34,11 @@ export class MonoString extends MonoObject {
    * @returns Character at the index
    */
   charAt(index: number): string {
-    if (index < 0 || index >= this.length) {
-      throw new RangeError(`Index ${index} out of range [0, ${this.length})`);
+    const str = this.toString();
+    if (index < 0 || index >= str.length) {
+      throw new RangeError(`Index ${index} out of range [0, ${str.length})`);
     }
-    const chars = this.native.mono_string_chars(this.pointer);
-    const charPtr = chars.add(index * 2);
-    return String.fromCharCode(charPtr.readU16());
+    return str.charAt(index);
   }
 
   /**
@@ -75,10 +82,41 @@ export class MonoString extends MonoObject {
 
   /**
    * Convert the Mono string to a JavaScript string
+   * Uses mono_string_to_utf8 or mono_string_to_utf16, with caching
    */
   toString(): string {
-    const chars = this.native.mono_string_chars(this.pointer);
-    return readUtf16String(chars, this.length);
+    if (this._cachedString !== null) {
+      return this._cachedString;
+    }
+    
+    // Try mono_string_to_utf8 first (most reliable for Unity Mono)
+    if (this.api.hasExport("mono_string_to_utf8")) {
+      const utf8Ptr = this.native.mono_string_to_utf8(this.pointer);
+      if (!pointerIsNull(utf8Ptr)) {
+        this._cachedString = readUtf8String(utf8Ptr);
+        this.api.tryFree(utf8Ptr);
+        return this._cachedString;
+      }
+    }
+    
+    // Fallback: Try mono_string_to_utf16
+    if (this.api.hasExport("mono_string_to_utf16")) {
+      const utf16Ptr = this.native.mono_string_to_utf16(this.pointer);
+      if (!pointerIsNull(utf16Ptr)) {
+        this._cachedString = readUtf16String(utf16Ptr);
+        return this._cachedString;
+      }
+    }
+    
+    // Last resort: Try mono_string_chars + mono_string_length
+    if (this.api.hasExport("mono_string_chars") && this.api.hasExport("mono_string_length")) {
+      const chars = this.native.mono_string_chars(this.pointer);
+      const length = this.native.mono_string_length(this.pointer) as number;
+      this._cachedString = readUtf16String(chars, length);
+      return this._cachedString;
+    }
+    
+    return "";
   }
 
   /**

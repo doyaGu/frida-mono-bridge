@@ -8,16 +8,19 @@ export interface MonoModuleInfo {
 }
 
 const COMMON_MODULE_NAMES = [
+  // Unity common names (prioritized)
+  "mono-2.0-bdwgc.dll",
+  "mono-2.0-sgen.dll",
+  "monosgen-2.0.dll",
+  "mono-2.0.dll",
+  // Generic names
+  "mono.dll",
+  // Linux/Mac
   "libmonosgen-2.0.so",
   "libmonosgen-2.0.dylib",
   "libmono-2.0.so",
   "libmono.so",
-  "mono.dll",
-  "mono-2.0-bdwgc.dll",
-  "mono-2.0-sgen.dll",
-  "mono-2.0.dll",
   "libmono-2.0.dylib",
-  "monosgen-2.0.dll",
 ];
 
 const PROBE_EXPORT_NAMES = [

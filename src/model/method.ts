@@ -17,6 +17,35 @@ export interface InvokeOptions {
   autoBoxPrimitives?: boolean;
 }
 
+/**
+ * Invoke result with automatic unboxing support
+ */
+export interface InvokeResult<T = any> {
+  /** Raw pointer result from mono_runtime_invoke */
+  raw: NativePointer;
+  /** Whether the result is null */
+  isNull: boolean;
+  /** Unboxed value (for value types) or wrapped object (for reference types) */
+  value: T;
+  /** Type of the return value */
+  type: MonoType;
+}
+
+/**
+ * Type mapping from Mono types to TypeScript types
+ */
+export type UnboxedType<Kind extends MonoTypeKind> = 
+  Kind extends typeof MonoTypeKind.Boolean ? boolean :
+  Kind extends typeof MonoTypeKind.Char ? number :
+  Kind extends typeof MonoTypeKind.I1 | typeof MonoTypeKind.U1 | 
+            typeof MonoTypeKind.I2 | typeof MonoTypeKind.U2 |
+            typeof MonoTypeKind.I4 | typeof MonoTypeKind.U4 |
+            typeof MonoTypeKind.R4 | typeof MonoTypeKind.R8 ? number :
+  Kind extends typeof MonoTypeKind.I8 | typeof MonoTypeKind.U8 ? bigint :
+  Kind extends typeof MonoTypeKind.String ? string :
+  Kind extends typeof MonoTypeKind.Void ? void :
+  any;
+
 export type MethodAccessibility = MemberAccessibility;
 
 export interface MonoMethodSummary {
@@ -204,7 +233,7 @@ export class MonoMethod extends MonoHandle {
     try {
       return readUtf8String(namePtr);
     } finally {
-      this.native.mono_free(namePtr);
+      this.api.tryFree(namePtr);
     }
   }
 
@@ -251,6 +280,147 @@ export class MonoMethod extends MonoHandle {
     }
   }
 
+  /**
+   * Call method with automatic unboxing of return value.
+   * This is the preferred way to invoke methods as it handles boxing/unboxing automatically.
+   * 
+   * @param instance The object instance (null for static methods)
+   * @param args Method arguments (automatically boxed if needed)
+   * @returns Unboxed return value with proper TypeScript type
+   * 
+   * @example
+   * // Calling an instance method that returns int
+   * const count = method.call<number>(obj, []);
+   * 
+   * // Calling a static method that returns string
+   * const name = method.call<string>(null, ["arg1", 42]);
+   * 
+   * // Calling a method that returns a struct/object
+   * const result = method.call<MonoObject>(obj, []);
+   */
+  call<T = any>(instance: MonoObject | NativePointer | null, args: MethodArgument[] = [], options: InvokeOptions = {}): T {
+    const rawResult = this.invoke(instance, args, options);
+    return this.unboxResult<T>(rawResult);
+  }
+
+  /**
+   * Call method and get full result information including raw pointer and type.
+   * Useful when you need access to both the raw result and the unboxed value.
+   * 
+   * @param instance The object instance (null for static methods)
+   * @param args Method arguments
+   * @returns InvokeResult with raw pointer, unboxed value, and type information
+   */
+  callWithInfo<T = any>(instance: MonoObject | NativePointer | null, args: MethodArgument[] = [], options: InvokeOptions = {}): InvokeResult<T> {
+    const rawResult = this.invoke(instance, args, options);
+    const returnType = this.getReturnType();
+    const isNull = pointerIsNull(rawResult);
+    
+    return {
+      raw: rawResult,
+      isNull,
+      value: isNull ? (null as unknown as T) : this.unboxResult<T>(rawResult),
+      type: returnType,
+    };
+  }
+
+  /**
+   * Unbox the raw result pointer based on the return type.
+   * Handles value types, strings, and reference types automatically.
+   */
+  private unboxResult<T>(rawResult: NativePointer): T {
+    if (pointerIsNull(rawResult)) {
+      return null as unknown as T;
+    }
+
+    const returnType = this.getReturnType();
+    const kind = returnType.getKind();
+
+    // Handle void
+    if (kind === MonoTypeKind.Void) {
+      return undefined as unknown as T;
+    }
+
+    // Handle string specially
+    if (kind === MonoTypeKind.String) {
+      return this.readMonoString(rawResult) as unknown as T;
+    }
+
+    // Handle value types (need to unbox)
+    if (returnType.isValueType()) {
+      return this.unboxValue(rawResult, kind) as unknown as T;
+    }
+
+    // Handle reference types - return wrapped MonoObject
+    return new MonoObject(this.api, rawResult) as unknown as T;
+  }
+
+  /**
+   * Unbox a value type from a boxed MonoObject pointer
+   */
+  private unboxValue(boxedPtr: NativePointer, kind: MonoTypeKind): any {
+    const unboxed = this.api.native.mono_object_unbox(boxedPtr);
+    
+    switch (kind) {
+      case MonoTypeKind.Boolean:
+        return unboxed.readU8() !== 0;
+      case MonoTypeKind.I1:
+        return unboxed.readS8();
+      case MonoTypeKind.U1:
+        return unboxed.readU8();
+      case MonoTypeKind.I2:
+        return unboxed.readS16();
+      case MonoTypeKind.U2:
+      case MonoTypeKind.Char:
+        return unboxed.readU16();
+      case MonoTypeKind.I4:
+        return unboxed.readS32();
+      case MonoTypeKind.U4:
+        return unboxed.readU32();
+      case MonoTypeKind.I8:
+        return unboxed.readS64().toNumber();
+      case MonoTypeKind.U8:
+        return unboxed.readU64().toNumber();
+      case MonoTypeKind.R4:
+        return unboxed.readFloat();
+      case MonoTypeKind.R8:
+        return unboxed.readDouble();
+      case MonoTypeKind.Enum:
+        // For enums, get underlying type and unbox recursively
+        const underlying = this.getReturnType().getUnderlyingType();
+        if (underlying) {
+          return this.unboxValue(boxedPtr, underlying.getKind());
+        }
+        // Default to int32 for unknown enums
+        return unboxed.readS32();
+      case MonoTypeKind.ValueType:
+        // For structs, return the boxed object for further processing
+        return new MonoObject(this.api, boxedPtr);
+      default:
+        // Unknown value type, return boxed pointer
+        return new MonoObject(this.api, boxedPtr);
+    }
+  }
+
+  /**
+   * Read a MonoString pointer as a JavaScript string
+   */
+  private readMonoString(strPtr: NativePointer): string {
+    if (pointerIsNull(strPtr)) return "";
+    
+    // Try mono_string_to_utf8 first (most common)
+    if (this.api.hasExport("mono_string_to_utf8")) {
+      const utf8Ptr = this.native.mono_string_to_utf8(strPtr);
+      if (!pointerIsNull(utf8Ptr)) {
+        const result = utf8Ptr.readUtf8String() || "";
+        this.api.tryFree(utf8Ptr);
+        return result;
+      }
+    }
+    
+    return "";
+  }
+
   private prepareArguments(args: MethodArgument[]): NativePointer[] {
     const signature = this.getSignature();
     const types = signature.getParameterTypes();
@@ -277,12 +447,23 @@ export class MonoMethod extends MonoHandle {
       if (type.isByRef() || this.isPointerLike(type)) {
         throw new Error(`Parameter ${index} on ${this.getFullName()} expects a pointer or reference; received primitive value.`);
       }
-      return this.boxPrimitive(type, value);
+      // Use allocPrimitiveArg which returns raw value pointer, NOT boxed object
+      return this.allocPrimitiveArg(type, value);
     }
     return value as NativePointer;
   }
 
-  private boxPrimitive(type: MonoType, value: number | boolean | bigint): NativePointer {
+  /**
+   * Allocate and write a primitive value to memory for use as a method argument.
+   * 
+   * IMPORTANT: mono_runtime_invoke expects a pointer to the raw value for value types,
+   * NOT a boxed MonoObject*. This method returns the raw storage pointer.
+   * 
+   * @param type The MonoType of the parameter
+   * @param value The primitive value to write
+   * @returns Pointer to the allocated memory containing the raw value
+   */
+  private allocPrimitiveArg(type: MonoType, value: number | boolean | bigint): NativePointer {
     const effectiveType = this.resolveUnderlyingPrimitive(type);
     const kind = effectiveType.getKind();
     const { size } = effectiveType.getValueSize();
@@ -343,9 +524,27 @@ export class MonoMethod extends MonoHandle {
         }
         break;
       default:
-        throw new Error(`Auto-boxing is not supported for parameter type ${effectiveType.getFullName()} on ${this.getFullName()}`);
+        throw new Error(`Primitive argument allocation is not supported for parameter type ${effectiveType.getFullName()} on ${this.getFullName()}`);
     }
 
+    // Return the raw storage pointer, NOT a boxed object
+    // mono_runtime_invoke expects raw value pointers for value type arguments
+    return storage;
+  }
+
+  /**
+   * Box a primitive value into a MonoObject.
+   * Use this when you need an actual boxed object (e.g., for storing in collections).
+   * Do NOT use this for method invocation arguments.
+   * 
+   * @param type The MonoType of the value
+   * @param value The primitive value to box
+   * @returns Pointer to the boxed MonoObject
+   */
+  boxPrimitive(type: MonoType, value: number | boolean | bigint): NativePointer {
+    const effectiveType = this.resolveUnderlyingPrimitive(type);
+    const storage = this.allocPrimitiveArg(type, value);
+    
     let klass = effectiveType.getClass();
     if (!klass) {
       const klassPtr = this.api.native.mono_class_from_mono_type(effectiveType.pointer);

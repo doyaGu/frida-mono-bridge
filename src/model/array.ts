@@ -4,6 +4,7 @@ import { MonoClass } from "./class";
 import { MonoTypeKind } from "./type";
 import { pointerIsNull } from "../utils/memory";
 import { setArrayReferenceWithBarrier } from "../utils/write-barrier";
+import { allocUtf8 } from "../runtime/mem";
 
 /**
  * Type guards for MonoArray operations
@@ -75,40 +76,108 @@ export class MonoArray<T = any> extends MonoObject {
 
   /**
    * Get array length
+   * Uses mono_array_length if available, otherwise calls System.Array.get_Length via invoke
    */
   getLength(): number {
-    return this.native.mono_array_length(this.pointer) as number;
+    // Try using mono_array_length first (standard Mono)
+    if (this.api.hasExport("mono_array_length")) {
+      return this.native.mono_array_length(this.pointer) as number;
+    }
+    
+    // Fallback: Call System.Array.get_Length property via managed code
+    // This works on all Mono runtimes including Unity's custom builds
+    const arrayClass = this.native.mono_get_array_class();
+    if (pointerIsNull(arrayClass)) {
+      throw new Error("Cannot get System.Array class");
+    }
+    
+    // Get the Length property getter
+    // mono_class_get_method_from_name(klass, name, param_count)
+    const methodName = allocUtf8("get_Length");
+    const getLengthMethod = this.native.mono_class_get_method_from_name(
+      arrayClass, 
+      methodName, 
+      0
+    );
+    
+    if (pointerIsNull(getLengthMethod)) {
+      throw new Error("Cannot find Array.get_Length method");
+    }
+    
+    // Invoke get_Length on this array instance
+    const result = this.api.runtimeInvoke(getLengthMethod, this.pointer, []);
+    
+    if (pointerIsNull(result)) {
+      return 0;
+    }
+    
+    // Result is a boxed Int32, unbox it
+    const unboxed = this.native.mono_object_unbox(result);
+    return unboxed.readS32();
   }
 
   /**
-   * Get element class
+   * Get element class (the type of elements in this array)
+   * Uses mono_class_get_element_class on the array's class
    */
   getElementClass(): MonoClass {
     if (this._elementClass) {
       return this._elementClass;
     }
-    const classPtr = this.native.mono_array_element_class(this.pointer);
-    this._elementClass = new MonoClass(this.api, classPtr);
+    // First get the array's class, then get its element class
+    const arrayClass = this.getClass();
+    const elementClassPtr = this.native.mono_class_get_element_class(arrayClass.pointer);
+    this._elementClass = new MonoClass(this.api, elementClassPtr);
     return this._elementClass;
   }
 
   /**
    * Get element size in bytes
+   * Uses available Mono APIs to determine element size
    */
   getElementSize(): number {
     if (this._elementSize !== null) {
       return this._elementSize;
     }
-    this._elementSize = this.native.mono_array_element_size(this.pointer) as number;
+    
+    const arrayClass = this.getClass();
+    
+    // Try mono_class_array_element_size first (most common)
+    if (this.api.hasExport("mono_class_array_element_size")) {
+      this._elementSize = this.native.mono_class_array_element_size(arrayClass.pointer) as number;
+      return this._elementSize;
+    }
+    
+    // Fallback: Try mono_array_element_size (standard Mono API, takes array class)
+    if (this.api.hasExport("mono_array_element_size")) {
+      this._elementSize = this.native.mono_array_element_size(arrayClass.pointer) as number;
+      return this._elementSize;
+    }
+    
+    // Last resort: Determine from element class using mono_class_value_size
+    const elementClass = this.getElementClass();
+    if (elementClass.isValueType()) {
+      // Use mono_class_value_size for value types (returns size without boxing)
+      if (this.api.hasExport("mono_class_value_size")) {
+        // mono_class_value_size(klass, &align) - we pass NULL for align
+        this._elementSize = this.native.mono_class_value_size(elementClass.pointer, NULL) as number;
+        return this._elementSize;
+      }
+    }
+    
+    // Reference types are always pointer-sized
+    this._elementSize = Process.pointerSize;
     return this._elementSize;
   }
 
   /**
-   * Get element at the specified index
+   * Get element address at the specified index
+   * Uses mono_array_addr_with_size API
    */
   getElementAddress(index: number): NativePointer {
-    const address = this.native.mono_array_addr_with_size(this.pointer, index);
-    return address;
+    const size = this.getElementSize();
+    // mono_array_addr_with_size is available in all Unity Mono builds
+    return this.native.mono_array_addr_with_size(this.pointer, size, index);
   }
 
   // ===== BASIC ARRAY OPERATIONS =====
@@ -166,7 +235,7 @@ export class MonoArray<T = any> extends MonoObject {
   /**
    * Get element as MonoObject (for object arrays)
    */
-  get(index: number): MonoObject {
+  getElement(index: number): MonoObject {
     const ptr = this.getReference(index);
     return new MonoObject(this.api, ptr);
   }
@@ -174,7 +243,7 @@ export class MonoArray<T = any> extends MonoObject {
   /**
    * Set element as MonoObject (for object arrays)
    */
-  set(index: number, value: MonoObject): void {
+  setElement(index: number, value: MonoObject): void {
     this.setReference(index, value.pointer);
   }
 
@@ -191,7 +260,7 @@ export class MonoArray<T = any> extends MonoObject {
     if (this.getElementClass().isValueType()) {
       return this.getNumber(index) as T;
     } else {
-      return this.get(index) as T;
+      return this.getElement(index) as T;
     }
   }
 
@@ -207,7 +276,7 @@ export class MonoArray<T = any> extends MonoObject {
       this.setNumber(index, value as number);
     } else {
       if (value instanceof MonoObject) {
-        this.set(index, value);
+        this.setElement(index, value);
       } else {
         throw new Error(`Cannot set non-MonoObject value in object array`);
       }
@@ -372,6 +441,93 @@ export class MonoArray<T = any> extends MonoObject {
    */
   toArray(): T[] {
     return this.select(item => item);
+  }
+
+  /**
+   * Iterate over each element
+   */
+  forEach(callback: (item: T, index: number) => void): void {
+    for (let i = 0; i < this.length; i++) {
+      callback(this.getTyped(i), i);
+    }
+  }
+
+  /**
+   * Transform array elements (alias for select)
+   */
+  map<TResult>(transform: (item: T, index: number) => TResult): TResult[] {
+    return this.select(transform);
+  }
+
+  /**
+   * Filter array elements (alias for where)
+   */
+  filter(predicate: (item: T, index: number) => boolean): T[] {
+    return this.where(predicate);
+  }
+
+  /**
+   * Reduce array to a single value (alias for aggregate)
+   */
+  reduce<TResult>(reducer: (acc: TResult, item: T, index: number) => TResult, initial: TResult): TResult {
+    return this.aggregate(reducer, initial);
+  }
+
+  /**
+   * Find first matching element (alias for first with predicate)
+   */
+  find(predicate: (item: T, index: number) => boolean): T | null {
+    return this.first(predicate);
+  }
+
+  /**
+   * Find index of first matching element
+   */
+  findIndex(predicate: (item: T, index: number) => boolean): number {
+    for (let i = 0; i < this.length; i++) {
+      if (predicate(this.getTyped(i), i)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Check if array includes an element (by reference for objects)
+   */
+  includes(element: T): boolean {
+    for (let i = 0; i < this.length; i++) {
+      const item = this.getTyped(i);
+      if (element instanceof MonoObject && item instanceof MonoObject) {
+        if (element.pointer.equals(item.pointer)) {
+          return true;
+        }
+      } else if (item === element) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Get a slice of the array
+   */
+  slice(start: number, end?: number): T[] {
+    const result: T[] = [];
+    const actualEnd = end ?? this.length;
+    for (let i = start; i < actualEnd && i < this.length; i++) {
+      result.push(this.getTyped(i));
+    }
+    return result;
+  }
+
+  /**
+   * Make the array iterable with for...of
+   */
+  *[Symbol.iterator](): Iterator<T> {
+    for (let i = 0; i < this.length; i++) {
+      yield this.getTyped(i);
+    }
   }
 
   // ===== UTILITY METHODS =====
