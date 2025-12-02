@@ -13,37 +13,47 @@ export interface MethodCallbacks {
 }
 
 /**
+ * Extended method callbacks with access to invocation context
+ */
+export interface MethodCallbacksExtended {
+  onEnter?: (this: InvocationContext, args: NativePointer[]) => void;
+  onLeave?: (this: InvocationContext, retval: InvocationReturnValue) => void;
+}
+
+/**
+ * Extract method arguments from Frida's InvocationArguments
+ */
+function extractMethodArgs(method: MonoMethod, args: InvocationArguments): NativePointer[] {
+  const monoArgs: NativePointer[] = [];
+  const paramCount = method.getParameterCount();
+  const isInstance = method.isInstanceMethod();
+  const startIdx = isInstance ? 1 : 0;
+
+  for (let i = 0; i < paramCount; i++) {
+    monoArgs.push(args[startIdx + i]);
+  }
+
+  return monoArgs;
+}
+
+/**
  * Hook a single method
  *
  * @param method Method to hook
  * @param callbacks Callbacks for entry/exit
- * @returns Detach function
+ * @returns Detach function that only detaches this specific hook
  */
-export function method(method: MonoMethod, callbacks: MethodCallbacks): () => void {
-  const methodPtr = method.pointer;
-
-  // Get method implementation address
-  const impl = method.api.native.mono_compile_method(methodPtr);
+export function method(monoMethod: MonoMethod, callbacks: MethodCallbacks): () => void {
+  const impl = monoMethod.api.native.mono_compile_method(monoMethod.pointer);
 
   if (impl.isNull()) {
-    throw new Error(`Failed to compile method: ${method.getFullName()}`);
+    throw new Error(`Failed to compile method: ${monoMethod.getFullName()}`);
   }
 
-  // Attach interceptor
-  Interceptor.attach(impl, {
+  const listener = Interceptor.attach(impl, {
     onEnter(args) {
       if (callbacks.onEnter) {
-        // args[0] is 'this' for instance methods
-        const monoArgs: NativePointer[] = [];
-        const paramCount = method.getParameterCount();
-        const isInstance = method.isInstanceMethod();
-        const startIdx = isInstance ? 0 : 1;
-
-        for (let i = 0; i <= paramCount; i++) {
-          monoArgs.push(args[startIdx + i]);
-        }
-
-        callbacks.onEnter(monoArgs);
+        callbacks.onEnter(extractMethodArgs(monoMethod, args));
       }
     },
     onLeave(retval) {
@@ -53,7 +63,73 @@ export function method(method: MonoMethod, callbacks: MethodCallbacks): () => vo
     },
   });
 
-  return () => Interceptor.detachAll();
+  return () => listener.detach();
+}
+
+/**
+ * Hook a single method with extended context access
+ *
+ * @param method Method to hook
+ * @param callbacks Callbacks for entry/exit with access to InvocationContext
+ * @returns Detach function
+ */
+export function methodExtended(monoMethod: MonoMethod, callbacks: MethodCallbacksExtended): () => void {
+  const impl = monoMethod.api.native.mono_compile_method(monoMethod.pointer);
+
+  if (impl.isNull()) {
+    throw new Error(`Failed to compile method: ${monoMethod.getFullName()}`);
+  }
+
+  const listener = Interceptor.attach(impl, {
+    onEnter(args) {
+      if (callbacks.onEnter) {
+        callbacks.onEnter.call(this, extractMethodArgs(monoMethod, args));
+      }
+    },
+    onLeave(retval) {
+      if (callbacks.onLeave) {
+        callbacks.onLeave.call(this, retval);
+      }
+    },
+  });
+
+  return () => listener.detach();
+}
+
+/**
+ * Replace a method's return value.
+ * The replacement function is called after the original method executes,
+ * allowing you to modify or replace the return value.
+ *
+ * @param method Method to intercept
+ * @param replacement Function that receives (originalRetval, thisPtr, ...args) and returns new result
+ * @returns Revert function to restore original behavior
+ */
+export function replaceReturnValue(
+  monoMethod: MonoMethod,
+  replacement: (originalRetval: NativePointer, thisPtr: NativePointer, args: NativePointer[]) => NativePointer | void
+): () => void {
+  const impl = monoMethod.api.native.mono_compile_method(monoMethod.pointer);
+
+  if (impl.isNull()) {
+    throw new Error(`Failed to compile method: ${monoMethod.getFullName()}`);
+  }
+
+  const listener = Interceptor.attach(impl, {
+    onEnter(args) {
+      const isInstance = monoMethod.isInstanceMethod();
+      (this as any).thisPtr = isInstance ? args[0] : ptr(0);
+      (this as any).methodArgs = extractMethodArgs(monoMethod, args);
+    },
+    onLeave(retval) {
+      const result = replacement(retval, (this as any).thisPtr, (this as any).methodArgs);
+      if (result !== undefined) {
+        retval.replace(result);
+      }
+    }
+  });
+
+  return () => listener.detach();
 }
 
 /**
