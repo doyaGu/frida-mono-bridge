@@ -620,5 +620,161 @@ export function createMonoAssemblyTests(): TestResult[] {
     }
   ));
 
+  // ===== ASSEMBLY PERFORMANCE STATS TESTS =====
+
+  results.push(createMonoDependentTest(
+    "MonoAssembly.getPerformanceStats returns valid statistics",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.assembly('mscorlib');
+      assertNotNull(mscorlib, 'mscorlib should exist');
+      
+      const stats = mscorlib!.getPerformanceStats();
+      assertNotNull(stats, 'getPerformanceStats should return object');
+      
+      assert(typeof stats.assemblyName === 'string', 'assemblyName should be string');
+      assert(stats.assemblyName === 'mscorlib', `assemblyName should be mscorlib, got ${stats.assemblyName}`);
+      assert(typeof stats.classCount === 'number', 'classCount should be number');
+      assert(stats.classCount > 0, `classCount should be positive, got ${stats.classCount}`);
+      assert(typeof stats.methodCount === 'number', 'methodCount should be number');
+      assert(typeof stats.fieldCount === 'number', 'fieldCount should be number');
+      assert(typeof stats.classLookupTime === 'number', 'classLookupTime should be number');
+      assert(typeof stats.methodLookupTime === 'number', 'methodLookupTime should be number');
+      assert(typeof stats.fieldAccessTime === 'number', 'fieldAccessTime should be number');
+      assert(typeof stats.totalMemoryUsage === 'number', 'totalMemoryUsage should be number');
+      assert(stats.totalMemoryUsage > 0, 'totalMemoryUsage should be positive');
+      assert(typeof stats.cacheHitRate === 'number', 'cacheHitRate should be number');
+      assert(stats.cacheHitRate >= 0 && stats.cacheHitRate <= 1, 'cacheHitRate should be 0-1');
+      
+      console.log(`[INFO] mscorlib stats:`);
+      console.log(`  - Classes: ${stats.classCount}`);
+      console.log(`  - Class lookup: ${stats.classLookupTime}ms`);
+      console.log(`  - Memory estimate: ${(stats.totalMemoryUsage / 1024 / 1024).toFixed(2)}MB`);
+      console.log(`  - Cache hit rate: ${(stats.cacheHitRate * 100).toFixed(1)}%`);
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoAssembly.getPerformanceStats works for user assemblies",
+    () => {
+      const domain = Mono.domain;
+      const assemblies = domain.assemblies;
+      
+      // Find Assembly-CSharp or any user assembly
+      const userAssembly = assemblies.find((a: any) => 
+        a.getName() === 'Assembly-CSharp' || a.isUserAssembly()
+      );
+      
+      if (userAssembly) {
+        const stats = userAssembly.getPerformanceStats();
+        assertNotNull(stats, 'getPerformanceStats should return object');
+        assert(stats.classCount >= 0, 'classCount should be non-negative');
+        
+        console.log(`[INFO] ${stats.assemblyName} stats: ${stats.classCount} classes`);
+      } else {
+        console.log('[INFO] No user assembly found to test');
+      }
+    }
+  ));
+
+  // ===== REFERENCING ASSEMBLIES TESTS =====
+
+  results.push(createMonoDependentTest(
+    "MonoAssembly.getReferencingAssemblies should return array",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const refs = mscorlib!.getReferencingAssemblies();
+      assert(Array.isArray(refs), "getReferencingAssemblies should return an array");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoAssembly.getReferencingAssemblies mscorlib should have dependents",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const refs = mscorlib!.getReferencingAssemblies();
+      // Most assemblies reference mscorlib
+      assert(refs.length > 0, "mscorlib should have dependent assemblies");
+      console.log(`  - mscorlib has ${refs.length} dependent assemblies`);
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoAssembly.getReferencingAssemblies should not include self",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const refs = mscorlib!.getReferencingAssemblies();
+      const selfPointer = mscorlib!.pointer.toString();
+      const includesSelf = refs.some(r => r.pointer.toString() === selfPointer);
+      assert(!includesSelf, "Referencing assemblies should not include self");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoAssembly.getReferencingAssemblies should return valid assemblies",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const refs = mscorlib!.getReferencingAssemblies();
+      if (refs.length === 0) return; // No dependents is valid
+      
+      // All returned assemblies should have valid names
+      const allValid = refs.every(r => {
+        const name = r.getName();
+        return typeof name === "string" && name.length > 0;
+      });
+      assert(allValid, "All referencing assemblies should have valid names");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoAssembly.getReferencingAssemblies should cache result",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const refs1 = mscorlib!.getReferencingAssemblies();
+      const refs2 = mscorlib!.getReferencingAssemblies();
+      
+      // Same array reference (cached)
+      assert(refs1 === refs2, "Result should be cached (same array reference)");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoAssembly.getReferencingAssemblies dependents should reference mscorlib",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const dependents = mscorlib!.getReferencingAssemblies();
+      if (dependents.length === 0) return; // No dependents is valid
+      
+      const mscorlibName = mscorlib!.getName().toLowerCase();
+      
+      // Check first few dependents
+      for (const dep of dependents.slice(0, 3)) {
+        const refs = dep.getReferencedAssemblies();
+        const hasMscorlib = refs.some(r => 
+          r.getName().toLowerCase() === mscorlibName
+        );
+        assert(hasMscorlib, `${dep.getName()} should reference mscorlib`);
+      }
+    }
+  ));
+
   return results;
 }

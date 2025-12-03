@@ -616,5 +616,188 @@ export function createMonoImageTests(): TestResult[] {
     }
   ));
 
+  // ===== NAMESPACE OPERATIONS TESTS =====
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getNamespaces should return array",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const namespaces = mscorlib!.image.getNamespaces();
+      assert(Array.isArray(namespaces), "getNamespaces should return an array");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getNamespaces should contain System namespace",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const namespaces = mscorlib!.image.getNamespaces();
+      assert(namespaces.includes("System"), "Should contain System namespace");
+      console.log(`  - Found ${namespaces.length} namespaces`);
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getNamespaces should return sorted unique values",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const namespaces = mscorlib!.image.getNamespaces();
+      
+      // Check sorted
+      const sorted = [...namespaces].sort();
+      assert(
+        JSON.stringify(namespaces) === JSON.stringify(sorted), 
+        "Namespaces should be sorted"
+      );
+      
+      // Check unique
+      const unique = [...new Set(namespaces)];
+      assert(namespaces.length === unique.length, "Namespaces should be unique");
+    }
+  ));
+
+  // ===== TYPE BY TOKEN TESTS =====
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getTypeByToken should return class for valid token",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      // Token 0x02000001 is typically the first typedef
+      const klass = mscorlib!.image.getTypeByToken(0x02000001);
+      assertNotNull(klass, "Should return a class for valid token");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getTypeByToken should work with index mode",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      // Using index 1 (converted to token internally)
+      const klass = mscorlib!.image.getTypeByToken(1, true);
+      assertNotNull(klass, "Should return a class with index mode");
+      
+      const name = klass!.getName();
+      assert(typeof name === "string" && name.length > 0, "Class should have valid name");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getTypeByToken should return null for invalid token",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      // Very high token that shouldn't exist
+      const klass = mscorlib!.image.getTypeByToken(0x02FFFFFF);
+      assert(klass === null, "Should return null for invalid token");
+    }
+  ));
+
+  // ===== CLASSES BY NAMESPACE TESTS =====
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getClassesByNamespace should return array",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const classes = mscorlib!.image.getClassesByNamespace("System");
+      assert(Array.isArray(classes), "Should return an array");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getClassesByNamespace System should have classes",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const classes = mscorlib!.image.getClassesByNamespace("System");
+      assert(classes.length > 0, "System namespace should have classes");
+      console.log(`  - System namespace has ${classes.length} classes`);
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getClassesByNamespace all classes should have correct namespace",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const classes = mscorlib!.image.getClassesByNamespace("System");
+      const allCorrect = classes.every(c => c.getNamespace() === "System");
+      assert(allCorrect, "All returned classes should have System namespace");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getClassesByNamespace should return empty for nonexistent namespace",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const classes = mscorlib!.image.getClassesByNamespace("NonExistentNamespace12345");
+      assert(classes.length === 0, "Should return empty array for nonexistent namespace");
+    }
+  ));
+
+  // ===== NAMESPACE INTEGRATION TESTS =====
+
+  results.push(createMonoDependentTest(
+    "MonoImage namespace methods should be consistent",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const namespaces = mscorlib!.image.getNamespaces();
+      
+      // Pick a namespace that should have classes
+      const testNs = namespaces.find(ns => ns === "System");
+      if (!testNs) return; // Skip if System not found
+      
+      const classes = mscorlib!.image.getClassesByNamespace(testNs);
+      assert(classes.length > 0, "Namespace from getNamespaces should have classes");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getTypeByToken should match getClasses",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      // Get first class by token
+      const klassByToken = mscorlib!.image.getTypeByToken(1, true);
+      assertNotNull(klassByToken, "Should get class by token");
+      
+      // Should be in the classes list
+      const allClasses = mscorlib!.image.getClasses();
+      const found = allClasses.some(c => c.getFullName() === klassByToken!.getFullName());
+      assert(found, "Class from token should be in classes list");
+    }
+  ));
+
   return results;
 }

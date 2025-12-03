@@ -377,5 +377,134 @@ export function createGenericTypeTests(): TestResult[] {
     }
   ));
 
+  // ============================================
+  // Generic Method Tests
+  // ============================================
+  results.push(createMonoDependentTest(
+    'Generic Method - non-generic method is not generic',
+    () => {
+      Mono.perform(() => {
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String should exist');
+        
+        const toStringMethod = stringClass!.tryGetMethod('ToString', 0);
+        assertNotNull(toStringMethod, 'ToString should exist');
+        
+        assert(!toStringMethod!.isGenericMethod(), 'ToString should not be generic');
+        assert(!toStringMethod!.isGenericMethodDefinition(), 'ToString should not be generic definition');
+        assert(toStringMethod!.getGenericArgumentCount() === 0, 'ToString should have 0 generic args');
+        assert(toStringMethod!.getGenericArguments().length === 0, 'ToString should have empty generic args');
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Generic Method - Array generic methods',
+    () => {
+      Mono.perform(() => {
+        const arrayClass = Mono.domain.class('System.Array');
+        if (!arrayClass) {
+          console.log('[INFO] System.Array not found');
+          return;
+        }
+        
+        const methods = arrayClass.methods;
+        let genericMethodCount = 0;
+        
+        for (const method of methods) {
+          if (method.isGenericMethod()) {
+            genericMethodCount++;
+            const argCount = method.getGenericArgumentCount();
+            console.log(`[INFO] Generic method: ${method.getName()}, ${argCount} type param(s)`);
+          }
+        }
+        
+        console.log(`[INFO] System.Array has ${genericMethodCount} generic methods`);
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Generic Method - Enumerable LINQ methods',
+    () => {
+      Mono.perform(() => {
+        const enumerableClass = Mono.domain.class('System.Linq.Enumerable');
+        if (!enumerableClass) {
+          console.log('[INFO] System.Linq.Enumerable not found (LINQ may not be loaded)');
+          return;
+        }
+        
+        const methods = enumerableClass.methods;
+        let genericMethodCount = 0;
+        
+        for (const method of methods) {
+          if (method.isGenericMethod()) {
+            genericMethodCount++;
+            if (genericMethodCount <= 5) {
+              console.log(`[INFO] Generic: ${method.getName()}, ${method.getGenericArgumentCount()} type param(s)`);
+            }
+          }
+        }
+        
+        console.log(`[INFO] Enumerable has ${genericMethodCount} generic methods`);
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Generic Method - describe includes generic info',
+    () => {
+      Mono.perform(() => {
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String should exist');
+        
+        const toStringMethod = stringClass!.tryGetMethod('ToString', 0);
+        assertNotNull(toStringMethod, 'ToString should exist');
+        
+        const desc = toStringMethod!.describe();
+        
+        assert('isGenericMethod' in desc, 'describe should have isGenericMethod');
+        assert('genericArgumentCount' in desc, 'describe should have genericArgumentCount');
+        
+        assert(desc.isGenericMethod === false, 'ToString isGenericMethod should be false');
+        assert(desc.genericArgumentCount === 0, 'ToString genericArgumentCount should be 0');
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Generic Method - makeGenericMethod returns null for non-generic',
+    () => {
+      Mono.perform(() => {
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String should exist');
+        
+        const toStringMethod = stringClass!.tryGetMethod('ToString', 0);
+        assertNotNull(toStringMethod, 'ToString should exist');
+        
+        const result = toStringMethod!.makeGenericMethod([]);
+        assert(result === null, 'makeGenericMethod should return null for non-generic method');
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Generic Method - getGenericArguments graceful handling',
+    () => {
+      Mono.perform(() => {
+        const intClass = Mono.domain.class('System.Int32');
+        assertNotNull(intClass, 'Int32 should exist');
+        
+        const toStringMethod = intClass!.tryGetMethod('ToString', 0);
+        assertNotNull(toStringMethod, 'ToString should exist');
+        
+        // Should not throw even if Unity API is not available
+        const args = toStringMethod!.getGenericArguments();
+        assert(Array.isArray(args), 'Should return array');
+        assert(args.length === 0, 'Non-generic method should have empty args');
+      });
+    }
+  ));
+
   return results;
 }

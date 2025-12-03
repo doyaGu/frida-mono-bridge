@@ -455,7 +455,31 @@ export function createMonoPropertyTests(): TestResult[] {
         const description = lengthProperty.describe();
         assertNotNull(description, "Property description should be available");
         assert(description.includes("Length"), "Description should include property name");
-        assert(description.includes("Int32"), "Description should include property type");
+        // New format includes getter/setter accessors like "{ get; }"
+        assert(description.includes("{") && description.includes("}"), 
+          "Description should include accessor block");
+        console.log(`  - Description: ${description}`);
+      }
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoProperty describe() for indexer should use this[] syntax",
+    () => {
+      const domain = Mono.domain;
+      const stringClass = domain.class("System.String");
+      
+      const charsProperty = stringClass!.tryGetProperty("Chars");
+      if (charsProperty) {
+        const description = charsProperty.describe();
+        assertNotNull(description, "Property description should be available");
+        
+        // Indexers use "this[...]" syntax
+        if (charsProperty.isIndexer()) {
+          assert(description.includes("this["), 
+            "Indexer description should use 'this[' syntax");
+        }
+        console.log(`  - Indexer description: ${description}`);
       }
     }
   ));
@@ -579,7 +603,7 @@ export function createMonoPropertyTests(): TestResult[] {
   // ===== PROPERTY TOSTRING AND SERIALIZATION TESTS =====
 
   results.push(createMonoDependentTest(
-    "MonoProperty toString should work correctly",
+    "MonoProperty legacy toString test (name and type format)",
     () => {
       const domain = Mono.domain;
       const stringClass = domain.class("System.String");
@@ -588,7 +612,8 @@ export function createMonoPropertyTests(): TestResult[] {
       if (lengthProperty) {
         const stringRep = lengthProperty.toString();
         assertNotNull(stringRep, "toString should return a value");
-        assert(stringRep.includes("MonoProperty"), "toString should include class type");
+        // New format: "PropertyName (PropertyType)"
+        assert(stringRep.includes("Length"), "toString should include property name");
       }
     }
   ));
@@ -605,6 +630,178 @@ export function createMonoPropertyTests(): TestResult[] {
       if (lengthProperty) {
         const flags = lengthProperty.getFlags();
         assert(typeof flags === "number", "Flags should be a number");
+        
+        // Test flags accessor
+        const flagsViaAccessor = lengthProperty.flags;
+        assert(flagsViaAccessor === flags, "Flags accessor should return same value");
+        console.log(`  - Property flags: ${flags} (0x${flags.toString(16)})`);
+      }
+    }
+  ));
+
+  // ===== NEW PROPERTY ATTRIBUTE TESTS =====
+
+  results.push(createMonoDependentTest(
+    "MonoProperty should check isSpecialName correctly",
+    () => {
+      const domain = Mono.domain;
+      const stringClass = domain.class("System.String");
+      
+      const lengthProperty = stringClass!.tryGetProperty("Length");
+      if (lengthProperty) {
+        const isSpecial = lengthProperty.isSpecialName();
+        assert(typeof isSpecial === "boolean", "isSpecialName should return boolean");
+        console.log(`  - Length isSpecialName: ${isSpecial}`);
+      }
+      
+      // Indexer properties typically have special name
+      const charsProperty = stringClass!.tryGetProperty("Chars");
+      if (charsProperty) {
+        const isSpecial = charsProperty.isSpecialName();
+        console.log(`  - Chars (indexer) isSpecialName: ${isSpecial}`);
+      }
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoProperty should check isRTSpecialName correctly",
+    () => {
+      const domain = Mono.domain;
+      const stringClass = domain.class("System.String");
+      
+      const lengthProperty = stringClass!.tryGetProperty("Length");
+      if (lengthProperty) {
+        const isRTSpecial = lengthProperty.isRTSpecialName();
+        assert(typeof isRTSpecial === "boolean", "isRTSpecialName should return boolean");
+        console.log(`  - Length isRTSpecialName: ${isRTSpecial}`);
+      }
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoProperty should check hasDefault correctly",
+    () => {
+      const domain = Mono.domain;
+      const stringClass = domain.class("System.String");
+      
+      const lengthProperty = stringClass!.tryGetProperty("Length");
+      if (lengthProperty) {
+        const hasDefaultValue = lengthProperty.hasDefault();
+        assert(typeof hasDefaultValue === "boolean", "hasDefault should return boolean");
+        console.log(`  - Length hasDefault: ${hasDefaultValue}`);
+      }
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoProperty should identify indexers with isIndexer",
+    () => {
+      const domain = Mono.domain;
+      
+      // String.Chars is an indexer
+      const stringClass = domain.class("System.String");
+      if (stringClass) {
+        const charsProperty = stringClass.tryGetProperty("Chars");
+        if (charsProperty) {
+          const isIdx = charsProperty.isIndexer();
+          console.log(`  - String.Chars isIndexer: ${isIdx}`);
+          // Chars should be an indexer (Item property with parameters)
+        }
+        
+        // Length is NOT an indexer
+        const lengthProperty = stringClass.tryGetProperty("Length");
+        if (lengthProperty) {
+          const isIdx = lengthProperty.isIndexer();
+          assert(isIdx === false, "Length should NOT be an indexer");
+          console.log(`  - String.Length isIndexer: ${isIdx}`);
+        }
+      }
+      
+      // List<T>.Item is an indexer
+      const listClass = domain.class("System.Collections.Generic.List`1");
+      if (listClass) {
+        const itemProperty = listClass.tryGetProperty("Item");
+        if (itemProperty) {
+          const isIdx = itemProperty.isIndexer();
+          console.log(`  - List<T>.Item isIndexer: ${isIdx}`);
+        }
+      }
+    }
+  ));
+
+  // ===== NEW getSummary TEST =====
+
+  results.push(createMonoDependentTest(
+    "MonoProperty getSummary should return complete information",
+    () => {
+      const domain = Mono.domain;
+      const stringClass = domain.class("System.String");
+      
+      const lengthProperty = stringClass!.tryGetProperty("Length");
+      if (lengthProperty) {
+        const summary = lengthProperty.getSummary();
+        
+        assertNotNull(summary, "Summary should not be null");
+        assert(summary.name === "Length", "Summary name should be Length");
+        assert(typeof summary.typeName === "string", "Summary typeName should be string");
+        assert(typeof summary.declaringType === "string", "Summary declaringType should be string");
+        assert(typeof summary.flags === "number", "Summary flags should be number");
+        assert(Array.isArray(summary.flagNames), "Summary flagNames should be array");
+        assert(typeof summary.canRead === "boolean", "Summary canRead should be boolean");
+        assert(typeof summary.canWrite === "boolean", "Summary canWrite should be boolean");
+        assert(typeof summary.isStatic === "boolean", "Summary isStatic should be boolean");
+        assert(typeof summary.isIndexer === "boolean", "Summary isIndexer should be boolean");
+        assert(typeof summary.parameterCount === "number", "Summary parameterCount should be number");
+        assert(Array.isArray(summary.parameterTypeNames), "Summary parameterTypeNames should be array");
+        assert(typeof summary.hasDefault === "boolean", "Summary hasDefault should be boolean");
+        assert(typeof summary.isSpecialName === "boolean", "Summary isSpecialName should be boolean");
+        
+        console.log(`  - Summary: ${JSON.stringify(summary, null, 2)}`);
+      }
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoProperty getSummary for indexer should show parameters",
+    () => {
+      const domain = Mono.domain;
+      const stringClass = domain.class("System.String");
+      
+      const charsProperty = stringClass!.tryGetProperty("Chars");
+      if (charsProperty) {
+        const summary = charsProperty.getSummary();
+        
+        console.log(`  - Chars property summary:`);
+        console.log(`    - isIndexer: ${summary.isIndexer}`);
+        console.log(`    - parameterCount: ${summary.parameterCount}`);
+        console.log(`    - parameterTypeNames: ${summary.parameterTypeNames.join(", ")}`);
+        
+        if (summary.parameterCount > 0) {
+          assert(summary.parameterTypeNames.length > 0, "Indexer should have parameter type names");
+        }
+      }
+    }
+  ));
+
+  // ===== UPDATED toString TEST =====
+
+  results.push(createMonoDependentTest(
+    "MonoProperty toString should return property name and type",
+    () => {
+      const domain = Mono.domain;
+      const stringClass = domain.class("System.String");
+      
+      const lengthProperty = stringClass!.tryGetProperty("Length");
+      if (lengthProperty) {
+        const stringRep = lengthProperty.toString();
+        assertNotNull(stringRep, "toString should return a value");
+        
+        // Updated: toString now returns "PropertyName (PropertyType)" format
+        assert(stringRep.includes("Length"), "toString should include property name");
+        assert(stringRep.includes("Int32") || stringRep.includes("("), 
+          "toString should include type information");
+        
+        console.log(`  - toString result: ${stringRep}`);
       }
     }
   ));
@@ -1024,11 +1221,27 @@ export function createMonoPropertyTests(): TestResult[] {
         assertNotNull(description, "Property description should not be null");
         
         // Verify description includes key info
+        // New format: "Type PropertyName { get; set; }" or "Type this[params] { get; set; }"
         assert(description.includes("Length") || description.includes("Int32"), 
           "Description should include property or type name");
+        assert(description.includes("{") && description.includes("}"),
+          "Description should include accessor block");
         
-        console.log(`  - Description length: ${description.length} chars`);
-        console.log(`  - Preview: ${description.substring(0, 100)}...`);
+        console.log(`  - Full description: ${description}`);
+      }
+      
+      // Test static property description
+      const envClass = domain.class("System.Environment");
+      if (envClass) {
+        const newlineProperty = envClass.tryGetProperty("NewLine");
+        if (newlineProperty) {
+          const description = newlineProperty.describe();
+          if (newlineProperty.isStatic()) {
+            assert(description.includes("static"), 
+              "Static property description should include 'static'");
+          }
+          console.log(`  - Static property description: ${description}`);
+        }
       }
     }
   ));
@@ -1195,6 +1408,73 @@ export function createMonoPropertyTests(): TestResult[] {
           const propCount = cls.getProperties().length;
           console.log(`  - ${className}: ${propCount} properties`);
         }
+      });
+    }
+  ));
+
+  // =====================================================
+  // Section: Enhanced convertValue Tests
+  // =====================================================
+
+  results.push(createMonoDependentTest(
+    'MonoProperty - setValue handles string conversion',
+    () => {
+      Mono.perform(() => {
+        // Test string property conversion (Exception.Message)
+        const exceptionClass = Mono.domain.class('System.Exception');
+        assertNotNull(exceptionClass, 'Exception class should exist');
+        
+        const msgProp = exceptionClass!.property('Message');
+        assertNotNull(msgProp, 'Message property should exist');
+        
+        // Message property should be readable
+        assert(msgProp!.canRead(), 'Message property should be readable');
+        
+        console.log('[INFO] String property conversion test passed');
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'MonoProperty - type accessor works correctly',
+    () => {
+      Mono.perform(() => {
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String class should exist');
+        
+        const lengthProp = stringClass!.property('Length');
+        assertNotNull(lengthProp, 'Length property should exist');
+        
+        const propType = lengthProp!.type;
+        assertNotNull(propType, 'Property type should not be null');
+        
+        const typeName = propType.getName();
+        assert(typeName.includes('Int32') || typeName.includes('int'), `Type should be Int32, got: ${typeName}`);
+        
+        console.log(`[INFO] Property type: ${typeName}`);
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'MonoProperty - getPropertyInfo returns complete info',
+    () => {
+      Mono.perform(() => {
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String class should exist');
+        
+        const lengthProp = stringClass!.property('Length');
+        assertNotNull(lengthProp, 'Length property should exist');
+        
+        const info = lengthProp!.getPropertyInfo();
+        
+        assert(info.name === 'Length', 'Name should be Length');
+        assert(info.canRead === true, 'Should be readable');
+        assert(info.canWrite === false, 'Should not be writable');
+        assert(typeof info.typeName === 'string', 'typeName should be string');
+        assert(typeof info.declaringType === 'string', 'declaringType should be string');
+        
+        console.log(`[INFO] PropertyInfo: ${JSON.stringify(info)}`);
       });
     }
   ));

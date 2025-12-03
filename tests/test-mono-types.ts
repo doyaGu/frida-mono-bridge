@@ -1130,6 +1130,208 @@ export function testMonoTypes(): TestResult {
     }
   }));
 
+  // ===== MULTI-DIMENSIONAL ARRAY TESTS =====
+
+  suite.addResult(createMonoDependentTest("Should identify single-dimensional array rank", () => {
+    const domain = Mono.domain;
+    
+    // Test single-dimensional array
+    const intArrayClass = domain.class("System.Int32[]");
+    if (intArrayClass) {
+      const type = intArrayClass.getType();
+      if (type) {
+        assert(type.isArray(), "Int32[] should be an array type");
+        const rank = type.getArrayRank();
+        assert(rank === 1, `Int32[] should have rank 1, got ${rank}`);
+        console.log(`    Int32[] array rank: ${rank}`);
+      }
+    }
+    
+    // Test string array
+    const stringArrayClass = domain.class("System.String[]");
+    if (stringArrayClass) {
+      const type = stringArrayClass.getType();
+      if (type) {
+        assert(type.isArray(), "String[] should be an array type");
+        const rank = type.getArrayRank();
+        assert(rank === 1, `String[] should have rank 1, got ${rank}`);
+        console.log(`    String[] array rank: ${rank}`);
+      }
+    }
+    
+    // Test object array
+    const objectArrayClass = domain.class("System.Object[]");
+    if (objectArrayClass) {
+      const type = objectArrayClass.getType();
+      if (type) {
+        assert(type.isArray(), "Object[] should be an array type");
+        const rank = type.getArrayRank();
+        assert(rank === 1, `Object[] should have rank 1, got ${rank}`);
+        console.log(`    Object[] array rank: ${rank}`);
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should return rank 0 for non-array types", () => {
+    const domain = Mono.domain;
+    
+    // Test non-array types
+    const testTypes = ["System.Int32", "System.String", "System.Object", "System.DateTime"];
+    
+    for (const typeName of testTypes) {
+      const cls = domain.class(typeName);
+      if (cls) {
+        const type = cls.getType();
+        if (type) {
+          assert(!type.isArray(), `${typeName} should not be an array type`);
+          const rank = type.getArrayRank();
+          assert(rank === 0, `${typeName} should have rank 0, got ${rank}`);
+          console.log(`    ${typeName} array rank: ${rank} (non-array)`);
+        }
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should include array info in MonoType.describe()", () => {
+    const domain = Mono.domain;
+    
+    // Test array type
+    const intArrayClass = domain.class("System.Int32[]");
+    if (intArrayClass) {
+      const type = intArrayClass.getType();
+      if (type) {
+        const summary = type.describe();
+        assert(summary.isArray === true, "Int32[] describe.isArray should be true");
+        assert(summary.arrayRank === 1, `Int32[] describe.arrayRank should be 1, got ${summary.arrayRank}`);
+        console.log(`    Int32[] describe: isArray=${summary.isArray}, arrayRank=${summary.arrayRank}`);
+      }
+    }
+    
+    // Test non-array type
+    const intClass = domain.class("System.Int32");
+    if (intClass) {
+      const type = intClass.getType();
+      if (type) {
+        const summary = type.describe();
+        assert(summary.isArray === false, "Int32 describe.isArray should be false");
+        assert(summary.arrayRank === 0, `Int32 describe.arrayRank should be 0, got ${summary.arrayRank}`);
+        console.log(`    Int32 describe: isArray=${summary.isArray}, arrayRank=${summary.arrayRank}`);
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should handle multi-dimensional array type names", () => {
+    const domain = Mono.domain;
+    
+    // Try to find or create multi-dimensional array types
+    // Multi-dimensional arrays are represented as [,] for 2D, [,,] for 3D, etc.
+    const multiDimTypeNames = [
+      "System.Int32[,]",
+      "System.Int32[,,]",
+      "System.String[,]"
+    ];
+    
+    let foundAny = false;
+    for (const typeName of multiDimTypeNames) {
+      try {
+        const cls = domain.class(typeName);
+        if (cls) {
+          foundAny = true;
+          const type = cls.getType();
+          if (type) {
+            const isArray = type.isArray();
+            const rank = type.getArrayRank();
+            console.log(`    ${typeName}: isArray=${isArray}, rank=${rank}`);
+            
+            // Verify expected rank based on comma count
+            const expectedRank = (typeName.match(/,/g) || []).length + 1;
+            if (rank > 0) {
+              assert(rank === expectedRank, `${typeName} should have rank ${expectedRank}, got ${rank}`);
+            }
+          }
+        }
+      } catch (e) {
+        console.log(`    ${typeName}: not available (${e})`);
+      }
+    }
+    
+    if (!foundAny) {
+      console.log("    Note: Multi-dimensional array types may require explicit loading");
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should identify array element type correctly", () => {
+    const domain = Mono.domain;
+    
+    // Test getting element type from array
+    const intArrayClass = domain.class("System.Int32[]");
+    if (intArrayClass) {
+      const type = intArrayClass.getType();
+      if (type && type.isArray()) {
+        const elementType = type.getElementType();
+        if (elementType) {
+          const elementName = elementType.getName();
+          assert(elementName.includes("Int32") || elementName.includes("int"), 
+            `Element type of Int32[] should be Int32, got ${elementName}`);
+          console.log(`    Int32[] element type: ${elementName}`);
+          
+          // Element type should not be an array
+          assert(!elementType.isArray(), "Element type should not be an array");
+          assert(elementType.getArrayRank() === 0, "Element type should have rank 0");
+        }
+      }
+    }
+    
+    // Test object array
+    const objectArrayClass = domain.class("System.Object[]");
+    if (objectArrayClass) {
+      const type = objectArrayClass.getType();
+      if (type && type.isArray()) {
+        const elementType = type.getElementType();
+        if (elementType) {
+          const elementName = elementType.getName();
+          assert(elementName.includes("Object"), 
+            `Element type of Object[] should be Object, got ${elementName}`);
+          console.log(`    Object[] element type: ${elementName}`);
+        }
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should handle jagged arrays", () => {
+    const domain = Mono.domain;
+    
+    // Jagged arrays (array of arrays) - Int32[][]
+    // The outer type is Int32[][], which is an array of Int32[]
+    const jaggedTypeName = "System.Int32[][]";
+    
+    try {
+      const cls = domain.class(jaggedTypeName);
+      if (cls) {
+        const type = cls.getType();
+        if (type) {
+          assert(type.isArray(), `${jaggedTypeName} should be an array type`);
+          const rank = type.getArrayRank();
+          // Jagged arrays are single-dimensional arrays of arrays
+          // So Int32[][] has rank 1, not 2
+          assert(rank === 1, `${jaggedTypeName} (jagged) should have rank 1, got ${rank}`);
+          console.log(`    ${jaggedTypeName} (jagged array): isArray=true, rank=${rank}`);
+          
+          // Element type should be Int32[]
+          const elementType = type.getElementType();
+          if (elementType) {
+            assert(elementType.isArray(), "Element type of Int32[][] should be an array");
+            console.log(`    Element type of ${jaggedTypeName}: ${elementType.getName()}`);
+          }
+        }
+      } else {
+        console.log(`    ${jaggedTypeName}: type not found (may need explicit loading)`);
+      }
+    } catch (e) {
+      console.log(`    ${jaggedTypeName}: not available (${e})`);
+    }
+  }));
+
   const summary = suite.getSummary();
 
   return {

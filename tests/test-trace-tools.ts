@@ -521,5 +521,245 @@ export function createTraceToolsTests(): TestResult[] {
     }
   ));
 
+  // ============================================
+  // Field Tracing Tests
+  // ============================================
+  results.push(createStandaloneTest(
+    'Trace - field function exists',
+    () => {
+      assert(typeof Trace.field === 'function', 'Trace.field should be a function');
+    }
+  ));
+
+  results.push(createStandaloneTest(
+    'Trace - fieldsByPattern function exists',
+    () => {
+      assert(typeof Trace.fieldsByPattern === 'function', 'Trace.fieldsByPattern should be a function');
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Trace.field - returns null for non-traceable field',
+    () => {
+      Mono.perform(() => {
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String class should exist');
+        
+        // Try to find a private field that won't have property accessors
+        const fields = stringClass!.getFields();
+        if (fields.length > 0) {
+          const result = Trace.field(fields[0], {
+            onRead: () => {},
+          });
+          
+          // Most internal fields won't be traceable without property accessors
+          console.log(`[INFO] Field trace result: ${result === null ? 'null (expected)' : 'detach function'}`);
+        }
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Trace.fieldsByPattern - handles empty results',
+    () => {
+      Mono.perform(() => {
+        // Use a pattern that won't match anything
+        const detach = Trace.fieldsByPattern(Mono.api, 'NonExistentFieldXYZ*', {
+          onRead: () => {},
+        });
+        
+        // Should return a valid detach function
+        assert(typeof detach === 'function', 'Should return a detach function');
+        detach();
+      });
+    }
+  ));
+
+  // ============================================
+  // Property Tracing Tests
+  // ============================================
+  results.push(createStandaloneTest(
+    'Trace - propertyTrace function exists',
+    () => {
+      assert(typeof Trace.propertyTrace === 'function', 'Trace.propertyTrace should be a function');
+    }
+  ));
+
+  results.push(createStandaloneTest(
+    'Trace - propertiesByPattern function exists',
+    () => {
+      assert(typeof Trace.propertiesByPattern === 'function', 'Trace.propertiesByPattern should be a function');
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Trace.propertyTrace - hooks Length property',
+    () => {
+      Mono.perform(() => {
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String class should exist');
+        
+        const lengthProperty = stringClass!.tryGetProperty('Length');
+        assertNotNull(lengthProperty, 'Length property should exist');
+        
+        let getterCalled = false;
+        const detach = Trace.propertyTrace(lengthProperty!, {
+          onGet: () => {
+            getterCalled = true;
+          },
+        });
+        
+        // The detach function should exist
+        assert(typeof detach === 'function', 'Should return a detach function');
+        detach();
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Trace.propertiesByPattern - traces matching properties',
+    () => {
+      Mono.perform(() => {
+        // Trace all Length properties
+        const detach = Trace.propertiesByPattern(Mono.api, '*Length*', {
+          onGet: () => {},
+        });
+        
+        assert(typeof detach === 'function', 'Should return a detach function');
+        detach();
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Trace - FieldAccessCallbacks interface works',
+    () => {
+      // Type-level test
+      const callbacks: Trace.FieldAccessCallbacks = {
+        onRead: (instance, value) => {
+          console.log(`Read: instance=${instance}, value=${value}`);
+        },
+        onWrite: (instance, oldValue, newValue) => {
+          console.log(`Write: ${oldValue} -> ${newValue}`);
+        },
+      };
+      
+      assert(typeof callbacks.onRead === 'function', 'onRead should be a function');
+      assert(typeof callbacks.onWrite === 'function', 'onWrite should be a function');
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Trace - PropertyAccessCallbacks interface works',
+    () => {
+      // Type-level test
+      const callbacks: Trace.PropertyAccessCallbacks = {
+        onGet: (instance, value) => {
+          console.log(`Get: instance=${instance}, value=${value}`);
+        },
+        onSet: (instance, oldValue, newValue) => {
+          console.log(`Set: ${oldValue} -> ${newValue}`);
+        },
+      };
+      
+      assert(typeof callbacks.onGet === 'function', 'onGet should be a function');
+      assert(typeof callbacks.onSet === 'function', 'onSet should be a function');
+    }
+  ));
+
+  // =====================================================
+  // Section 8: Performance Tracking Tests
+  // =====================================================
+  results.push(createMonoDependentTest(
+    'Trace - createPerformanceTracker exists',
+    () => {
+      assertNotNull(Trace.createPerformanceTracker, 'createPerformanceTracker should exist');
+      assert(typeof Trace.createPerformanceTracker === 'function', 'createPerformanceTracker should be a function');
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Trace - PerformanceTracker can be instantiated',
+    () => {
+      const tracker = Trace.createPerformanceTracker();
+      assertNotNull(tracker, 'Tracker should be created');
+      
+      // Check that it has the expected methods
+      assert(typeof tracker.track === 'function', 'track method should exist');
+      assert(typeof tracker.getStats === 'function', 'getStats method should exist');
+      assert(typeof tracker.getAllStats === 'function', 'getAllStats method should exist');
+      assert(typeof tracker.getReport === 'function', 'getReport method should exist');
+      assert(typeof tracker.reset === 'function', 'reset method should exist');
+      assert(typeof tracker.dispose === 'function', 'dispose method should exist');
+      
+      // Clean up
+      tracker.dispose();
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Trace - PerformanceTracker.getReport returns string',
+    () => {
+      const tracker = Trace.createPerformanceTracker();
+      const report = tracker.getReport();
+      
+      assert(typeof report === 'string', 'Report should be a string');
+      assert(report.includes('Performance Report'), 'Report should contain header');
+      console.log(`[INFO] Empty report:\n${report}`);
+      
+      tracker.dispose();
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Trace - methodWithCallStack exists',
+    () => {
+      assertNotNull(Trace.methodWithCallStack, 'methodWithCallStack should exist');
+      assert(typeof Trace.methodWithCallStack === 'function', 'methodWithCallStack should be a function');
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Trace - MethodCallbacksTimed interface works',
+    () => {
+      // Type-level test
+      const callbacks: Trace.MethodCallbacksTimed = {
+        onEnter: (args, callStack) => {
+          console.log(`Enter with ${args.length} args, stack depth: ${callStack.length}`);
+        },
+        onLeave: (retval, duration) => {
+          console.log(`Leave after ${duration}ms`);
+        },
+      };
+      
+      assert(typeof callbacks.onEnter === 'function', 'onEnter should be a function');
+      assert(typeof callbacks.onLeave === 'function', 'onLeave should be a function');
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'Trace - MethodStats interface structure',
+    () => {
+      // Type-level test for MethodStats
+      const mockStats: Trace.MethodStats = {
+        callCount: 10,
+        totalTime: 100,
+        minTime: 5,
+        maxTime: 20,
+        avgTime: 10,
+        lastCallTime: Date.now(),
+      };
+      
+      assert(typeof mockStats.callCount === 'number', 'callCount should be number');
+      assert(typeof mockStats.totalTime === 'number', 'totalTime should be number');
+      assert(typeof mockStats.minTime === 'number', 'minTime should be number');
+      assert(typeof mockStats.maxTime === 'number', 'maxTime should be number');
+      assert(typeof mockStats.avgTime === 'number', 'avgTime should be number');
+      assert(typeof mockStats.lastCallTime === 'number', 'lastCallTime should be number');
+      
+      console.log(`[INFO] MethodStats interface verified`);
+    }
+  ));
+
   return results;
 }

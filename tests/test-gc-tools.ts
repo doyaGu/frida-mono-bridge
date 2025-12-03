@@ -686,5 +686,242 @@ export function createGCToolsTests(): TestResult[] {
     }
   ));
 
+  // ============================================
+  // Memory Statistics Tests
+  // ============================================
+  results.push(createMonoDependentTest(
+    'GC - getMemoryStats returns valid structure',
+    () => {
+      Mono.perform(() => {
+        const gc = Mono.gc;
+        assertNotNull(gc, 'GC utilities should exist');
+        
+        const stats = gc.getMemoryStats();
+        
+        assert(typeof stats === 'object', 'getMemoryStats should return an object');
+        assert('heapSize' in stats, 'Stats should have heapSize');
+        assert('usedHeapSize' in stats, 'Stats should have usedHeapSize');
+        assert('totalCollections' in stats, 'Stats should have totalCollections');
+        assert('activeHandles' in stats, 'Stats should have activeHandles');
+        assert('detailedStatsAvailable' in stats, 'Stats should have detailedStatsAvailable');
+        
+        console.log(`[INFO] Memory stats: ${JSON.stringify(stats)}`);
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'GC - getActiveHandleCount returns number',
+    () => {
+      Mono.perform(() => {
+        const gc = Mono.gc;
+        assertNotNull(gc, 'GC utilities should exist');
+        
+        const initialCount = gc.getActiveHandleCount();
+        assert(typeof initialCount === 'number', 'Should return a number');
+        assert(initialCount >= 0, 'Count should be non-negative');
+        
+        // Create a handle and check count increases
+        const stringClass = Mono.domain.class('System.String');
+        if (stringClass) {
+          const emptyField = stringClass.tryGetField('Empty');
+          if (emptyField) {
+            const emptyString = emptyField.getStaticValue();
+            const handle = gc.handle(emptyString);
+            
+            const afterCount = gc.getActiveHandleCount();
+            assert(afterCount === initialCount + 1, 'Count should increase by 1');
+            
+            gc.releaseHandle(handle);
+            
+            const finalCount = gc.getActiveHandleCount();
+            assert(finalCount === initialCount, 'Count should return to initial');
+          }
+        }
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'GC - getGenerationStats returns array',
+    () => {
+      Mono.perform(() => {
+        const gc = Mono.gc;
+        assertNotNull(gc, 'GC utilities should exist');
+        
+        const stats = gc.getGenerationStats();
+        
+        assert(Array.isArray(stats), 'Should return an array');
+        assert(stats.length > 0, 'Should have at least one generation');
+        
+        for (const genStat of stats) {
+          assert(typeof genStat.generation === 'number', 'Should have generation number');
+          console.log(`[INFO] Gen ${genStat.generation}: size=${genStat.size}, collections=${genStat.collections}`);
+        }
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'GC - getMemorySummary returns string',
+    () => {
+      Mono.perform(() => {
+        const gc = Mono.gc;
+        assertNotNull(gc, 'GC utilities should exist');
+        
+        const summary = gc.getMemorySummary();
+        
+        assert(typeof summary === 'string', 'Should return a string');
+        assert(summary.length > 0, 'Summary should not be empty');
+        assert(summary.includes('GC Memory Summary'), 'Should contain header');
+        
+        console.log(summary);
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'GC - isCollected checks weak handle',
+    () => {
+      Mono.perform(() => {
+        const gc = Mono.gc;
+        assertNotNull(gc, 'GC utilities should exist');
+        
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String class should exist');
+        
+        const emptyField = stringClass.tryGetField('Empty');
+        if (!emptyField) {
+          console.log('[INFO] String.Empty field not found, skipping');
+          return;
+        }
+        
+        const emptyString = emptyField.getStaticValue();
+        
+        // Create weak handle to a well-known object (Empty string won't be collected)
+        const weakHandle = gc.weakHandle(emptyString);
+        
+        // String.Empty should not be collected
+        const isCollected = gc.isCollected(weakHandle);
+        assert(isCollected === false, 'String.Empty should not be collected');
+        
+        gc.releaseHandle(weakHandle);
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'GC - collectAndReport returns delta',
+    () => {
+      Mono.perform(() => {
+        const gc = Mono.gc;
+        assertNotNull(gc, 'GC utilities should exist');
+        
+        const report = gc.collectAndReport();
+        
+        assert(typeof report === 'object', 'Should return an object');
+        assert('before' in report, 'Should have before stats');
+        assert('after' in report, 'Should have after stats');
+        assert('delta' in report, 'Should have delta');
+        
+        console.log(`[INFO] Before: ${JSON.stringify(report.before)}`);
+        console.log(`[INFO] After: ${JSON.stringify(report.after)}`);
+        if (report.delta !== null) {
+          console.log(`[INFO] Delta: ${report.delta} bytes freed`);
+        }
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'GC - MemoryStats interface is correct',
+    () => {
+      // Type-level test - verify the structure matches expected interface
+      Mono.perform(() => {
+        const gc = Mono.gc;
+        assertNotNull(gc, 'GC utilities should exist');
+        
+        const stats = gc.getMemoryStats();
+        
+        // Verify all expected properties exist
+        const requiredKeys = ['heapSize', 'usedHeapSize', 'totalCollections', 'activeHandles', 'detailedStatsAvailable'];
+        for (const key of requiredKeys) {
+          assert(key in stats, `MemoryStats should have ${key}`);
+        }
+        
+        console.log('[INFO] MemoryStats interface verified');
+      });
+    }
+  ));
+
+  // =====================================================
+  // Section 9: Finalization Queue Tests
+  // =====================================================
+  results.push(createMonoDependentTest(
+    'GC - getFinalizationQueueInfo exists',
+    () => {
+      Mono.perform(() => {
+        const gc = Mono.gc;
+        assertNotNull(gc, 'GC utilities should exist');
+        
+        assert(typeof gc.getFinalizationQueueInfo === 'function', 'getFinalizationQueueInfo should exist');
+        
+        const info = gc.getFinalizationQueueInfo();
+        assert(typeof info.available === 'boolean', 'available should be boolean');
+        assert(info.message !== undefined, 'message should exist');
+        
+        console.log(`[INFO] Finalization info: available=${info.available}, message=${info.message}`);
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'GC - requestFinalization exists',
+    () => {
+      Mono.perform(() => {
+        const gc = Mono.gc;
+        assertNotNull(gc, 'GC utilities should exist');
+        
+        assert(typeof gc.requestFinalization === 'function', 'requestFinalization should exist');
+        
+        // Just call to verify it doesn't crash
+        const result = gc.requestFinalization();
+        console.log(`[INFO] requestFinalization returned: ${result}`);
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'GC - waitForPendingFinalizers exists',
+    () => {
+      Mono.perform(() => {
+        const gc = Mono.gc;
+        assertNotNull(gc, 'GC utilities should exist');
+        
+        assert(typeof gc.waitForPendingFinalizers === 'function', 'waitForPendingFinalizers should exist');
+        
+        // Just call to verify it doesn't crash
+        const result = gc.waitForPendingFinalizers(0);
+        console.log(`[INFO] waitForPendingFinalizers returned: ${result}`);
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'GC - suppressFinalize exists',
+    () => {
+      Mono.perform(() => {
+        const gc = Mono.gc;
+        assertNotNull(gc, 'GC utilities should exist');
+        
+        assert(typeof gc.suppressFinalize === 'function', 'suppressFinalize should exist');
+        
+        // Call with NULL pointer (should handle gracefully)
+        const result = gc.suppressFinalize(ptr(0));
+        console.log(`[INFO] suppressFinalize with NULL returned: ${result}`);
+      });
+    }
+  ));
+
   return results;
 }

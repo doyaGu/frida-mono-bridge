@@ -46,6 +46,7 @@ import { createGenericTypeTests } from "./test-generic-types";
 import { createMonoStringTests } from "./test-mono-string";
 import { createMonoArrayTests } from "./test-mono-array";
 import { createMonoDelegateTests } from "./test-mono-delegate";
+import { createMonoObjectTests } from "./test-mono-object";
 import { testMonoData } from "./test-mono-data";
 
 // ============================================================================
@@ -306,6 +307,14 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
     return suite.getSummary();
   }
 
+  // Comprehensive MonoObject Tests
+  logSection("Comprehensive MonoObject Tests");
+  const objectTestResults = createMonoObjectTests();
+  objectTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
   // ============================================================================
   // PHASE 3: ENHANCED FEATURE TESTS
   // ============================================================================
@@ -408,6 +417,7 @@ export {
   createMonoStringTests,
   createMonoArrayTests,
   createMonoDelegateTests,
+  createMonoObjectTests,
   testMonoData,
   
   // Domain & Assembly Tests

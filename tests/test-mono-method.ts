@@ -1084,5 +1084,74 @@ export function createMonoMethodTests(): TestResult[] {
     }
   ));
 
+  // =====================================================
+  // Section: BigInt Return Option Tests
+  // =====================================================
+
+  results.push(createMonoDependentTest(
+    'MonoMethod - InvokeOptions returnBigInt exists',
+    () => {
+      Mono.perform(() => {
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String class should exist');
+        
+        const getLengthMethod = stringClass!.getMethod('get_Length', 0);
+        assertNotNull(getLengthMethod, 'get_Length method should exist');
+        
+        // Test that call accepts returnBigInt option (type checking)
+        const testStr = Mono.api.stringNew('test');
+        const result = getLengthMethod!.call<number>(testStr, [], { returnBigInt: false });
+        assert(typeof result === 'number', 'Result should be number when returnBigInt is false');
+        
+        console.log(`[INFO] InvokeOptions returnBigInt supported, result: ${result}`);
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'MonoMethod - call with returnBigInt option for Int32',
+    () => {
+      Mono.perform(() => {
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String class should exist');
+        
+        const getLengthMethod = stringClass!.getMethod('get_Length', 0);
+        assertNotNull(getLengthMethod, 'get_Length method should exist');
+        
+        const testStr = Mono.api.stringNew('hello');
+        
+        // Int32 should still return number (BigInt only for I8/U8)
+        const resultWithBigInt = getLengthMethod!.call<number>(testStr, [], { returnBigInt: true });
+        assert(typeof resultWithBigInt === 'number', 'Int32 should return number even with returnBigInt');
+        assert(resultWithBigInt === 5, 'Length should be 5');
+        
+        console.log(`[INFO] Int32 with returnBigInt returns number: ${resultWithBigInt}`);
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'MonoMethod - callWithInfo returns proper result',
+    () => {
+      Mono.perform(() => {
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String class should exist');
+        
+        const getLengthMethod = stringClass!.getMethod('get_Length', 0);
+        assertNotNull(getLengthMethod, 'get_Length method should exist');
+        
+        const testStr = Mono.api.stringNew('hello world');
+        
+        const result = getLengthMethod!.callWithInfo<number>(testStr, [], { returnBigInt: false });
+        assert(result.raw !== null, 'raw should not be null');
+        assert(result.isNull === false, 'isNull should be false');
+        assert(result.value === 11, 'value should be 11');
+        assertNotNull(result.type, 'type should not be null');
+        
+        console.log(`[INFO] callWithInfo result: value=${result.value}, type=${result.type.getName()}`);
+      });
+    }
+  ));
+
   return results;
 }

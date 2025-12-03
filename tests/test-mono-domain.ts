@@ -709,7 +709,7 @@ export function testMonoDomain(): TestResult {
       console.log(`    Found ${unityMethods.length} Unity-specific methods`);
     }
     
-    // Test Unity assembly integration
+      // Test Unity assembly integration
     const unityCore = domain.assembly("UnityEngine.CoreModule");
     if (unityCore) {
       const image = unityCore.image;
@@ -725,9 +725,83 @@ export function testMonoDomain(): TestResult {
     console.log("    Unity system integration verified");
   }));
 
-  const summary = suite.getSummary();
+  // ============================================================================
+  // ASSEMBLY UNLOADING TESTS
+  // ============================================================================
 
-  return {
+  suite.addResult(createDomainTest("Domain.unloadAssembly should return result object", domain => {
+    const mscorlib = domain.getAssembly("mscorlib");
+    assertNotNull(mscorlib, "mscorlib should exist");
+    
+    const result = domain.unloadAssembly(mscorlib!);
+    assert(typeof result === "object", "Should return object");
+    assert(typeof result.success === "boolean", "Should have success property");
+    assert(typeof result.reason === "string", "Should have reason property");
+    assert(typeof result.supported === "boolean", "Should have supported property");
+  }));
+
+  suite.addResult(createDomainTest("Domain.unloadAssembly should reject system assemblies", domain => {
+    const mscorlib = domain.getAssembly("mscorlib");
+    assertNotNull(mscorlib, "mscorlib should exist");
+    
+    const result = domain.unloadAssembly(mscorlib!);
+    // Should fail because mscorlib is a system assembly
+    assert(result.success === false, "Should fail for system assembly");
+    assert(result.reason.toLowerCase().includes("system"), "Reason should mention system");
+  }));
+
+  suite.addResult(createDomainTest("Domain.unloadAssembly should work by name", domain => {
+    const result = domain.unloadAssembly("mscorlib");
+    // Should return a result (even if failed)
+    assert(typeof result === "object", "Should return result object");
+    assert(typeof result.success === "boolean", "Should have success property");
+  }));
+
+  suite.addResult(createDomainTest("Domain.unloadAssembly should handle nonexistent assembly", domain => {
+    const result = domain.unloadAssembly("NonExistentAssembly12345");
+    assert(result.success === false, "Should fail for nonexistent assembly");
+    assert(result.reason.toLowerCase().includes("not found"), "Reason should mention not found");
+  }));
+
+  suite.addResult(createDomainTest("Domain.isAssemblyUnloadingSupported should return boolean", domain => {
+    const supported = domain.isAssemblyUnloadingSupported();
+    assert(typeof supported === "boolean", "Should return boolean");
+    console.log(`    Assembly unloading supported: ${supported}`);
+  }));
+
+  // ============================================================================
+  // DOMAIN CREATION AND SWITCHING TESTS
+  // ============================================================================
+
+  suite.addResult(createDomainTest("Domain.createDomain should return domain or null", domain => {
+    const newDomain = domain.createDomain("TestDomain");
+    // Can be null if not supported, that's OK
+    assert(
+      newDomain === null || newDomain.pointer !== undefined,
+      "Should return null or valid domain"
+    );
+    if (newDomain) {
+      console.log(`    Created domain: ${newDomain.id}`);
+    } else {
+      console.log("    Domain creation not supported");
+    }
+  }));
+
+  suite.addResult(createDomainTest("Domain.setAsCurrent should return domain or null", domain => {
+    const previous = domain.setAsCurrent();
+    // Can be null if API not available
+    assert(
+      previous === null || previous.pointer !== undefined,
+      "Should return null or valid domain"
+    );
+    if (previous) {
+      console.log(`    Previous domain ID: ${previous.id}`);
+    } else {
+      console.log("    setAsCurrent API not available");
+    }
+  }));
+
+  const summary = suite.getSummary();  return {
     name: "Mono Domain Complete Suite",
     passed: summary.failed === 0,
     failed: summary.failed > 0,
