@@ -3,6 +3,7 @@ import { pointerIsNull } from "../utils/memory";
 import { readUtf8String, readUtf16String } from "../utils/string";
 import { MonoClass } from "./class";
 import { MonoObject } from "./object";
+import { MonoString } from "./string";
 import { MonoDomain } from "./domain";
 import { MonoType, MonoTypeKind, MonoTypeSummary } from "./type";
 import { FieldAttribute, getMaskedValue, hasFlag } from "../runtime/metadata";
@@ -174,6 +175,32 @@ export class MonoField<T = any> extends MonoHandle {
     }
     const objectPtr = this.native.mono_field_get_value_object(domainPtr, this.pointer, unwrapInstance(instance));
     return pointerIsNull(objectPtr) ? null : new MonoObject(this.api, objectPtr);
+  }
+
+  /**
+   * Get the value of a string field as a MonoString object
+   * @param instance Object instance (null for static fields)
+   * @param options Access options
+   * @returns MonoString object or null
+   * @throws Error if the field is not a string type
+   */
+  getStringValue(instance?: MonoObject | NativePointer | null, options: FieldAccessOptions = {}): MonoString | null {
+    const type = this.getType();
+    if (type.getKind() !== MonoTypeKind.String) {
+      throw new Error(`Field ${this.getName()} is not a string type (is ${type.getFullName()})`);
+    }
+    const valuePtr = this.getValue(instance, options);
+    return pointerIsNull(valuePtr) ? null : new MonoString(this.api, valuePtr);
+  }
+
+  /**
+   * Get the static value of a string field as a MonoString object
+   * @param options Access options
+   * @returns MonoString object or null
+   * @throws Error if the field is not a string type
+   */
+  getStaticStringValue(options: FieldAccessOptions = {}): MonoString | null {
+    return this.getStringValue(null, options);
   }
 
   readValue(instance?: MonoObject | NativePointer | null, options: FieldReadOptions = {}): unknown {

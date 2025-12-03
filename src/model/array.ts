@@ -81,7 +81,10 @@ export class MonoArray<T = any> extends MonoObject {
   getLength(): number {
     // Try using mono_array_length first (standard Mono)
     if (this.api.hasExport("mono_array_length")) {
-      return this.native.mono_array_length(this.pointer) as number;
+      const result = this.native.mono_array_length(this.pointer);
+      // mono_array_length returns size_t which may be UInt64/Int64 object or BigInt on 64-bit
+      // Use Number() to safely convert all numeric types to number
+      return Number(result);
     }
     
     // Fallback: Call System.Array.get_Length property via managed code
@@ -142,15 +145,17 @@ export class MonoArray<T = any> extends MonoObject {
     
     const arrayClass = this.getClass();
     
-    // Try mono_class_array_element_size first (most common)
-    if (this.api.hasExport("mono_class_array_element_size")) {
-      this._elementSize = this.native.mono_class_array_element_size(arrayClass.pointer) as number;
+    // Try mono_array_element_size first - this is the correct API for getting element size
+    // It takes the array class (e.g., System.Int32[]) and returns the size of each element
+    if (this.api.hasExport("mono_array_element_size")) {
+      this._elementSize = Number(this.native.mono_array_element_size(arrayClass.pointer));
       return this._elementSize;
     }
     
-    // Fallback: Try mono_array_element_size (standard Mono API, takes array class)
-    if (this.api.hasExport("mono_array_element_size")) {
-      this._elementSize = this.native.mono_array_element_size(arrayClass.pointer) as number;
+    // Fallback: Try mono_class_array_element_size (Note: on some Mono versions this may return
+    // different values, so mono_array_element_size is preferred)
+    if (this.api.hasExport("mono_class_array_element_size")) {
+      this._elementSize = Number(this.native.mono_class_array_element_size(arrayClass.pointer));
       return this._elementSize;
     }
     
@@ -160,7 +165,7 @@ export class MonoArray<T = any> extends MonoObject {
       // Use mono_class_value_size for value types (returns size without boxing)
       if (this.api.hasExport("mono_class_value_size")) {
         // mono_class_value_size(klass, &align) - we pass NULL for align
-        this._elementSize = this.native.mono_class_value_size(elementClass.pointer, NULL) as number;
+        this._elementSize = Number(this.native.mono_class_value_size(elementClass.pointer, NULL));
         return this._elementSize;
       }
     }
@@ -521,6 +526,253 @@ export class MonoArray<T = any> extends MonoObject {
     return result;
   }
 
+  // ===== NEW ARRAY METHODS =====
+
+  /**
+   * Get a number value as BigInt (for 64-bit numeric arrays)
+   * Preserves full precision for Int64/UInt64 values
+   * @param index Array index
+   * @returns BigInt value
+   */
+  getBigInt(index: number): bigint {
+    const address = this.getElementAddress(index);
+    const elementSize = this.getElementSize();
+    
+    if (elementSize === 8) {
+      // Read as two 32-bit parts and combine
+      const low = BigInt(address.readU32());
+      const high = BigInt(address.add(4).readU32());
+      return (high << 32n) | low;
+    } else if (elementSize === 4) {
+      return BigInt(address.readS32());
+    } else if (elementSize === 2) {
+      return BigInt(address.readS16());
+    } else if (elementSize === 1) {
+      return BigInt(address.readS8());
+    }
+    throw new Error(`Unsupported element size for BigInt: ${elementSize}`);
+  }
+
+  /**
+   * Set a BigInt value (for 64-bit numeric arrays)
+   * @param index Array index
+   * @param value BigInt value to set
+   */
+  setBigInt(index: number, value: bigint): void {
+    const address = this.getElementAddress(index);
+    const elementSize = this.getElementSize();
+    
+    if (elementSize === 8) {
+      // Write as two 32-bit parts
+      address.writeU32(Number(value & 0xFFFFFFFFn));
+      address.add(4).writeU32(Number((value >> 32n) & 0xFFFFFFFFn));
+    } else if (elementSize === 4) {
+      address.writeS32(Number(value));
+    } else if (elementSize === 2) {
+      address.writeS16(Number(value));
+    } else if (elementSize === 1) {
+      address.writeS8(Number(value));
+    } else {
+      throw new Error(`Unsupported element size for BigInt: ${elementSize}`);
+    }
+  }
+
+  /**
+   * Reverse the array in place
+   * Note: This modifies the original Mono array
+   */
+  reverse(): void {
+    const len = this.length;
+    const halfLen = Math.floor(len / 2);
+    
+    for (let i = 0; i < halfLen; i++) {
+      const j = len - 1 - i;
+      const temp = this.getTyped(i);
+      this.setTyped(i, this.getTyped(j));
+      this.setTyped(j, temp);
+    }
+  }
+
+  /**
+   * Get a reversed copy of the array (non-mutating)
+   * @returns New JavaScript array with reversed elements
+   */
+  reversed(): T[] {
+    const result: T[] = [];
+    for (let i = this.length - 1; i >= 0; i--) {
+      result.push(this.getTyped(i));
+    }
+    return result;
+  }
+
+  /**
+   * Fill the array with a value
+   * @param value Value to fill with
+   * @param start Optional start index (default: 0)
+   * @param end Optional end index (default: length)
+   */
+  fill(value: T, start?: number, end?: number): void {
+    const actualStart = start ?? 0;
+    const actualEnd = end ?? this.length;
+    
+    for (let i = actualStart; i < actualEnd && i < this.length; i++) {
+      this.setTyped(i, value);
+    }
+  }
+
+  /**
+   * Copy elements to another MonoArray
+   * @param target Target MonoArray
+   * @param targetStart Start index in target array (default: 0)
+   * @param sourceStart Start index in source array (default: 0)
+   * @param sourceEnd End index in source array (default: length)
+   */
+  copyTo(target: MonoArray<T>, targetStart?: number, sourceStart?: number, sourceEnd?: number): void {
+    const actualTargetStart = targetStart ?? 0;
+    const actualSourceStart = sourceStart ?? 0;
+    const actualSourceEnd = sourceEnd ?? this.length;
+    
+    let targetIndex = actualTargetStart;
+    for (let i = actualSourceStart; i < actualSourceEnd && i < this.length && targetIndex < target.length; i++) {
+      target.setTyped(targetIndex++, this.getTyped(i));
+    }
+  }
+
+  /**
+   * Copy elements to a JavaScript array
+   * @param start Start index (default: 0)
+   * @param end End index (default: length)
+   * @returns New JavaScript array with copied elements
+   */
+  copyToArray(start?: number, end?: number): T[] {
+    return this.slice(start ?? 0, end);
+  }
+
+  /**
+   * Sort the array in place using a compare function
+   * Note: This modifies the original Mono array
+   * @param compareFn Compare function
+   */
+  sort(compareFn?: (a: T, b: T) => number): void {
+    // Convert to JS array, sort, and copy back
+    const items = this.toArray();
+    items.sort(compareFn);
+    
+    for (let i = 0; i < items.length; i++) {
+      this.setTyped(i, items[i]);
+    }
+  }
+
+  /**
+   * Get a sorted copy of the array (non-mutating)
+   * @param compareFn Compare function
+   * @returns New JavaScript array with sorted elements
+   */
+  sorted(compareFn?: (a: T, b: T) => number): T[] {
+    const items = this.toArray();
+    items.sort(compareFn);
+    return items;
+  }
+
+  /**
+   * Join array elements into a string (for arrays with toString-able elements)
+   * @param separator Separator string (default: ',')
+   * @returns Joined string
+   */
+  join(separator?: string): string {
+    const items: string[] = [];
+    for (let i = 0; i < this.length; i++) {
+      const item = this.getTyped(i);
+      if (item instanceof MonoObject) {
+        items.push(item.toString());
+      } else {
+        items.push(String(item));
+      }
+    }
+    return items.join(separator ?? ',');
+  }
+
+  /**
+   * Get index of first occurrence of an element
+   * @param element Element to search for
+   * @param fromIndex Start index for search
+   * @returns Index of element, or -1 if not found
+   */
+  indexOf(element: T, fromIndex?: number): number {
+    const start = fromIndex ?? 0;
+    for (let i = start; i < this.length; i++) {
+      const item = this.getTyped(i);
+      if (element instanceof MonoObject && item instanceof MonoObject) {
+        if (element.pointer.equals(item.pointer)) {
+          return i;
+        }
+      } else if (item === element) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Get index of last occurrence of an element
+   * @param element Element to search for
+   * @param fromIndex Start index for backward search
+   * @returns Index of element, or -1 if not found
+   */
+  lastIndexOf(element: T, fromIndex?: number): number {
+    const start = fromIndex ?? (this.length - 1);
+    for (let i = start; i >= 0; i--) {
+      const item = this.getTyped(i);
+      if (element instanceof MonoObject && item instanceof MonoObject) {
+        if (element.pointer.equals(item.pointer)) {
+          return i;
+        }
+      } else if (item === element) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Concatenate with another array (returns new JS array)
+   * @param other Other array to concatenate
+   * @returns New JavaScript array with combined elements
+   */
+  concat(other: MonoArray<T> | T[]): T[] {
+    const result = this.toArray();
+    if (other instanceof MonoArray) {
+      result.push(...other.toArray());
+    } else {
+      result.push(...other);
+    }
+    return result;
+  }
+
+  /**
+   * Flatten nested arrays (for arrays of arrays)
+   * @param depth Depth to flatten (default: 1)
+   * @returns Flattened JavaScript array
+   */
+  flat(depth: number = 1): any[] {
+    const items = this.toArray();
+    return items.flat(depth);
+  }
+
+  /**
+   * Check if every element satisfies the predicate (alias for all)
+   */
+  every(predicate: (item: T, index: number) => boolean): boolean {
+    return this.all(predicate);
+  }
+
+  /**
+   * Check if some element satisfies the predicate (alias for any)
+   */
+  some(predicate: (item: T, index: number) => boolean): boolean {
+    return this.any(predicate);
+  }
+
   /**
    * Make the array iterable with for...of
    */
@@ -594,11 +846,15 @@ export class MonoArray<T = any> extends MonoObject {
 
   /**
    * Create a new MonoArray
+   * @param api MonoApi instance
+   * @param elementClass The element type class
+   * @param length Number of elements
+   * @returns A new MonoArray instance
    */
-  static new(api: MonoApi, elementClass: MonoClass, length: number): MonoArray {
+  static new<T = any>(api: MonoApi, elementClass: MonoClass, length: number): MonoArray<T> {
     const domain = api.getRootDomain();
     const arrayPtr = api.native.mono_array_new(domain, elementClass.pointer, length);
-    return new MonoArray(api, arrayPtr);
+    return new MonoArray<T>(api, arrayPtr);
   }
 
   /**

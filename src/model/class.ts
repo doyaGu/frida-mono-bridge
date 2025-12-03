@@ -23,6 +23,10 @@ export interface MonoClassSummary {
   isValueType: boolean;
   isEnum: boolean;
   isDelegate: boolean;
+  isGenericType: boolean;
+  isGenericTypeDefinition: boolean;
+  genericArgumentCount: number;
+  genericParameterCount: number;
   parent: string | null;
   methodCount: number;
   fieldCount: number;
@@ -59,6 +63,9 @@ export class MonoClass extends MonoHandle {
   #interfaces: MonoClass[] | null = null;
   #nestedTypes: MonoClass[] | null = null;
   #initialized = false;
+  #isGenericTypeDefinition: boolean | null = null;
+  #isGenericInstance: boolean | null = null;
+  #genericParameterCount: number | null = null;
 
   /**
    * Get class name
@@ -273,6 +280,217 @@ export class MonoClass extends MonoHandle {
     return hasFlag(this.getFlags(), TypeAttribute.BeforeFieldInit);
   }
 
+  // ===== GENERIC TYPE SUPPORT (Standard Mono API) =====
+
+  /**
+   * Parse the generic parameter count from the class name.
+   * Generic types have a backtick followed by the parameter count (e.g., `List\`1`, `Dictionary\`2`).
+   * @returns The generic parameter count from the class name, or 0 if not a generic type.
+   */
+  private parseGenericParameterCountFromName(): number {
+    const name = this.getName();
+    const backtickIndex = name.lastIndexOf('`');
+    if (backtickIndex === -1) {
+      return 0;
+    }
+    const countStr = name.substring(backtickIndex + 1);
+    const count = parseInt(countStr, 10);
+    return isNaN(count) ? 0 : count;
+  }
+
+  /**
+   * Check if this is a generic type definition (open generic type like `List<T>`).
+   * Uses standard Mono API `mono_class_is_generic` if available, otherwise falls back to name parsing.
+   * This is the unbound form that can be used with makeGenericType().
+   */
+  isGenericTypeDefinition(): boolean {
+    if (this.#isGenericTypeDefinition !== null) {
+      return this.#isGenericTypeDefinition;
+    }
+
+    // Try mono_class_is_generic first (standard Mono API)
+    if (this.api.hasExport('mono_class_is_generic')) {
+      try {
+        const result = this.native.mono_class_is_generic(this.pointer);
+        this.#isGenericTypeDefinition = Number(result) !== 0;
+        return this.#isGenericTypeDefinition;
+      } catch {
+        // Fall through to name-based detection
+      }
+    }
+
+    // Fall back to name-based detection (backtick notation)
+    this.#isGenericTypeDefinition = this.parseGenericParameterCountFromName() > 0;
+    return this.#isGenericTypeDefinition;
+  }
+
+  /**
+   * Check if this is a constructed generic type (closed generic like `List<int>`).
+   * Uses standard Mono API via MonoType to detect MONO_TYPE_GENERICINST.
+   */
+  isConstructedGenericType(): boolean {
+    if (this.#isGenericInstance !== null) {
+      return this.#isGenericInstance;
+    }
+
+    try {
+      const monoType = this.getType();
+      // MonoTypeKind.GenericInstance corresponds to MONO_TYPE_GENERICINST (0x15)
+      this.#isGenericInstance = monoType.getKind() === 0x15; // MONO_TYPE_GENERICINST
+    } catch {
+      this.#isGenericInstance = false;
+    }
+
+    return this.#isGenericInstance;
+  }
+
+  /**
+   * Check if this class is a generic type (either open or closed).
+   * An open generic type has unbound type parameters (e.g., `List<T>`).
+   * A closed generic type has all type parameters bound (e.g., `List<int>`).
+   */
+  isGenericType(): boolean {
+    return this.isGenericTypeDefinition() || this.isConstructedGenericType();
+  }
+
+  /**
+   * Get the number of generic type parameters (for open generic type definitions).
+   * Parsed from the class name using backtick notation (e.g., `List\`1` returns 1).
+   * Returns 0 for non-generic types or constructed generic types.
+   */
+  getGenericParameterCount(): number {
+    if (this.#genericParameterCount !== null) {
+      return this.#genericParameterCount;
+    }
+
+    // Only generic type definitions have parameters
+    if (!this.isGenericTypeDefinition()) {
+      this.#genericParameterCount = 0;
+      return 0;
+    }
+
+    this.#genericParameterCount = this.parseGenericParameterCountFromName();
+    return this.#genericParameterCount;
+  }
+
+  /**
+   * Get the number of generic type arguments (for constructed generic types).
+   * For now, uses Unity API if available, otherwise returns 0.
+   * Returns 0 for non-generic types or open generic type definitions.
+   */
+  getGenericArgumentCount(): number {
+    // For constructed generic types, try Unity API if available
+    if (this.isConstructedGenericType()) {
+      if (this.api.hasExport('mono_unity_class_get_generic_argument_count')) {
+        try {
+          const count = this.native.mono_unity_class_get_generic_argument_count(this.pointer);
+          return Number(count);
+        } catch {
+          // Fall through
+        }
+      }
+      // Without Unity API, we can't easily get argument count for constructed types
+      // Could try parsing from type name in the future
+    }
+    return 0;
+  }
+
+  /**
+   * Get the generic type arguments for a constructed generic type.
+   * For example, for `List<string>`, returns `[System.String]`.
+   * Returns empty array for non-generic types.
+   * 
+   * Note: This currently requires Unity-specific API for full implementation.
+   * Without it, returns an empty array.
+   */
+  getGenericArguments(): MonoClass[] {
+    // This requires Unity API to enumerate actual type arguments
+    if (!this.api.hasExport('mono_unity_class_get_generic_argument_at')) {
+      return [];
+    }
+
+    try {
+      const count = this.getGenericArgumentCount();
+      const args: MonoClass[] = [];
+      for (let i = 0; i < count; i++) {
+        const argPtr = this.native.mono_unity_class_get_generic_argument_at(this.pointer, i);
+        if (!pointerIsNull(argPtr)) {
+          args.push(new MonoClass(this.api, argPtr));
+        }
+      }
+      return args;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Get the generic type definition for a constructed generic type.
+   * For example, for `List<string>`, returns the open `List<T>`.
+   * Returns null for non-generic types.
+   * 
+   * Note: This currently requires Unity-specific API for full implementation.
+   */
+  getGenericTypeDefinition(): MonoClass | null {
+    // Only constructed generic types have a type definition
+    if (!this.isConstructedGenericType()) {
+      return null;
+    }
+
+    if (!this.api.hasExport('mono_unity_class_get_generic_type_definition')) {
+      return null;
+    }
+
+    try {
+      const defPtr = this.native.mono_unity_class_get_generic_type_definition(this.pointer);
+      if (!pointerIsNull(defPtr)) {
+        return new MonoClass(this.api, defPtr);
+      }
+    } catch {
+      // Return null
+    }
+
+    return null;
+  }
+
+  /**
+   * Create a constructed generic type from this generic type definition.
+   * 
+   * Note: This method is not fully implemented. Creating new generic type
+   * instantiations at runtime requires complex mono_class_inflate_generic_type
+   * infrastructure.
+   * 
+   * @param typeArguments Array of MonoClass to use as type arguments
+   * @returns Constructed generic type, or null if construction failed
+   * 
+   * @example
+   * const listType = Mono.domain.class('System.Collections.Generic.List`1');
+   * const stringClass = Mono.domain.class('System.String');
+   * const stringListType = listType?.makeGenericType([stringClass]);
+   */
+  makeGenericType(typeArguments: MonoClass[]): MonoClass | null {
+    if (!this.isGenericTypeDefinition()) {
+      throw new Error(`${this.getFullName()} is not a generic type definition`);
+    }
+
+    const paramCount = this.getGenericParameterCount();
+    if (typeArguments.length !== paramCount) {
+      throw new Error(
+        `Type argument count mismatch: ${this.getFullName()} requires ${paramCount} ` +
+        `arguments but ${typeArguments.length} were provided`
+      );
+    }
+
+    // Generic instantiation requires building MonoGenericContext structure
+    // and calling mono_class_inflate_generic_type, which is complex.
+    // This is a placeholder for future implementation.
+    console.log(`[WARN] makeGenericType is not fully implemented. ` +
+                `Cannot create ${this.getFullName()}<${typeArguments.map(t => t.getFullName()).join(', ')}>`);
+    return null;
+  }
+
+  // ===== END GENERIC TYPE SUPPORT =====
+
   isSubclassOf(target: MonoClass, checkInterfaces = false): boolean {
     return (this.native.mono_class_is_subclass_of(this.pointer, target.pointer, checkInterfaces ? 1 : 0) as number) !== 0;
   }
@@ -413,6 +631,10 @@ export class MonoClass extends MonoHandle {
       isValueType: this.isValueType(),
       isEnum: this.isEnum(),
       isDelegate: this.isDelegate(),
+      isGenericType: this.isGenericType(),
+      isGenericTypeDefinition: this.isGenericTypeDefinition(),
+      genericArgumentCount: this.getGenericArgumentCount(),
+      genericParameterCount: this.getGenericParameterCount(),
       parent: parent ? parent.getFullName() : null,
       methodCount: this.getMethods().length,
       fieldCount: this.getFields().length,

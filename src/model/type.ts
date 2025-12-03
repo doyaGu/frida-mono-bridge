@@ -148,8 +148,8 @@ export class MonoType extends MonoHandle {
 
   isValueType(): boolean {
     const kind = this.getKind();
-    // 基于类型种类判断是否是值类型
-    // ValueType, Enum, Primitive types (Boolean, Char, I1-I8, U1-U8, R4, R8) 都是值类型
+    // Determine if it's a value type based on the type kind
+    // ValueType, Enum, Primitive types (Boolean, Char, I1-I8, U1-U8, R4, R8) are all value types
     switch (kind) {
       case MonoTypeKind.ValueType:
       case MonoTypeKind.Enum:

@@ -75,27 +75,93 @@ export class MonoAssembly extends MonoHandle {
   }
 
   /**
-   * Get assembly full name
+   * Get assembly full name (including version, culture, and public key token)
    */
   getFullName(): string {
-    // For now, return the simple name
-    return this.getName();
+    const name = this.getName();
+    const version = this.getVersion();
+    const culture = this.getCulture();
+    
+    // Try to get public key token
+    let publicKeyToken = 'null';
+    try {
+      const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
+      if (!assemblyNamePtr.isNull() && this.api.hasExport('mono_assembly_name_get_pubkeytoken')) {
+        const tokenPtr = this.native.mono_assembly_name_get_pubkeytoken(assemblyNamePtr);
+        if (!tokenPtr.isNull()) {
+          // Public key token is 8 bytes
+          const bytes: string[] = [];
+          for (let i = 0; i < 8; i++) {
+            const byte = tokenPtr.add(i).readU8();
+            if (byte === 0 && i === 0) break; // No token
+            bytes.push(byte.toString(16).padStart(2, '0'));
+          }
+          if (bytes.length > 0) {
+            publicKeyToken = bytes.join('');
+          }
+        }
+      }
+    } catch {
+      // Keep default 'null'
+    }
+    
+    return `${name}, Version=${version.major}.${version.minor}.${version.build}.${version.revision}, Culture=${culture}, PublicKeyToken=${publicKeyToken}`;
   }
 
   /**
    * Get assembly culture
    */
   getCulture(): string {
-    // Would need to use mono_assembly_name_get_culture
-    return "neutral";
+    try {
+      const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
+      if (!assemblyNamePtr.isNull()) {
+        // Check if the function exists
+        if (this.api.hasExport('mono_assembly_name_get_culture')) {
+          const culturePtr = this.native.mono_assembly_name_get_culture(assemblyNamePtr);
+          if (!culturePtr.isNull()) {
+            const culture = culturePtr.readUtf8String();
+            if (culture && culture !== '') {
+              return culture;
+            }
+          }
+        }
+      }
+    } catch {
+      // Fall through to default
+    }
+    return 'neutral';
   }
 
   /**
    * Get assembly version
    */
   getVersion(): { major: number; minor: number; build: number; revision: number } {
-    // Would need to use mono_assembly_name_get_version
-    return { major: 1, minor: 0, build: 0, revision: 0 };
+    try {
+      const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
+      if (!assemblyNamePtr.isNull() && this.api.hasExport('mono_assembly_name_get_version')) {
+        // mono_assembly_name_get_version returns major version and takes out params for minor/build/revision
+        const minorPtr = Memory.alloc(4);
+        const buildPtr = Memory.alloc(4);
+        const revisionPtr = Memory.alloc(4);
+        
+        const major = this.native.mono_assembly_name_get_version(
+          assemblyNamePtr,
+          minorPtr,
+          buildPtr,
+          revisionPtr
+        );
+        
+        return {
+          major: major as number,
+          minor: minorPtr.readU16(),
+          build: buildPtr.readU16(),
+          revision: revisionPtr.readU16()
+        };
+      }
+    } catch {
+      // Fall through to default
+    }
+    return { major: 0, minor: 0, build: 0, revision: 0 };
   }
 
   /**
@@ -243,14 +309,93 @@ export class MonoAssembly extends MonoHandle {
   // ===== DEPENDENCY ANALYSIS =====
 
   /**
-   * Get all assemblies referenced by this assembly
+   * Get all assemblies referenced by this assembly.
+   * 
+   * This reads the AssemblyRef metadata table to find all referenced assemblies,
+   * then attempts to resolve them from loaded assemblies in the current domain.
    */
   getReferencedAssemblies(): MonoAssembly[] {
     if (this.#referencedAssemblies === null) {
+      this.#referencedAssemblies = [];
+      
       try {
-        // This would require assembly dependency analysis
-        // For now, return empty array
-        this.#referencedAssemblies = [];
+        const image = this.#getImage();
+        
+        // MONO_TABLE_ASSEMBLYREF = 35
+        const MONO_TABLE_ASSEMBLYREF = 35;
+        
+        // Check if the API is available
+        if (!this.api.hasExport('mono_image_get_table_rows')) {
+          return this.#referencedAssemblies;
+        }
+        
+        // Get number of assembly references
+        const refCount = this.native.mono_image_get_table_rows(
+          image.pointer,
+          MONO_TABLE_ASSEMBLYREF
+        );
+        
+        if (refCount <= 0) {
+          return this.#referencedAssemblies;
+        }
+        
+        // Get loaded assemblies to resolve references
+        const loadedAssemblies = new Map<string, MonoAssembly>();
+        
+        // Use mono_assembly_foreach to enumerate all loaded assemblies
+        const seenPtrs = new Set<string>();
+        const callback = new NativeCallback(
+          (assemblyPtr: NativePointer, _userData: NativePointer) => {
+            if (assemblyPtr.isNull()) return;
+            const key = assemblyPtr.toString();
+            if (seenPtrs.has(key)) return;
+            seenPtrs.add(key);
+            
+            try {
+              const asm = new MonoAssembly(this.api, assemblyPtr);
+              const name = asm.getName().toLowerCase();
+              loadedAssemblies.set(name, asm);
+            } catch {
+              // Skip invalid assemblies
+            }
+          },
+          'void',
+          ['pointer', 'pointer']
+        );
+        
+        this.native.mono_assembly_foreach(callback, NULL);
+        
+        // Try to get referenced assembly names using mono_assembly_get_assemblyref
+        if (this.api.hasExport('mono_assembly_get_assemblyref')) {
+          const assemblyNameStruct = Memory.alloc(256); // MonoAssemblyName is a structure
+          
+          for (let i = 0; i < Number(refCount); i++) {
+            try {
+              // mono_assembly_get_assemblyref fills the MonoAssemblyName structure
+              this.native.mono_assembly_get_assemblyref(image.pointer, i, assemblyNameStruct);
+              
+              // Get name from the assembly name structure
+              const namePtr = this.native.mono_assembly_name_get_name(assemblyNameStruct);
+              if (!namePtr.isNull()) {
+                const refName = namePtr.readUtf8String();
+                if (refName) {
+                  const normalizedName = refName.toLowerCase();
+                  const resolved = loadedAssemblies.get(normalizedName);
+                  if (resolved && resolved.pointer.toString() !== this.pointer.toString()) {
+                    // Avoid duplicates
+                    if (!this.#referencedAssemblies.some(a => 
+                      a.pointer.toString() === resolved.pointer.toString()
+                    )) {
+                      this.#referencedAssemblies.push(resolved);
+                    }
+                  }
+                }
+              }
+            } catch {
+              // Skip invalid references
+            }
+          }
+        }
       } catch {
         this.#referencedAssemblies = [];
       }
