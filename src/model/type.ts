@@ -69,6 +69,8 @@ export interface MonoTypeSummary {
   isValueType: boolean;
   isGeneric: boolean;
   isVoid: boolean;
+  isArray: boolean;
+  arrayRank: number;
   size: number;
   alignment: number;
 }
@@ -177,6 +179,41 @@ export class MonoType extends MonoHandle {
     return this.getKind() === MonoTypeKind.Void;
   }
 
+  /**
+   * Check if this type is an array type.
+   */
+  isArray(): boolean {
+    const kind = this.getKind();
+    return kind === MonoTypeKind.Array || kind === MonoTypeKind.SingleDimArray;
+  }
+
+  /**
+   * Get the rank (number of dimensions) of an array type.
+   * Returns 0 for non-array types.
+   * Returns 1 for single-dimensional arrays (SZARRAY).
+   * Returns the actual rank for multi-dimensional arrays (ARRAY).
+   */
+  getArrayRank(): number {
+    const kind = this.getKind();
+    
+    // Single-dimensional array (SZARRAY) always has rank 1
+    if (kind === MonoTypeKind.SingleDimArray) {
+      return 1;
+    }
+    
+    // Multi-dimensional array (ARRAY) - get rank from class
+    if (kind === MonoTypeKind.Array) {
+      const arrayClass = this.native.mono_type_get_class(this.pointer);
+      if (!pointerIsNull(arrayClass)) {
+        const rank = this.native.mono_class_get_rank(arrayClass) as number;
+        return rank;
+      }
+    }
+    
+    // Not an array type
+    return 0;
+  }
+
   getStackSize(): { size: number; alignment: number } {
     const alignPtr = Memory.alloc(4);
     const size = this.native.mono_type_stack_size(this.pointer, alignPtr) as number;
@@ -208,6 +245,8 @@ export class MonoType extends MonoHandle {
       isValueType: this.isValueType(),
       isGeneric: this.isGenericParameter(),
       isVoid: this.isVoid(),
+      isArray: this.isArray(),
+      arrayRank: this.getArrayRank(),
       size,
       alignment,
     };

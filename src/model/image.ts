@@ -143,6 +143,80 @@ export class MonoImage extends MonoHandle {
     }
     return this.native.mono_table_info_get_rows(table) as number;
   }
+
+  // ===== NEW METHODS =====
+
+  /**
+   * Get all unique namespaces in this image.
+   * Collects namespaces from all classes and returns them sorted.
+   * 
+   * @returns Array of unique namespace strings (empty string for global namespace)
+   * 
+   * @example
+   * const namespaces = image.getNamespaces();
+   * // ['', 'System', 'System.Collections', 'Game', 'Game.Player']
+   */
+  getNamespaces(): string[] {
+    const namespaces = new Set<string>();
+    
+    this.enumerateClasses((klass) => {
+      const ns = klass.getNamespace();
+      namespaces.add(ns);
+    });
+    
+    return Array.from(namespaces).sort();
+  }
+
+  /**
+   * Get a class by its metadata token.
+   * Uses mono_class_get to resolve the token to a MonoClass.
+   * 
+   * @param token Metadata token (TypeDef token with MONO_TOKEN_TYPE_DEF flag)
+   * @returns MonoClass if found, null otherwise
+   * 
+   * @example
+   * // Get class by raw token
+   * const klass = image.getTypeByToken(0x02000001);
+   * 
+   * // Get class by index (will be converted to token)
+   * const klass2 = image.getTypeByToken(1, true);
+   */
+  getTypeByToken(token: number, isIndex = false): MonoClass | null {
+    // Convert index to token if needed
+    const actualToken = isIndex ? (MONO_METADATA_TOKEN_TYPEDEF | token) : token;
+    
+    try {
+      const klassPtr = this.native.mono_class_get(this.pointer, actualToken);
+      if (pointerIsNull(klassPtr)) {
+        return null;
+      }
+      return new MonoClass(this.api, klassPtr);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get classes filtered by namespace.
+   * 
+   * @param namespace Namespace to filter by (exact match, use empty string for global)
+   * @returns Array of classes in the specified namespace
+   * 
+   * @example
+   * const gameClasses = image.getClassesByNamespace('Game');
+   * const globalClasses = image.getClassesByNamespace('');
+   */
+  getClassesByNamespace(namespace: string): MonoClass[] {
+    const classes: MonoClass[] = [];
+    
+    this.enumerateClasses((klass) => {
+      if (klass.getNamespace() === namespace) {
+        classes.push(klass);
+      }
+    });
+    
+    return classes;
+  }
 }
 
 const MONO_METADATA_TABLE_TYPEDEF = 0x02;

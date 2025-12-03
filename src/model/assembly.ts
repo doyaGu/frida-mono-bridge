@@ -259,15 +259,73 @@ export class MonoAssembly extends MonoHandle {
 
   /**
    * Get performance statistics for this assembly
+   * Measures actual lookup times and estimates memory usage
    */
   getPerformanceStats(): AssemblyPerformanceStats {
+    const name = this.getName();
+    const image = this.#getImage();
+    
+    // Measure class lookup time
+    const classStart = Date.now();
+    const classCount = image.getClassCount();
+    // Do a sample lookup
+    try {
+      image.tryClassFromName('System', 'Object');
+    } catch {}
+    const classLookupTime = Date.now() - classStart;
+    
+    // Measure method lookup time
+    const methodStart = Date.now();
+    let methodCount = 0;
+    try {
+      const classes = image.getClasses();
+      if (classes.length > 0) {
+        const firstClass = classes[0];
+        methodCount = firstClass.getMethods().length;
+      }
+    } catch {}
+    const methodLookupTime = Date.now() - methodStart;
+    
+    // Measure field access time
+    const fieldStart = Date.now();
+    let fieldCount = 0;
+    try {
+      const classes = image.getClasses();
+      if (classes.length > 0) {
+        const firstClass = classes[0];
+        fieldCount = firstClass.getFields().length;
+      }
+    } catch {}
+    const fieldAccessTime = Date.now() - fieldStart;
+    
+    // Estimate memory usage based on class count and metadata
+    // This is a rough estimate: ~1KB per class for metadata
+    const estimatedMemoryUsage = classCount * 1024;
+    
+    // Cache hit rate is not directly measurable, estimate based on repeated lookups
+    let cacheHitRate = 0;
+    try {
+      const lookupStart = Date.now();
+      for (let i = 0; i < 10; i++) {
+        image.tryClassFromName('System', 'Object');
+      }
+      const lookupTime = Date.now() - lookupStart;
+      // If 10 lookups take less than 2ms total, assume good cache hit rate
+      cacheHitRate = lookupTime < 2 ? 0.95 : lookupTime < 10 ? 0.7 : 0.5;
+    } catch {
+      cacheHitRate = 0;
+    }
+    
     return {
-      assemblyName: this.getName(),
-      classLookupTime: 0, // Would need measurement
-      methodLookupTime: 0,
-      fieldAccessTime: 0,
-      totalMemoryUsage: 0,
-      cacheHitRate: 0
+      assemblyName: name,
+      classCount,
+      methodCount,
+      fieldCount,
+      classLookupTime,
+      methodLookupTime,
+      fieldAccessTime,
+      totalMemoryUsage: estimatedMemoryUsage,
+      cacheHitRate
     };
   }
 
@@ -404,14 +462,65 @@ export class MonoAssembly extends MonoHandle {
   }
 
   /**
-   * Get all assemblies that reference this assembly
+   * Get all assemblies that reference this assembly.
+   * 
+   * This performs a reverse dependency analysis by iterating through all loaded
+   * assemblies and checking if they reference this assembly.
+   * 
+   * @returns Array of assemblies that depend on this assembly
+   * 
+   * @example
+   * const mscorlib = domain.getAssembly('mscorlib');
+   * const dependents = mscorlib.getReferencingAssemblies();
+   * // Most assemblies will reference mscorlib
    */
   getReferencingAssemblies(): MonoAssembly[] {
     if (this.#referencingAssemblies === null) {
+      this.#referencingAssemblies = [];
+      
       try {
-        // This would require reverse dependency analysis
-        // For now, return empty array
-        this.#referencingAssemblies = [];
+        const myName = this.getName().toLowerCase();
+        const myPointer = this.pointer.toString();
+        
+        // Enumerate all loaded assemblies
+        const seenPtrs = new Set<string>();
+        const callback = new NativeCallback(
+          (assemblyPtr: NativePointer, _userData: NativePointer) => {
+            if (assemblyPtr.isNull()) return;
+            const key = assemblyPtr.toString();
+            if (seenPtrs.has(key)) return;
+            seenPtrs.add(key);
+            
+            // Skip self
+            if (key === myPointer) return;
+            
+            try {
+              const otherAsm = new MonoAssembly(this.api, assemblyPtr);
+              
+              // Check if this assembly references us
+              const refs = otherAsm.getReferencedAssemblies();
+              const referencesMe = refs.some(ref => 
+                ref.getName().toLowerCase() === myName ||
+                ref.pointer.toString() === myPointer
+              );
+              
+              if (referencesMe) {
+                // Avoid duplicates
+                if (!this.#referencingAssemblies!.some(a => 
+                  a.pointer.toString() === key
+                )) {
+                  this.#referencingAssemblies!.push(otherAsm);
+                }
+              }
+            } catch {
+              // Skip assemblies that fail to enumerate
+            }
+          },
+          'void',
+          ['pointer', 'pointer']
+        );
+        
+        this.native.mono_assembly_foreach(callback, NULL);
       } catch {
         this.#referencingAssemblies = [];
       }
@@ -642,6 +751,9 @@ export interface AssemblySizeInfo {
 
 export interface AssemblyPerformanceStats {
   assemblyName: string;
+  classCount: number;
+  methodCount: number;
+  fieldCount: number;
   classLookupTime: number;
   methodLookupTime: number;
   fieldAccessTime: number;

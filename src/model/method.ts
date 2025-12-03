@@ -15,6 +15,8 @@ import { Logger } from "../utils/log";
 export interface InvokeOptions {
   throwOnManagedException?: boolean;
   autoBoxPrimitives?: boolean;
+  /** Return Int64/UInt64 as bigint instead of number (prevents precision loss) */
+  returnBigInt?: boolean;
 }
 
 /**
@@ -61,6 +63,8 @@ export interface MonoMethodSummary {
   isVirtual: boolean;
   isAbstract: boolean;
   isConstructor: boolean;
+  isGenericMethod: boolean;
+  genericArgumentCount: number;
   callConvention: number;
   parameterCount: number;
   parameters: Array<{ index: number; isOut: boolean; type: MonoTypeSummary }>;
@@ -258,12 +262,182 @@ export class MonoMethod extends MonoHandle {
       isVirtual: this.isVirtual(),
       isAbstract: this.isAbstract(),
       isConstructor: this.isConstructor(),
+      isGenericMethod: this.isGenericMethod(),
+      genericArgumentCount: this.getGenericArgumentCount(),
       callConvention: this.getCallConvention(),
       parameterCount: parameters.length,
       parameters,
       returnType,
       token: this.getToken(),
     };
+  }
+
+  // ===== GENERIC METHOD SUPPORT =====
+
+  /**
+   * Check if this method is a generic method (has generic type parameters).
+   * For example, `void Swap<T>(ref T a, ref T b)` is a generic method.
+   * 
+   * This uses the Unity API if available, otherwise falls back to checking
+   * the method name for the generic arity marker (backtick notation).
+   */
+  isGenericMethod(): boolean {
+    // Try Unity API first
+    if (this.api.hasExport('mono_unity_method_is_generic')) {
+      try {
+        const result = this.native.mono_unity_method_is_generic(this.pointer);
+        return Number(result) !== 0;
+      } catch {
+        // Fall through to name-based detection
+      }
+    }
+
+    // Fall back to checking method full name for generic markers
+    // Generic methods in mono are marked with backtick notation in their full name
+    const fullName = this.getFullName(true);
+    // Generic methods will have <T> or similar in their signature
+    return fullName.includes('<') && fullName.includes('>');
+  }
+
+  /**
+   * Check if this is a generic method definition (open generic method).
+   * A generic method definition has unbound type parameters.
+   */
+  isGenericMethodDefinition(): boolean {
+    // If it's a generic method, we need to check if it's the definition
+    // or an instantiated version
+    if (!this.isGenericMethod()) {
+      return false;
+    }
+
+    // For now, assume all generic methods we find are definitions
+    // Full implementation would need mono_method_is_generic_sharable_full
+    // or mono_method_is_inflated checks
+    const fullName = this.getFullName(true);
+    // Generic method definitions typically have unbound parameters like <T, U>
+    // while instantiated methods have concrete types like <System.String>
+    const hasUnboundParams = /\[[A-Z][a-zA-Z0-9_,\s]*\]/.test(fullName) ||
+                             /<[A-Z][a-zA-Z0-9_,\s]*>/.test(fullName);
+    return hasUnboundParams;
+  }
+
+  /**
+   * Get the number of generic type parameters for this method.
+   * Returns 0 for non-generic methods.
+   */
+  getGenericArgumentCount(): number {
+    // Try Unity API first
+    if (this.api.hasExport('mono_unity_method_get_generic_argument_count')) {
+      try {
+        const count = this.native.mono_unity_method_get_generic_argument_count(this.pointer);
+        return Number(count);
+      } catch {
+        // Fall through to name parsing
+      }
+    }
+
+    // Fall back to parsing from method name
+    // Generic methods are marked like MethodName`2 or in full name <T, U>
+    const fullName = this.getFullName(true);
+    
+    // Count type parameters in angle brackets
+    const match = fullName.match(/<([^>]+)>/);
+    if (match) {
+      const params = match[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+      return params.length;
+    }
+
+    // Check for backtick notation in method name
+    const nameMatch = this.getName().match(/`(\d+)/);
+    if (nameMatch) {
+      return parseInt(nameMatch[1], 10);
+    }
+
+    return 0;
+  }
+
+  /**
+   * Get the generic type arguments for this method.
+   * For a generic method definition, returns the type parameter classes.
+   * For an instantiated generic method, returns the actual type arguments.
+   * 
+   * Note: This requires Unity API for full implementation.
+   * Without it, returns an empty array.
+   */
+  getGenericArguments(): MonoClass[] {
+    // This requires Unity API
+    if (!this.api.hasExport('mono_unity_method_get_generic_argument_at')) {
+      return [];
+    }
+
+    try {
+      const count = this.getGenericArgumentCount();
+      const args: MonoClass[] = [];
+      for (let i = 0; i < count; i++) {
+        const argPtr = this.native.mono_unity_method_get_generic_argument_at(this.pointer, i);
+        if (!pointerIsNull(argPtr)) {
+          args.push(new MonoClass(this.api, argPtr));
+        }
+      }
+      return args;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Create an instantiated generic method from this generic method definition.
+   * 
+   * Note: This method requires mono_class_inflate_generic_method and 
+   * MonoGenericContext infrastructure which is complex to implement.
+   * Currently returns null - full implementation deferred.
+   * 
+   * @param typeArguments Array of MonoClass to use as type arguments
+   * @returns Instantiated generic method, or null if instantiation failed
+   * 
+   * @example
+   * // Get a generic method like T Max<T>(T a, T b)
+   * const maxMethod = mathClass.method('Max`1');
+   * // Create Max<int>
+   * const maxInt = maxMethod?.makeGenericMethod([intClass]);
+   */
+  makeGenericMethod(typeArguments: MonoClass[]): MonoMethod | null {
+    // This requires mono_class_inflate_generic_method with a properly constructed
+    // MonoGenericContext. The context needs:
+    // - class_inst: for class type arguments (null for methods)
+    // - method_inst: for method type arguments
+    
+    // Creating MonoGenericInst is complex and requires internal mono structures
+    // that aren't easily accessible from Frida
+    
+    // For now, return null indicating not implemented
+    // Full implementation would need:
+    // 1. Create MonoGenericInst from typeArguments
+    // 2. Create MonoGenericContext with method_inst set
+    // 3. Call mono_class_inflate_generic_method(this.pointer, context)
+    
+    if (!this.isGenericMethodDefinition()) {
+      return null;
+    }
+
+    const expectedCount = this.getGenericArgumentCount();
+    if (typeArguments.length !== expectedCount) {
+      throw new Error(
+        `Generic method ${this.getName()} expects ${expectedCount} type arguments, ` +
+        `but ${typeArguments.length} were provided`
+      );
+    }
+
+    // Try to use mono_class_inflate_generic_method if we can construct the context
+    if (!this.api.hasExport('mono_class_inflate_generic_method')) {
+      return null;
+    }
+
+    // Without access to MonoGenericContext creation APIs, we cannot proceed
+    // This would require either:
+    // - Unity-specific APIs for method instantiation
+    // - Low-level access to mono metadata structures
+    return null;
   }
 
   invoke(instance: MonoObject | NativePointer | null, args: MethodArgument[] = [], options: InvokeOptions = {}): NativePointer {
@@ -297,10 +471,13 @@ export class MonoMethod extends MonoHandle {
    * 
    * // Calling a method that returns a struct/object
    * const result = method.call<MonoObject>(obj, []);
+   * 
+   * // Calling a method that returns Int64 with BigInt option
+   * const bigValue = method.call<bigint>(null, [], { returnBigInt: true });
    */
   call<T = any>(instance: MonoObject | NativePointer | null, args: MethodArgument[] = [], options: InvokeOptions = {}): T {
     const rawResult = this.invoke(instance, args, options);
-    return this.unboxResult<T>(rawResult);
+    return this.unboxResult<T>(rawResult, options);
   }
 
   /**
@@ -319,7 +496,7 @@ export class MonoMethod extends MonoHandle {
     return {
       raw: rawResult,
       isNull,
-      value: isNull ? (null as unknown as T) : this.unboxResult<T>(rawResult),
+      value: isNull ? (null as unknown as T) : this.unboxResult<T>(rawResult, options),
       type: returnType,
     };
   }
@@ -327,8 +504,9 @@ export class MonoMethod extends MonoHandle {
   /**
    * Unbox the raw result pointer based on the return type.
    * Handles value types, strings, and reference types automatically.
+   * @param options Include returnBigInt to preserve Int64/UInt64 precision
    */
-  private unboxResult<T>(rawResult: NativePointer): T {
+  private unboxResult<T>(rawResult: NativePointer, options: InvokeOptions = {}): T {
     if (pointerIsNull(rawResult)) {
       return null as unknown as T;
     }
@@ -348,7 +526,7 @@ export class MonoMethod extends MonoHandle {
 
     // Handle value types (need to unbox)
     if (returnType.isValueType()) {
-      return this.unboxValue(rawResult, kind) as unknown as T;
+      return this.unboxValue(rawResult, kind, options) as unknown as T;
     }
 
     // Handle reference types - return wrapped MonoObject
@@ -357,8 +535,9 @@ export class MonoMethod extends MonoHandle {
 
   /**
    * Unbox a value type from a boxed MonoObject pointer
+   * @param options Include returnBigInt to preserve Int64/UInt64 as bigint
    */
-  private unboxValue(boxedPtr: NativePointer, kind: MonoTypeKind): any {
+  private unboxValue(boxedPtr: NativePointer, kind: MonoTypeKind, options: InvokeOptions = {}): any {
     const unboxed = this.api.native.mono_object_unbox(boxedPtr);
     
     switch (kind) {
@@ -378,8 +557,18 @@ export class MonoMethod extends MonoHandle {
       case MonoTypeKind.U4:
         return unboxed.readU32();
       case MonoTypeKind.I8:
+        // Return as bigint if requested, otherwise convert to number (may lose precision)
+        if (options.returnBigInt) {
+          const int64Val = unboxed.readS64();
+          return BigInt(int64Val.toString());
+        }
         return unboxed.readS64().toNumber();
       case MonoTypeKind.U8:
+        // Return as bigint if requested, otherwise convert to number (may lose precision)
+        if (options.returnBigInt) {
+          const uint64Val = unboxed.readU64();
+          return BigInt(uint64Val.toString());
+        }
         return unboxed.readU64().toNumber();
       case MonoTypeKind.R4:
         return unboxed.readFloat();
@@ -389,7 +578,7 @@ export class MonoMethod extends MonoHandle {
         // For enums, get underlying type and unbox recursively
         const underlying = this.getReturnType().getUnderlyingType();
         if (underlying) {
-          return this.unboxValue(boxedPtr, underlying.getKind());
+          return this.unboxValue(boxedPtr, underlying.getKind(), options);
         }
         // Default to int32 for unknown enums
         return unboxed.readS32();

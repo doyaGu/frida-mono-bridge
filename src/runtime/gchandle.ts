@@ -35,6 +35,13 @@ export class GCHandlePool {
 
   constructor(private readonly api: MonoApi) {}
 
+  /**
+   * Get the number of active handles in this pool
+   */
+  get size(): number {
+    return this.handles.size;
+  }
+
   create(object: NativePointer, pinned = false): GCHandle {
     const handleId = this.api.native.mono_gchandle_new(object, pinned) as number;
     const handle = new GCHandle(this.api, handleId, false);

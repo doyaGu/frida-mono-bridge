@@ -500,4 +500,131 @@ export class MonoObject extends MonoHandle {
       errors
     };
   }
+
+  // ===== OBJECT CLONING =====
+
+  /**
+   * Clone this object (shallow copy).
+   * Creates a new instance and copies all field values.
+   * 
+   * For reference type fields, only the reference is copied (shallow).
+   * For value type fields, the value is copied.
+   * 
+   * Note: This does not invoke constructors or ICloneable.Clone().
+   * For proper deep cloning, implement ICloneable or use serialization.
+   * 
+   * @returns A new MonoObject with copied field values
+   * 
+   * @example
+   * const player = domain.class('Game.Player').newObject();
+   * const playerClone = player.clone();
+   */
+  clone(): MonoObject {
+    const klass = this.getClass();
+    
+    // For value types (structs), we can use mono_object_clone if available
+    if (this.api.hasExport('mono_object_clone')) {
+      try {
+        const clonedPtr = this.native.mono_object_clone(this.pointer);
+        if (!pointerIsNull(clonedPtr)) {
+          return new MonoObject(this.api, clonedPtr);
+        }
+      } catch {
+        // Fall through to manual clone
+      }
+    }
+    
+    // Manual clone: create new object and copy fields
+    const newObj = klass.newObject(false); // Don't initialize (no constructor call)
+    
+    // Copy all instance fields
+    for (const field of klass.getFields()) {
+      if (!field.isStatic()) {
+        try {
+          const value = field.getValue(this.pointer);
+          field.setValue(newObj.pointer, value);
+        } catch {
+          // Skip fields that fail to copy (might be special runtime fields)
+        }
+      }
+    }
+    
+    return newObj;
+  }
+
+  /**
+   * Clone this object with deep copying of reference types.
+   * 
+   * Warning: This is a best-effort deep clone that may not work for all types.
+   * Complex objects with circular references, native resources, or special
+   * runtime state may not clone correctly.
+   * 
+   * @param maxDepth Maximum recursion depth for deep cloning (default: 10)
+   * @returns A new MonoObject with recursively cloned field values
+   * 
+   * @example
+   * const player = domain.class('Game.Player').newObject();
+   * const deepClone = player.deepClone();
+   */
+  deepClone(maxDepth = 10): MonoObject {
+    return this.deepCloneInternal(maxDepth, new Map());
+  }
+
+  /**
+   * Internal deep clone implementation with cycle detection
+   */
+  private deepCloneInternal(
+    maxDepth: number,
+    visited: Map<string, MonoObject>
+  ): MonoObject {
+    // Check for cycles
+    const ptrKey = this.pointer.toString();
+    if (visited.has(ptrKey)) {
+      return visited.get(ptrKey)!;
+    }
+    
+    // Depth limit reached, do shallow clone
+    if (maxDepth <= 0) {
+      return this.clone();
+    }
+    
+    const klass = this.getClass();
+    
+    // Create new object without initialization
+    const newObj = klass.newObject(false);
+    visited.set(ptrKey, newObj);
+    
+    // Copy all instance fields
+    for (const field of klass.getFields()) {
+      if (field.isStatic()) continue;
+      
+      try {
+        const fieldType = field.getType();
+        const value = field.getValue(this.pointer);
+        
+        // Check if this is a reference type that needs deep cloning
+        if (fieldType.isReferenceType() && !pointerIsNull(value)) {
+          // Don't deep clone strings (immutable) or null
+          const typeName = fieldType.getName();
+          if (typeName !== 'String' && typeName !== 'System.String') {
+            try {
+              const refObj = new MonoObject(this.api, value);
+              const clonedRef = refObj.deepCloneInternal(maxDepth - 1, visited);
+              field.setValue(newObj.pointer, clonedRef.pointer);
+              continue;
+            } catch {
+              // Fall through to shallow copy
+            }
+          }
+        }
+        
+        // Shallow copy for value types, strings, and failed deep clones
+        field.setValue(newObj.pointer, value);
+      } catch {
+        // Skip fields that fail to copy
+      }
+    }
+    
+    return newObj;
+  }
 }
