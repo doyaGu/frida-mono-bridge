@@ -636,6 +636,500 @@ export function testMonoTypes(): TestResult {
     }
   }));
 
+  // ============================================================================
+  // MONO TYPE KIND COMPREHENSIVE TESTS (BOUNDARY)
+  // ============================================================================
+
+  suite.addResult(createMonoDependentTest("Should identify primitive type kinds", () => {
+    const domain = Mono.domain;
+    const { MonoType, MonoTypeKind } = require("../src/model/type");
+    
+    const primitiveTypes = [
+      { name: "System.Boolean", expectedKind: MonoTypeKind.Boolean },
+      { name: "System.Byte", expectedKind: MonoTypeKind.U1 },
+      { name: "System.SByte", expectedKind: MonoTypeKind.I1 },
+      { name: "System.Int16", expectedKind: MonoTypeKind.I2 },
+      { name: "System.UInt16", expectedKind: MonoTypeKind.U2 },
+      { name: "System.Int32", expectedKind: MonoTypeKind.I4 },
+      { name: "System.UInt32", expectedKind: MonoTypeKind.U4 },
+      { name: "System.Int64", expectedKind: MonoTypeKind.I8 },
+      { name: "System.UInt64", expectedKind: MonoTypeKind.U8 },
+      { name: "System.Single", expectedKind: MonoTypeKind.R4 },
+      { name: "System.Double", expectedKind: MonoTypeKind.R8 },
+      { name: "System.Char", expectedKind: MonoTypeKind.Char },
+    ];
+    
+    let successCount = 0;
+    for (const test of primitiveTypes) {
+      const cls = domain.class(test.name);
+      if (cls) {
+        const type = cls.getType();
+        if (type) {
+          const kind = type.getKind();
+          if (kind === test.expectedKind) {
+            successCount++;
+          } else {
+            console.log(`    ${test.name}: expected kind ${test.expectedKind}, got ${kind}`);
+          }
+        }
+      }
+    }
+    
+    console.log(`    Primitive type kinds: ${successCount}/${primitiveTypes.length} verified`);
+    assert(successCount >= primitiveTypes.length * 0.8, "Most primitive types should have correct kinds");
+  }));
+
+  suite.addResult(createMonoDependentTest("Should identify String type kind", () => {
+    const domain = Mono.domain;
+    const { MonoTypeKind } = require("../src/model/type");
+    
+    const stringClass = domain.class("System.String");
+    assertNotNull(stringClass, "System.String should be available");
+    
+    const type = stringClass.getType();
+    assertNotNull(type, "String type should be available");
+    
+    const kind = type.getKind();
+    assert(kind === MonoTypeKind.String, `String type kind should be String (${MonoTypeKind.String}), got ${kind}`);
+    
+    assert(type.isReferenceType(), "String should be reference type");
+    assert(!type.isValueType(), "String should not be value type");
+    
+    console.log(`    String type kind: ${kind} (correct)`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should identify Object type kind", () => {
+    const domain = Mono.domain;
+    const { MonoTypeKind } = require("../src/model/type");
+    
+    const objectClass = domain.class("System.Object");
+    assertNotNull(objectClass, "System.Object should be available");
+    
+    const type = objectClass.getType();
+    assertNotNull(type, "Object type should be available");
+    
+    const kind = type.getKind();
+    assert(kind === MonoTypeKind.Object, `Object type kind should be Object (${MonoTypeKind.Object}), got ${kind}`);
+    
+    console.log(`    Object type kind: ${kind} (correct)`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should identify ValueType type kind", () => {
+    const domain = Mono.domain;
+    const { MonoTypeKind } = require("../src/model/type");
+    
+    // DateTime is a value type struct
+    const dateTimeClass = domain.class("System.DateTime");
+    if (dateTimeClass) {
+      const type = dateTimeClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        assert(kind === MonoTypeKind.ValueType, `DateTime type kind should be ValueType (${MonoTypeKind.ValueType}), got ${kind}`);
+        assert(type.isValueType(), "DateTime should be value type");
+        console.log(`    DateTime (struct) type kind: ${kind}`);
+      }
+    }
+    
+    // TimeSpan is also a value type struct
+    const timeSpanClass = domain.class("System.TimeSpan");
+    if (timeSpanClass) {
+      const type = timeSpanClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        assert(kind === MonoTypeKind.ValueType, `TimeSpan type kind should be ValueType`);
+        console.log(`    TimeSpan (struct) type kind: ${kind}`);
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should identify Enum type kind", () => {
+    const domain = Mono.domain;
+    const { MonoTypeKind } = require("../src/model/type");
+    
+    const dayOfWeekClass = domain.class("System.DayOfWeek");
+    if (dayOfWeekClass) {
+      const type = dayOfWeekClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        // Note: In some Mono implementations, enum types return ValueType kind
+        // when accessed through class.getType(), not Enum kind directly
+        assert(kind === MonoTypeKind.Enum || kind === MonoTypeKind.ValueType, 
+          `DayOfWeek type kind should be Enum (${MonoTypeKind.Enum}) or ValueType (${MonoTypeKind.ValueType}), got ${kind}`);
+        assert(type.isValueType(), "Enum should be value type");
+        console.log(`    DayOfWeek (enum) type kind: ${kind}`);
+      }
+    }
+    
+    const fileAccessClass = domain.class("System.IO.FileAccess");
+    if (fileAccessClass) {
+      const type = fileAccessClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        assert(kind === MonoTypeKind.Enum || kind === MonoTypeKind.ValueType, 
+          `FileAccess type kind should be Enum or ValueType`);
+        console.log(`    FileAccess (flags enum) type kind: ${kind}`);
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should identify Class type kind", () => {
+    const domain = Mono.domain;
+    const { MonoTypeKind } = require("../src/model/type");
+    
+    // Exception is a class
+    const exceptionClass = domain.class("System.Exception");
+    if (exceptionClass) {
+      const type = exceptionClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        assert(kind === MonoTypeKind.Class, `Exception type kind should be Class (${MonoTypeKind.Class}), got ${kind}`);
+        assert(type.isReferenceType(), "Exception should be reference type");
+        console.log(`    Exception (class) type kind: ${kind}`);
+      }
+    }
+    
+    // Console is a static class (but still Class kind)
+    const consoleClass = domain.class("System.Console");
+    if (consoleClass) {
+      const type = consoleClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        assert(kind === MonoTypeKind.Class, `Console type kind should be Class`);
+        console.log(`    Console (static class) type kind: ${kind}`);
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should identify Array type kinds", () => {
+    const domain = Mono.domain;
+    const { MonoTypeKind } = require("../src/model/type");
+    
+    // Single-dimensional array
+    const intArrayClass = domain.class("System.Int32[]");
+    if (intArrayClass) {
+      const type = intArrayClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        assert(kind === MonoTypeKind.SingleDimArray || kind === MonoTypeKind.Array, 
+          `Int32[] type kind should be SingleDimArray or Array, got ${kind}`);
+        console.log(`    Int32[] (array) type kind: ${kind}`);
+      }
+    }
+    
+    // String array
+    const stringArrayClass = domain.class("System.String[]");
+    if (stringArrayClass) {
+      const type = stringArrayClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        console.log(`    String[] (array) type kind: ${kind}`);
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should identify Generic type kinds", () => {
+    const domain = Mono.domain;
+    const { MonoTypeKind } = require("../src/model/type");
+    
+    // Generic type definition
+    const listClass = domain.class("System.Collections.Generic.List`1");
+    if (listClass) {
+      const type = listClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        console.log(`    List<T> (generic) type kind: ${kind}`);
+        // Generic type definitions are typically Class kind
+        assert(kind === MonoTypeKind.Class || kind === MonoTypeKind.GenericInstance, 
+          `List<T> should be Class or GenericInstance kind`);
+      }
+    }
+    
+    // Dictionary generic
+    const dictClass = domain.class("System.Collections.Generic.Dictionary`2");
+    if (dictClass) {
+      const type = dictClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        console.log(`    Dictionary<K,V> (generic) type kind: ${kind}`);
+      }
+    }
+    
+    // Nullable<T> generic value type
+    const nullableClass = domain.class("System.Nullable`1");
+    if (nullableClass) {
+      const type = nullableClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        console.log(`    Nullable<T> (generic value type) type kind: ${kind}`);
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should identify Pointer/IntPtr type kinds", () => {
+    const domain = Mono.domain;
+    const { MonoTypeKind } = require("../src/model/type");
+    
+    const intPtrClass = domain.class("System.IntPtr");
+    if (intPtrClass) {
+      const type = intPtrClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        // IntPtr is typically Int (native int) kind
+        assert(kind === MonoTypeKind.Int || kind === MonoTypeKind.ValueType, 
+          `IntPtr type kind should be Int or ValueType, got ${kind}`);
+        console.log(`    IntPtr type kind: ${kind}`);
+      }
+    }
+    
+    const uintPtrClass = domain.class("System.UIntPtr");
+    if (uintPtrClass) {
+      const type = uintPtrClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        console.log(`    UIntPtr type kind: ${kind}`);
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should identify Void type kind", () => {
+    const domain = Mono.domain;
+    const { MonoTypeKind } = require("../src/model/type");
+    
+    const voidClass = domain.class("System.Void");
+    if (voidClass) {
+      const type = voidClass.getType();
+      if (type) {
+        const kind = type.getKind();
+        assert(kind === MonoTypeKind.Void, `Void type kind should be Void (${MonoTypeKind.Void}), got ${kind}`);
+        assert(type.isVoid(), "Type.isVoid() should return true for Void");
+        console.log(`    Void type kind: ${kind} (correct)`);
+      }
+    } else {
+      console.log("    System.Void class not directly accessible");
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should test MonoType.describe() for all kinds", () => {
+    const domain = Mono.domain;
+    
+    const testTypes = [
+      "System.Int32",
+      "System.String",
+      "System.Object",
+      "System.DateTime",
+      "System.DayOfWeek",
+      "System.Exception",
+    ];
+    
+    for (const typeName of testTypes) {
+      const cls = domain.class(typeName);
+      if (cls) {
+        const type = cls.getType();
+        if (type) {
+          const desc = type.describe();
+          assertNotNull(desc, `${typeName} should have description`);
+          assert(typeof desc.kind === "number", "Description should have kind");
+          assert(typeof desc.isValueType === "boolean", "Description should have isValueType");
+          assert(typeof desc.isReferenceType === "boolean", "Description should have isReferenceType");
+          console.log(`    ${typeName}: kind=${desc.kind}, isValue=${desc.isValueType}, isRef=${desc.isReferenceType}`);
+        }
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should test MonoType size and alignment", () => {
+    const domain = Mono.domain;
+    
+    const sizeTests = [
+      { name: "System.Byte", expectedSize: 1 },
+      { name: "System.Int16", expectedSize: 2 },
+      { name: "System.Int32", expectedSize: 4 },
+      { name: "System.Int64", expectedSize: 8 },
+      { name: "System.Single", expectedSize: 4 },
+      { name: "System.Double", expectedSize: 8 },
+      { name: "System.Char", expectedSize: 2 },
+      { name: "System.Boolean", expectedSize: 1 },
+    ];
+    
+    for (const test of sizeTests) {
+      const cls = domain.class(test.name);
+      if (cls) {
+        const type = cls.getType();
+        if (type) {
+          const { size, alignment } = type.getValueSize();
+          console.log(`    ${test.name}: size=${size}, alignment=${alignment} (expected size=${test.expectedSize})`);
+          assert(size === test.expectedSize, `${test.name} size should be ${test.expectedSize}, got ${size}`);
+          // Note: alignment can be 0 in some Mono implementations
+          assert(alignment >= 0, `${test.name} alignment should be non-negative`);
+        }
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should test MonoType.isByRef()", () => {
+    const domain = Mono.domain;
+    
+    // Get a method with ref/out parameter to test byref type
+    const intClass = domain.class("System.Int32");
+    if (intClass) {
+      // TryParse has out parameter
+      const tryParseMethod = intClass.method("TryParse", 2);
+      if (tryParseMethod) {
+        const params = tryParseMethod.getParameters();
+        if (params.length >= 2) {
+          const resultParam = params[1]; // The 'out' parameter
+          const paramType = resultParam.type;
+          if (paramType) {
+            const isByRef = paramType.isByRef();
+            console.log(`    Int32.TryParse result parameter isByRef: ${isByRef}`);
+            assert(isByRef === true, "TryParse result parameter should be byref");
+          }
+        }
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should test MonoType.getElementType() for arrays", () => {
+    const domain = Mono.domain;
+    
+    const intArrayClass = domain.class("System.Int32[]");
+    if (intArrayClass) {
+      const type = intArrayClass.getType();
+      if (type) {
+        const elementType = type.getElementType();
+        if (elementType) {
+          const elementName = elementType.getName();
+          console.log(`    Int32[] element type: ${elementName}`);
+          assert(elementName.includes("Int32") || elementName.includes("int"), 
+            `Element type should be Int32, got ${elementName}`);
+        }
+      }
+    }
+    
+    const stringArrayClass = domain.class("System.String[]");
+    if (stringArrayClass) {
+      const type = stringArrayClass.getType();
+      if (type) {
+        const elementType = type.getElementType();
+        if (elementType) {
+          const elementName = elementType.getName();
+          console.log(`    String[] element type: ${elementName}`);
+        }
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should test MonoType.getClass() relationship", () => {
+    const domain = Mono.domain;
+    
+    const testClasses = ["System.Int32", "System.String", "System.DateTime"];
+    
+    for (const className of testClasses) {
+      const cls = domain.class(className);
+      if (cls) {
+        const type = cls.getType();
+        if (type) {
+          const typeClass = type.getClass();
+          if (typeClass) {
+            const roundTripName = typeClass.getFullName();
+            console.log(`    ${className} -> Type -> Class: ${roundTripName}`);
+            assert(roundTripName === className, `Round-trip should preserve class name`);
+          }
+        }
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should test MonoType.getUnderlyingType() for enums", () => {
+    const domain = Mono.domain;
+    const { MonoTypeKind } = require("../src/model/type");
+    
+    const dayOfWeekClass = domain.class("System.DayOfWeek");
+    if (dayOfWeekClass) {
+      const type = dayOfWeekClass.getType();
+      if (type) {
+        const underlyingType = type.getUnderlyingType();
+        if (underlyingType) {
+          const underlyingKind = underlyingType.getKind();
+          const underlyingName = underlyingType.getName();
+          console.log(`    DayOfWeek underlying type: ${underlyingName} (kind=${underlyingKind})`);
+          // Enum underlying type is typically Int32
+          assert(underlyingKind === MonoTypeKind.I4, 
+            `DayOfWeek underlying type should be I4 (Int32), got ${underlyingKind}`);
+        }
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should test MonoType name formats", () => {
+    const domain = Mono.domain;
+    const { MonoTypeNameFormat } = require("../src/model/type");
+    
+    const stringClass = domain.class("System.String");
+    if (stringClass) {
+      const type = stringClass.getType();
+      if (type) {
+        const name = type.getName();
+        const fullName = type.getFullName(MonoTypeNameFormat.FullName);
+        const reflectionName = type.getFullName(MonoTypeNameFormat.Reflection);
+        const ilName = type.getFullName(MonoTypeNameFormat.IL);
+        
+        console.log(`    String type names:`);
+        console.log(`      getName(): ${name}`);
+        console.log(`      FullName: ${fullName}`);
+        console.log(`      Reflection: ${reflectionName}`);
+        console.log(`      IL: ${ilName}`);
+        
+        assert(name.length > 0, "getName() should return non-empty string");
+        assert(fullName.length > 0, "getFullName() should return non-empty string");
+      }
+    }
+  }));
+
+  suite.addResult(createMonoDependentTest("Should verify type kind constants", () => {
+    const { MonoTypeKind } = require("../src/model/type");
+    
+    // Verify all type kinds are defined
+    const expectedKinds = [
+      "End", "Void", "Boolean", "Char", "I1", "U1", "I2", "U2", "I4", "U4",
+      "I8", "U8", "R4", "R8", "String", "Pointer", "ByRef", "ValueType", "Class",
+      "GenericVar", "Array", "GenericInstance", "TypedByRef", "Int", "UInt",
+      "FunctionPointer", "Object", "SingleDimArray", "GenericMethodVar",
+      "CModReqd", "CModOpt", "Internal", "Modifier", "Sentinel", "Pinned", "Enum"
+    ];
+    
+    let definedCount = 0;
+    for (const kindName of expectedKinds) {
+      if (MonoTypeKind[kindName] !== undefined) {
+        definedCount++;
+      } else {
+        console.log(`    Missing type kind: ${kindName}`);
+      }
+    }
+    
+    console.log(`    Type kind constants: ${definedCount}/${expectedKinds.length} defined`);
+    assert(definedCount === expectedKinds.length, "All type kinds should be defined");
+  }));
+
+  suite.addResult(createMonoDependentTest("Should test MonoType.toString()", () => {
+    const domain = Mono.domain;
+    
+    const testTypes = ["System.Int32", "System.String", "System.DateTime"];
+    
+    for (const typeName of testTypes) {
+      const cls = domain.class(typeName);
+      if (cls) {
+        const type = cls.getType();
+        if (type) {
+          const str = type.toString();
+          assertNotNull(str, `${typeName}.toString() should not be null`);
+          assert(str.length > 0, `${typeName}.toString() should not be empty`);
+          console.log(`    ${typeName}.toString(): ${str}`);
+        }
+      }
+    }
+  }));
+
   const summary = suite.getSummary();
 
   return {

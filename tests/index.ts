@@ -1,43 +1,77 @@
 ﻿/**
  * Test Suite Index
  * Orchestrates all test modules and provides a unified test runner
+ * 
+ * Test Categories:
+ * - Core Infrastructure: Basic module setup and Mono detection
+ * - Type System: MonoClass, MonoMethod, MonoField, MonoProperty
+ * - Runtime Objects: MonoString, MonoArray, MonoDelegate, MonoObject
+ * - Domain & Assembly: MonoDomain, MonoAssembly, MonoImage
+ * - Advanced Features: GC Tools, Trace Tools, Find Tools, Generic Types
+ * - Unity Integration: GameObject, Components, Engine Modules
  */
 
 // Import test setup files
 import "./test-common";
 import "./test-utilities";
 
-// Import basic test files
+// ============================================================================
+// CATEGORY 1: Core Infrastructure Tests
+// ============================================================================
 import { testCoreInfrastructure } from "./test-core-infrastructure";
 import { testMonoTypes } from "./test-mono-types";
 import { testMonoMembers } from "./test-mono-members";
 import { testDataOperations } from "./test-data-operations";
-import { testAdvancedFeatures } from "./test-advanced-features";
 import { testIntegration } from "./test-integration";
 import { testSupporting } from "./test-supporting";
 
-// Import Unity-specific test files
-import { testUnityGameObject } from "./test-unity-gameobject";
-import { testUnityComponents } from "./test-unity-components";
-import { testUnityEngineModules } from "./test-unity-engine-modules";
-
-// Import comprehensive test files - STANDALONE tests (run first)
+// ============================================================================
+// CATEGORY 2: Utility Tests (STANDALONE - No Mono dependency)
+// ============================================================================
 import { testMonoUtils } from "./test-mono-utils";
 import { testMonoErrorHandling } from "./test-mono-error-handling";
 
-// Import comprehensive test files - MONO_DEPENDENT tests (run after Mono runtime)
-import { testMonoApi } from "./test-mono-api";
-import { testMonoDomain } from "./test-mono-domain";
-import { testMonoThreading } from "./test-mono-threading";
-import { testMonoModule } from "./test-mono-module";
+// ============================================================================
+// CATEGORY 3: Type System Tests (MONO_DEPENDENT)
+// ============================================================================
 import { createMonoClassTests } from "./test-mono-class";
 import { createMonoMethodTests } from "./test-mono-method";
 import { createMonoFieldTests } from "./test-mono-field";
 import { createMonoPropertyTests } from "./test-mono-property";
+import { createGenericTypeTests } from "./test-generic-types";
+
+// ============================================================================
+// CATEGORY 4: Runtime Object Tests (MONO_DEPENDENT)
+// ============================================================================
+import { createMonoStringTests } from "./test-mono-string";
+import { createMonoArrayTests } from "./test-mono-array";
+import { createMonoDelegateTests } from "./test-mono-delegate";
+import { testMonoData } from "./test-mono-data";
+
+// ============================================================================
+// CATEGORY 5: Domain & Assembly Tests (MONO_DEPENDENT)
+// ============================================================================
+import { testMonoApi } from "./test-mono-api";
+import { testMonoDomain } from "./test-mono-domain";
+import { testMonoThreading } from "./test-mono-threading";
+import { testMonoModule } from "./test-mono-module";
 import { createMonoAssemblyTests } from "./test-mono-assembly";
 import { createMonoImageTests } from "./test-mono-image";
-import { testMonoData } from "./test-mono-data";
-import { testMonoAdvanced } from "./test-mono-advanced";
+import { createRuntimeApiTests } from "./test-runtime-api";
+
+// ============================================================================
+// CATEGORY 6: Advanced Feature Tests (MONO_DEPENDENT)
+// ============================================================================
+import { createFindToolTests } from "./test-find-tools";
+import { createTraceToolsTests } from "./test-trace-tools";
+import { createGCToolsTests } from "./test-gc-tools";
+
+// ============================================================================
+// CATEGORY 7: Unity Integration Tests (MONO_DEPENDENT)
+// ============================================================================
+import { testUnityGameObject } from "./test-unity-gameobject";
+import { testUnityComponents } from "./test-unity-components";
+import { testUnityEngineModules } from "./test-unity-engine-modules";
 
 import { TestSummary, TestSuite } from "./test-framework";
 
@@ -105,15 +139,6 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
   suite.addResult(testDataOperations());
   if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
     return suite.getSummary();
-  }
-
-  // Advanced Features Tests
-  if (!config.skipAdvancedTests) {
-    logSection("Advanced Features Tests");
-    suite.addResult(testAdvancedFeatures());
-    if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-      return suite.getSummary();
-    }
   }
 
   // Integration Tests
@@ -249,21 +274,81 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
     return suite.getSummary();
   }
 
+  // Comprehensive Runtime API Tests
+  logSection("Comprehensive Runtime API Tests");
+  const runtimeApiTestResults = createRuntimeApiTests();
+  runtimeApiTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive MonoString Tests
+  logSection("Comprehensive MonoString Tests");
+  const stringTestResults = createMonoStringTests();
+  stringTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive MonoArray Tests
+  logSection("Comprehensive MonoArray Tests");
+  const arrayTestResults = createMonoArrayTests();
+  arrayTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Comprehensive MonoDelegate Tests
+  logSection("Comprehensive MonoDelegate Tests");
+  const delegateTestResults = createMonoDelegateTests();
+  delegateTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // ============================================================================
+  // PHASE 3: ENHANCED FEATURE TESTS
+  // ============================================================================
+
+  logSection("Phase 3: Enhanced Feature Tests");
+
+  // Find Tools Tests
+  logSection("Find Tools Tests");
+  const findToolTestResults = createFindToolTests();
+  findToolTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Trace Tools Tests
+  logSection("Trace Tools Tests");
+  const traceToolTestResults = createTraceToolsTests();
+  traceToolTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // GC Tools Tests
+  logSection("GC Tools Tests");
+  const gcToolTestResults = createGCToolsTests();
+  gcToolTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
+  // Generic Types Tests
+  logSection("Generic Types Tests");
+  const genericTypeTestResults = createGenericTypeTests();
+  genericTypeTestResults.forEach(result => suite.addResult(result));
+  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
+    return suite.getSummary();
+  }
+
   // Comprehensive Mono Data Tests
   if (!config.skipPerformanceTests) {
     logSection("Comprehensive Mono Data Tests");
     const dataTestResults = testMonoData();
     dataTestResults.forEach(result => suite.addResult(result));
-    if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-      return suite.getSummary();
-    }
-  }
-
-  // Comprehensive Mono Advanced Tests
-  if (!config.skipAdvancedTests) {
-    logSection("Comprehensive Mono Advanced Tests");
-    const advancedTestResults = testMonoAdvanced();
-    advancedTestResults.forEach(result => suite.addResult(result));
     if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
       return suite.getSummary();
     }
@@ -300,31 +385,49 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
 
 // Export consolidated test modules for selective testing
 export {
+  // Core Infrastructure Tests
   testCoreInfrastructure,
   testMonoTypes,
   testMonoMembers,
   testDataOperations,
-  testAdvancedFeatures,
   testIntegration,
   testSupporting,
-  testUnityGameObject,
-  testUnityComponents,
-  testUnityEngineModules,
-  // Comprehensive test modules
+  
+  // Utility Tests (STANDALONE)
   testMonoUtils,
   testMonoErrorHandling,
-  testMonoApi,
-  testMonoDomain,
-  testMonoThreading,
-  testMonoModule,
+  
+  // Type System Tests
   createMonoClassTests,
   createMonoMethodTests,
   createMonoFieldTests,
   createMonoPropertyTests,
+  createGenericTypeTests,
+  
+  // Runtime Object Tests
+  createMonoStringTests,
+  createMonoArrayTests,
+  createMonoDelegateTests,
+  testMonoData,
+  
+  // Domain & Assembly Tests
+  testMonoApi,
+  testMonoDomain,
+  testMonoThreading,
+  testMonoModule,
   createMonoAssemblyTests,
   createMonoImageTests,
-  testMonoData,
-  testMonoAdvanced,
+  createRuntimeApiTests,
+  
+  // Advanced Feature Tests
+  createFindToolTests,
+  createTraceToolsTests,
+  createGCToolsTests,
+  
+  // Unity Integration Tests
+  testUnityGameObject,
+  testUnityComponents,
+  testUnityEngineModules,
 };
 
 const globalScope = globalThis as any;

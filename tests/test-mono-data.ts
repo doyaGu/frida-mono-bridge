@@ -487,6 +487,326 @@ export function testMonoData(): TestResult[] {
     }
   }));
 
+  // ===== MONO OBJECT BOXING/UNBOXING COMPREHENSIVE TESTS (BOUNDARY) =====
+
+  suite.addResult(createMonoDependentTest("Should box and unbox Int32 values", () => {
+    const domain = Mono.domain;
+    const intClass = domain.class("System.Int32");
+    assertNotNull(intClass, "System.Int32 class should be available");
+    
+    // Create memory for the value
+    const valuePtr = Memory.alloc(4);
+    const testValue = 42;
+    valuePtr.writeS32(testValue);
+    
+    // Box the value
+    const boxedObject = Mono.api.native.mono_value_box(domain.pointer, intClass.pointer, valuePtr);
+    assertNotNull(boxedObject, "Boxed Int32 should not be null");
+    assert(!boxedObject.isNull(), "Boxed Int32 pointer should not be NULL");
+    
+    // Unbox and verify
+    const unboxedPtr = Mono.api.native.mono_object_unbox(boxedObject);
+    assertNotNull(unboxedPtr, "Unboxed pointer should not be null");
+    const unboxedValue = unboxedPtr.readS32();
+    
+    assert(unboxedValue === testValue, `Unboxed value should be ${testValue}, got ${unboxedValue}`);
+    console.log(`    Int32 boxing: ${testValue} -> boxed -> unboxed = ${unboxedValue}`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should box and unbox Int64 values", () => {
+    const domain = Mono.domain;
+    const int64Class = domain.class("System.Int64");
+    assertNotNull(int64Class, "System.Int64 class should be available");
+    
+    const valuePtr = Memory.alloc(8);
+    const testValue = int64("9223372036854775807"); // Max Int64
+    valuePtr.writeS64(testValue);
+    
+    const boxedObject = Mono.api.native.mono_value_box(domain.pointer, int64Class.pointer, valuePtr);
+    assertNotNull(boxedObject, "Boxed Int64 should not be null");
+    
+    const unboxedPtr = Mono.api.native.mono_object_unbox(boxedObject);
+    const unboxedValue = unboxedPtr.readS64();
+    
+    assert(unboxedValue.equals(testValue), `Unboxed Int64 should match`);
+    console.log(`    Int64 boxing: large value boxed and unboxed successfully`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should box and unbox Double values", () => {
+    const domain = Mono.domain;
+    const doubleClass = domain.class("System.Double");
+    assertNotNull(doubleClass, "System.Double class should be available");
+    
+    const valuePtr = Memory.alloc(8);
+    const testValue = 3.141592653589793;
+    valuePtr.writeDouble(testValue);
+    
+    const boxedObject = Mono.api.native.mono_value_box(domain.pointer, doubleClass.pointer, valuePtr);
+    assertNotNull(boxedObject, "Boxed Double should not be null");
+    
+    const unboxedPtr = Mono.api.native.mono_object_unbox(boxedObject);
+    const unboxedValue = unboxedPtr.readDouble();
+    
+    assert(Math.abs(unboxedValue - testValue) < 0.0001, `Unboxed Double should be approximately ${testValue}, got ${unboxedValue}`);
+    console.log(`    Double boxing: ${testValue} -> boxed -> unboxed = ${unboxedValue}`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should box and unbox Boolean values", () => {
+    const domain = Mono.domain;
+    const boolClass = domain.class("System.Boolean");
+    assertNotNull(boolClass, "System.Boolean class should be available");
+    
+    // Test true value
+    const truePtr = Memory.alloc(1);
+    truePtr.writeU8(1);
+    
+    const boxedTrue = Mono.api.native.mono_value_box(domain.pointer, boolClass.pointer, truePtr);
+    assertNotNull(boxedTrue, "Boxed true should not be null");
+    
+    const unboxedTruePtr = Mono.api.native.mono_object_unbox(boxedTrue);
+    const unboxedTrue = unboxedTruePtr.readU8() !== 0;
+    
+    assert(unboxedTrue === true, "Unboxed true should be true");
+    
+    // Test false value
+    const falsePtr = Memory.alloc(1);
+    falsePtr.writeU8(0);
+    
+    const boxedFalse = Mono.api.native.mono_value_box(domain.pointer, boolClass.pointer, falsePtr);
+    const unboxedFalsePtr = Mono.api.native.mono_object_unbox(boxedFalse);
+    const unboxedFalse = unboxedFalsePtr.readU8() !== 0;
+    
+    assert(unboxedFalse === false, "Unboxed false should be false");
+    console.log(`    Boolean boxing: true=${unboxedTrue}, false=${unboxedFalse}`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should box and unbox Byte values", () => {
+    const domain = Mono.domain;
+    const byteClass = domain.class("System.Byte");
+    assertNotNull(byteClass, "System.Byte class should be available");
+    
+    const valuePtr = Memory.alloc(1);
+    const testValue = 255; // Max Byte
+    valuePtr.writeU8(testValue);
+    
+    const boxedObject = Mono.api.native.mono_value_box(domain.pointer, byteClass.pointer, valuePtr);
+    assertNotNull(boxedObject, "Boxed Byte should not be null");
+    
+    const unboxedPtr = Mono.api.native.mono_object_unbox(boxedObject);
+    const unboxedValue = unboxedPtr.readU8();
+    
+    assert(unboxedValue === testValue, `Unboxed Byte should be ${testValue}, got ${unboxedValue}`);
+    console.log(`    Byte boxing: ${testValue} -> boxed -> unboxed = ${unboxedValue}`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should box and unbox Single (Float) values", () => {
+    const domain = Mono.domain;
+    const floatClass = domain.class("System.Single");
+    assertNotNull(floatClass, "System.Single class should be available");
+    
+    const valuePtr = Memory.alloc(4);
+    const testValue = 2.71828;
+    valuePtr.writeFloat(testValue);
+    
+    const boxedObject = Mono.api.native.mono_value_box(domain.pointer, floatClass.pointer, valuePtr);
+    assertNotNull(boxedObject, "Boxed Single should not be null");
+    
+    const unboxedPtr = Mono.api.native.mono_object_unbox(boxedObject);
+    const unboxedValue = unboxedPtr.readFloat();
+    
+    assert(Math.abs(unboxedValue - testValue) < 0.0001, `Unboxed Single should be approximately ${testValue}, got ${unboxedValue}`);
+    console.log(`    Single boxing: ${testValue} -> boxed -> unboxed = ${unboxedValue}`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should box and unbox Char values", () => {
+    const domain = Mono.domain;
+    const charClass = domain.class("System.Char");
+    assertNotNull(charClass, "System.Char class should be available");
+    
+    const valuePtr = Memory.alloc(2);
+    const testValue = 'A'.charCodeAt(0);
+    valuePtr.writeU16(testValue);
+    
+    const boxedObject = Mono.api.native.mono_value_box(domain.pointer, charClass.pointer, valuePtr);
+    assertNotNull(boxedObject, "Boxed Char should not be null");
+    
+    const unboxedPtr = Mono.api.native.mono_object_unbox(boxedObject);
+    const unboxedValue = unboxedPtr.readU16();
+    
+    assert(unboxedValue === testValue, `Unboxed Char should be '${String.fromCharCode(testValue)}', got '${String.fromCharCode(unboxedValue)}'`);
+    console.log(`    Char boxing: '${String.fromCharCode(testValue)}' -> boxed -> unboxed = '${String.fromCharCode(unboxedValue)}'`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should box and unbox struct (DateTime) values", () => {
+    const domain = Mono.domain;
+    const dateTimeClass = domain.class("System.DateTime");
+    assertNotNull(dateTimeClass, "System.DateTime class should be available");
+    
+    // DateTime has a single Int64 field for ticks
+    const valuePtr = Memory.alloc(8);
+    const testTicks = int64("637500000000000000"); // Some arbitrary DateTime ticks
+    valuePtr.writeS64(testTicks);
+    
+    const boxedObject = Mono.api.native.mono_value_box(domain.pointer, dateTimeClass.pointer, valuePtr);
+    assertNotNull(boxedObject, "Boxed DateTime should not be null");
+    
+    const unboxedPtr = Mono.api.native.mono_object_unbox(boxedObject);
+    assertNotNull(unboxedPtr, "Unboxed DateTime pointer should not be null");
+    
+    console.log(`    DateTime struct boxed and unboxed successfully`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should box and unbox Guid struct values", () => {
+    const domain = Mono.domain;
+    const guidClass = domain.class("System.Guid");
+    assertNotNull(guidClass, "System.Guid class should be available");
+    
+    // Guid is 16 bytes
+    const valuePtr = Memory.alloc(16);
+    // Write some test GUID bytes
+    valuePtr.writeByteArray([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10]);
+    
+    const boxedObject = Mono.api.native.mono_value_box(domain.pointer, guidClass.pointer, valuePtr);
+    assertNotNull(boxedObject, "Boxed Guid should not be null");
+    
+    const unboxedPtr = Mono.api.native.mono_object_unbox(boxedObject);
+    assertNotNull(unboxedPtr, "Unboxed Guid pointer should not be null");
+    
+    // Verify first byte
+    const firstByte = unboxedPtr.readU8();
+    assert(firstByte === 0x01, `First byte should be 0x01, got 0x${firstByte.toString(16)}`);
+    
+    console.log(`    Guid struct boxed and unboxed successfully`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should box and unbox enum values", () => {
+    const domain = Mono.domain;
+    const dayOfWeekClass = domain.class("System.DayOfWeek");
+    assertNotNull(dayOfWeekClass, "System.DayOfWeek enum should be available");
+    
+    // Enum underlying type is Int32
+    const valuePtr = Memory.alloc(4);
+    const testValue = 3; // Wednesday
+    valuePtr.writeS32(testValue);
+    
+    const boxedObject = Mono.api.native.mono_value_box(domain.pointer, dayOfWeekClass.pointer, valuePtr);
+    assertNotNull(boxedObject, "Boxed enum should not be null");
+    
+    const unboxedPtr = Mono.api.native.mono_object_unbox(boxedObject);
+    const unboxedValue = unboxedPtr.readS32();
+    
+    assert(unboxedValue === testValue, `Unboxed enum should be ${testValue}, got ${unboxedValue}`);
+    console.log(`    Enum boxing: DayOfWeek.Wednesday (${testValue}) boxed and unboxed successfully`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should handle boxing boundary values", () => {
+    const domain = Mono.domain;
+    
+    // Test Int32 boundary values
+    const int32Class = domain.class("System.Int32");
+    assertNotNull(int32Class, "System.Int32 class should be available");
+    
+    const boundaryValues = [
+      { value: 0, name: "zero" },
+      { value: -1, name: "negative one" },
+      { value: 2147483647, name: "max Int32" },
+      { value: -2147483648, name: "min Int32" },
+    ];
+    
+    let successCount = 0;
+    for (const test of boundaryValues) {
+      const valuePtr = Memory.alloc(4);
+      valuePtr.writeS32(test.value);
+      
+      const boxedObject = Mono.api.native.mono_value_box(domain.pointer, int32Class.pointer, valuePtr);
+      if (boxedObject && !boxedObject.isNull()) {
+        const unboxedPtr = Mono.api.native.mono_object_unbox(boxedObject);
+        const unboxedValue = unboxedPtr.readS32();
+        
+        if (unboxedValue === test.value) {
+          successCount++;
+        } else {
+          console.log(`    Boundary test failed for ${test.name}: expected ${test.value}, got ${unboxedValue}`);
+        }
+      }
+    }
+    
+    assert(successCount === boundaryValues.length, `Expected all ${boundaryValues.length} boundary tests to pass, got ${successCount}`);
+    console.log(`    Boundary value boxing: ${successCount}/${boundaryValues.length} tests passed`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should verify boxed object class is correct", () => {
+    const domain = Mono.domain;
+    const intClass = domain.class("System.Int32");
+    assertNotNull(intClass, "System.Int32 class should be available");
+    
+    const valuePtr = Memory.alloc(4);
+    valuePtr.writeS32(100);
+    
+    const boxedObject = Mono.api.native.mono_value_box(domain.pointer, intClass.pointer, valuePtr);
+    assertNotNull(boxedObject, "Boxed object should not be null");
+    
+    // Get class of boxed object
+    const objectClass = Mono.api.native.mono_object_get_class(boxedObject);
+    assertNotNull(objectClass, "Object class should be retrievable");
+    
+    // Verify it's the same class
+    assert(objectClass.equals(intClass.pointer), "Boxed object class should match Int32 class");
+    console.log("    Boxed object class verification successful");
+  }));
+
+  suite.addResult(createMonoDependentTest("Should handle multiple boxing/unboxing cycles", () => {
+    const domain = Mono.domain;
+    const intClass = domain.class("System.Int32");
+    assertNotNull(intClass, "System.Int32 class should be available");
+    
+    const originalValue = 12345;
+    let currentValue = originalValue;
+    
+    // Perform multiple box/unbox cycles
+    for (let cycle = 0; cycle < 5; cycle++) {
+      const valuePtr = Memory.alloc(4);
+      valuePtr.writeS32(currentValue);
+      
+      const boxedObject = Mono.api.native.mono_value_box(domain.pointer, intClass.pointer, valuePtr);
+      assertNotNull(boxedObject, `Boxed object should not be null at cycle ${cycle}`);
+      
+      const unboxedPtr = Mono.api.native.mono_object_unbox(boxedObject);
+      currentValue = unboxedPtr.readS32();
+    }
+    
+    assert(currentValue === originalValue, `Value should remain ${originalValue} after 5 cycles, got ${currentValue}`);
+    console.log(`    Multiple boxing cycles: value preserved after 5 cycles`);
+  }));
+
+  suite.addResult(createMonoDependentTest("Should test MonoObject wrapper boxing/unboxing", () => {
+    const domain = Mono.domain;
+    const intClass = domain.class("System.Int32");
+    assertNotNull(intClass, "System.Int32 class should be available");
+    
+    // Create boxed object
+    const valuePtr = Memory.alloc(4);
+    valuePtr.writeS32(999);
+    
+    const boxedPtr = Mono.api.native.mono_value_box(domain.pointer, intClass.pointer, valuePtr);
+    
+    // Import MonoObject to wrap the boxed value
+    // Note: This tests the high-level MonoObject API
+    const { MonoObject } = require("../src/model/object");
+    const monoObj = new MonoObject(Mono.api, boxedPtr);
+    
+    // Test MonoObject methods
+    assert(monoObj.isValueType(), "Wrapped Int32 should be value type");
+    
+    const unboxedPtr = monoObj.unbox();
+    assertNotNull(unboxedPtr, "MonoObject.unbox() should return pointer");
+    
+    const unboxedValue = unboxedPtr.readS32();
+    assert(unboxedValue === 999, `MonoObject unbox should return 999, got ${unboxedValue}`);
+    
+    console.log("    MonoObject wrapper boxing/unboxing successful");
+  }));
+
   suite.addResult(createMonoDependentTest("Should test object cloning and copying", () => {
     const domain = Mono.domain;
     const stringClass = domain.class("System.String");
