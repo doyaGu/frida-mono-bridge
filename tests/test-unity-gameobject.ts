@@ -31,7 +31,7 @@ export function testUnityGameObject(): TestResult {
   // Basic GameObject class availability
   suite.addResult(createUnityTypeTest(
     "UnityEngine.GameObject",
-    ["Find", "Instantiate"],
+    ["Find"],  // Instantiate is on UnityEngine.Object, not GameObject directly
     ["name", "activeSelf", "tag", "layer"],
     (gameObjectClass) => {
       if (gameObjectClass) {

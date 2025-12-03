@@ -7,10 +7,23 @@ import { Logger } from "./log";
 const logger = new Logger({ tag: "BatchOperation" });
 
 /**
+ * Options for batch operation
+ */
+export interface BatchOperationOptions {
+  /** Whether to suppress error logging (useful for testing) */
+  silent?: boolean;
+}
+
+/**
  * Batch operation for executing multiple operations efficiently
  */
 export class BatchOperation {
   private operations: Array<() => any> = [];
+  private silent: boolean;
+
+  constructor(options?: BatchOperationOptions) {
+    this.silent = options?.silent ?? false;
+  }
 
   /**
    * Add an operation to the batch
@@ -32,7 +45,9 @@ export class BatchOperation {
         const result = this.operations[i]();
         results.push(result);
       } catch (error) {
-        logger.error(`Batch operation ${i + 1}/${this.operations.length} failed in ${context}: ${error}`);
+        if (!this.silent) {
+          logger.error(`Batch operation ${i + 1}/${this.operations.length} failed in ${context}: ${error}`);
+        }
         results.push(null);
       }
     }

@@ -39,7 +39,12 @@ export function testMonoData(): TestResult[] {
     assert(Mono.api.hasExport("mono_array_new"), "mono_array_new should be available");
     assert(Mono.api.hasExport("mono_array_length"), "mono_array_length should be available");
     assert(Mono.api.hasExport("mono_array_addr_with_size"), "mono_array_addr_with_size should be available");
-    assert(Mono.api.hasExport("mono_array_element_class"), "mono_array_element_class should be available");
+    // Note: mono_array_element_class may not be available in all Mono versions
+    if (Mono.api.hasExport("mono_array_element_class")) {
+      console.log("    mono_array_element_class is available");
+    } else {
+      console.log("    mono_array_element_class is NOT available (optional)");
+    }
     assert(Mono.api.hasExport("mono_array_element_size"), "mono_array_element_size should be available");
     
     // String APIs
@@ -72,14 +77,17 @@ export function testMonoData(): TestResult[] {
     assertNotNull(stringArray, "String array should be created");
     assert(!stringArray.isNull(), "String array pointer should not be null");
     
-    // Test array length
-    const length = Mono.api.native.mono_array_length(stringArray);
+    // Test array length - mono_array_length returns uintptr_t which may need conversion
+    const lengthRaw = Mono.api.native.mono_array_length(stringArray);
+    const length = typeof lengthRaw === "number" ? lengthRaw : lengthRaw.toNumber();
     assert(length === 5, `Array length should be 5, got ${length}`);
     
-    // Test element class
-    const elementClass = Mono.api.native.mono_array_element_class(stringArray);
-    assertNotNull(elementClass, "Element class should be available");
-    assert(!elementClass.isNull(), "Element class pointer should not be null");
+    // Test element class if available
+    if (Mono.api.hasExport("mono_array_element_class")) {
+      const elementClass = Mono.api.native.mono_array_element_class(stringArray);
+      assertNotNull(elementClass, "Element class should be available");
+      assert(!elementClass.isNull(), "Element class pointer should not be null");
+    }
     
     console.log(`    Successfully created string array with ${length} elements`);
   }));
@@ -93,13 +101,16 @@ export function testMonoData(): TestResult[] {
     const intArray = Mono.api.native.mono_array_new(domain.pointer, intClass.pointer, 3);
     assertNotNull(intArray, "Int array should be created");
     
-    // Test valid access
-    const validAddress = Mono.api.native.mono_array_addr_with_size(intArray, 1);
+    // Get element size for Int32 (4 bytes)
+    const elementSize = 4;
+    
+    // Test valid access (array, element_size, index)
+    const validAddress = Mono.api.native.mono_array_addr_with_size(intArray, elementSize, 0);
     assertNotNull(validAddress, "Valid array address should be accessible");
     
     // Test bounds checking - this should not crash
     try {
-      const invalidAddress = Mono.api.native.mono_array_addr_with_size(intArray, 10);
+      const invalidAddress = Mono.api.native.mono_array_addr_with_size(intArray, elementSize, 10);
       console.log("    Out-of-bounds access handled gracefully");
     } catch (error) {
       console.log(`    Out-of-bounds access threw expected error: ${error}`);
@@ -139,17 +150,20 @@ export function testMonoData(): TestResult[] {
     const testArray = Mono.api.native.mono_array_new(domain.pointer, stringClass.pointer, 4);
     const testStrings = ["First", "Second", "Third", "Fourth"];
     
+    // For object arrays (strings are objects), element size is pointer size
+    const ptrSize = Process.pointerSize;
+    
     // Populate array
     for (let i = 0; i < testStrings.length; i++) {
       const testString = Mono.api.stringNew(testStrings[i]);
-      const elementAddress = Mono.api.native.mono_array_addr_with_size(testArray, i);
+      const elementAddress = Mono.api.native.mono_array_addr_with_size(testArray, ptrSize, i);
       elementAddress.writePointer(testString);
     }
     
     // Iterate and verify
     let successCount = 0;
     for (let i = 0; i < testStrings.length; i++) {
-      const elementAddress = Mono.api.native.mono_array_addr_with_size(testArray, i);
+      const elementAddress = Mono.api.native.mono_array_addr_with_size(testArray, ptrSize, i);
       const elementPtr = elementAddress.readPointer();
       if (!elementPtr.isNull()) {
         // Read string using native APIs
@@ -174,16 +188,19 @@ export function testMonoData(): TestResult[] {
     // Create numeric array
     const numArray = Mono.api.native.mono_array_new(domain.pointer, intClass.pointer, 10);
     
+    // Int32 element size is 4 bytes
+    const intSize = 4;
+    
     // Populate with test data
     for (let i = 0; i < 10; i++) {
-      const elementAddress = Mono.api.native.mono_array_addr_with_size(numArray, i);
+      const elementAddress = Mono.api.native.mono_array_addr_with_size(numArray, intSize, i);
       elementAddress.writeU32(i * 2); // Even numbers: 0, 2, 4, 6, 8, 10, 12, 14, 16, 18
     }
     
     // Test filtering (even numbers greater than 10)
     let filteredCount = 0;
     for (let i = 0; i < 10; i++) {
-      const elementAddress = Mono.api.native.mono_array_addr_with_size(numArray, i);
+      const elementAddress = Mono.api.native.mono_array_addr_with_size(numArray, intSize, i);
       const value = elementAddress.readU32();
       if (value > 10) {
         filteredCount++;
@@ -195,7 +212,7 @@ export function testMonoData(): TestResult[] {
     // Test aggregation (sum)
     let sum = 0;
     for (let i = 0; i < 10; i++) {
-      const elementAddress = Mono.api.native.mono_array_addr_with_size(numArray, i);
+      const elementAddress = Mono.api.native.mono_array_addr_with_size(numArray, intSize, i);
       sum += elementAddress.readU32();
     }
     
@@ -214,17 +231,20 @@ export function testMonoData(): TestResult[] {
     // Create large array
     const largeArray = Mono.api.native.mono_array_new(domain.pointer, stringClass.pointer, arraySize);
     
+    // For object arrays (strings are objects), element size is pointer size
+    const ptrSize = Process.pointerSize;
+    
     // Populate array
     for (let i = 0; i < arraySize; i++) {
       const testString = Mono.api.stringNew(`Item_${i}`);
-      const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, i);
+      const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, ptrSize, i);
       elementAddress.writePointer(testString);
     }
     
     // Read all elements
     let readCount = 0;
     for (let i = 0; i < arraySize; i++) {
-      const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, i);
+      const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, ptrSize, i);
       const elementPtr = elementAddress.readPointer();
       if (!elementPtr.isNull()) {
         readCount++;
@@ -629,15 +649,19 @@ export function testMonoData(): TestResult[] {
       // Create object array containing strings
       const objectArray = Mono.api.native.mono_array_new(domain.pointer, objectClass.pointer, 3);
       
+      // For object arrays, element size is pointer size
+      const ptrSize = Process.pointerSize;
+      
       // Add strings to object array
       for (let i = 0; i < 3; i++) {
         const itemString = Mono.api.stringNew(`Item ${i}`);
-        const elementAddress = Mono.api.native.mono_array_addr_with_size(objectArray, i);
+        const elementAddress = Mono.api.native.mono_array_addr_with_size(objectArray, ptrSize, i);
         elementAddress.writePointer(itemString);
       }
       
       // Verify array length
-      const arrayLength = Mono.api.native.mono_array_length(objectArray);
+      const arrayLengthRaw = Mono.api.native.mono_array_length(objectArray);
+      const arrayLength = typeof arrayLengthRaw === "number" ? arrayLengthRaw : arrayLengthRaw.toNumber();
       assert(arrayLength === 3, `Object array should have 3 elements, got ${arrayLength}`);
       
       console.log("    Cross-type operations: strings in object array working correctly");
@@ -807,17 +831,20 @@ export function testMonoData(): TestResult[] {
     // Create large array
     const largeArray = Mono.api.native.mono_array_new(domain.pointer, stringClass.pointer, largeArraySize);
     
+    // For object arrays (strings are objects), element size is pointer size
+    const ptrSize = Process.pointerSize;
+    
     // Populate with data
     for (let i = 0; i < largeArraySize; i++) {
       const testString = Mono.api.stringNew(`Large array item ${i}`);
-      const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, i);
+      const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, ptrSize, i);
       elementAddress.writePointer(testString);
     }
     
     // Perform operations on the large array
     let sumLengths = 0;
     for (let i = 0; i < largeArraySize; i++) {
-      const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, i);
+      const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, ptrSize, i);
       const elementPtr = elementAddress.readPointer();
       if (!elementPtr.isNull()) {
         const length = Mono.api.native.mono_string_length(elementPtr);

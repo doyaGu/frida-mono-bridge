@@ -92,10 +92,23 @@ export function testMonoModule(): TestResult {
     // Test base address validity
     assert(!module.base.isNull(), "Module base should not be null");
     
-    const baseAddr = module.base.toUInt32();
+    // Use appropriate address comparison for the platform
+    const isAddress64Bit = Process.pointerSize === 8;
+    const baseAddrStr = module.base.toString();
+    const baseAddr = parseInt(baseAddrStr, 16) || module.base.toUInt32();
+    
     assert(baseAddr > 0, "Module base should be positive");
     assert(baseAddr > 0x10000, "Module base should be above low memory range");
-    assert(baseAddr < 0x7FFFFFFF, "Module base should be within 32-bit user space");
+    
+    // Platform-specific address validation
+    if (isAddress64Bit) {
+      // For 64-bit processes, just check the address is reasonable (not NULL, not obviously invalid)
+      assert(!module.base.isNull(), "Module base should not be NULL in 64-bit process");
+      console.log(`    64-bit process: Module base at ${module.base}`);
+    } else {
+      // For 32-bit processes, check it's within user space
+      assert(baseAddr < 0x7FFFFFFF, "Module base should be within 32-bit user space");
+    }
     
     // Test size validity
     assert(module.size > 1024 * 1024, "Module size should be at least 1MB");

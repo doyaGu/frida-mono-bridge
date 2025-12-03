@@ -473,20 +473,38 @@ export function createMemoryTest(
   options?: { expectMemoryLeak?: boolean }
 ): TestResult {
   return createTest(testName, () => {
-    // Measure memory before test
-    const initialMemory = process.memoryUsage();
+    // Measure memory before test (Frida doesn't have process.memoryUsage)
+    let initialHeapUsed = 0;
+    try {
+      if (typeof process !== 'undefined' && process.memoryUsage) {
+        initialHeapUsed = process.memoryUsage().heapUsed;
+      }
+    } catch (_e) {
+      // Ignore in Frida environment
+    }
     
     // Run the test
     testFn();
     
     // Force garbage collection if available
-    if (global.gc) {
-      global.gc();
+    try {
+      if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
+        (globalThis as any).gc();
+      }
+    } catch (_e) {
+      // Ignore in Frida environment
     }
     
     // Measure memory after test
-    const finalMemory = process.memoryUsage();
-    const memoryDiff = finalMemory.heapUsed - initialMemory.heapUsed;
+    let finalHeapUsed = 0;
+    try {
+      if (typeof process !== 'undefined' && process.memoryUsage) {
+        finalHeapUsed = process.memoryUsage().heapUsed;
+      }
+    } catch (_e) {
+      // Ignore in Frida environment
+    }
+    const memoryDiff = finalHeapUsed - initialHeapUsed;
     
     // If we expect no memory leak, check that memory usage is reasonable
     if (!options?.expectMemoryLeak && memoryDiff > 10 * 1024 * 1024) { // 10MB threshold
@@ -586,13 +604,24 @@ export function createTypeCheckingTest(
 
 /**
  * Measures memory usage before and after a test
+ * Note: In Frida environment, gc and process.memoryUsage are not available,
+ * so we return a placeholder value.
  */
 export function measureMemory(before?: number): number {
-  if (global.gc) {
-    global.gc();
+  // Frida doesn't have global.gc or process.memoryUsage
+  // Try to use them if available (Node.js environment), otherwise return 0
+  try {
+    if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
+      (globalThis as any).gc();
+    }
+    if (typeof process !== 'undefined' && process.memoryUsage) {
+      const memory = process.memoryUsage();
+      return memory.heapUsed;
+    }
+  } catch (_e) {
+    // Ignore errors in Frida environment
   }
-  const memory = process.memoryUsage();
-  return memory.heapUsed;
+  return 0;
 }
 
 /**
@@ -606,10 +635,14 @@ export function measurePerformance(testFn: () => void, options: PerformanceTestO
     testFn();
   }
   
-  // Force garbage collection if requested
+  // Force garbage collection if requested (only in Node.js)
   if (options.collectGarbage) {
-    if (global.gc) {
-      global.gc();
+    try {
+      if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
+        (globalThis as any).gc();
+      }
+    } catch (_e) {
+      // Ignore in Frida environment
     }
   }
   

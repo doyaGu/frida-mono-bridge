@@ -47,6 +47,14 @@ class MonoManagedExceptionError extends MonoError {
     super(message, "Managed Exception");
     this.name = "MonoManagedExceptionError";
   }
+
+  getFullDescription(): string {
+    let description = super.getFullDescription();
+    if (this.stackTrace && this.stackTrace.length > 0) {
+      description += "\nStack trace:\n" + this.stackTrace.join("\n");
+    }
+    return description;
+  }
 }
 
 import {
@@ -861,40 +869,41 @@ export function testMonoErrorHandling(): TestResult {
     const logger = Logger.withTag("WorkflowIntegration");
     const builder = new ValidationBuilder();
     
-    // Step 1: Validate inputs
+    // Step 1: Validate inputs (all passing)
     const validationResult = builder
       .check(true, "Input validation passed")
-      .check(false, "Input validation failed")
+      .check(true, "Second validation passed")
       .build();
     
-    // Step 2: Handle validation result
-    if (!validationResult.isValid) {
-      logger.error("Validation failed", validationResult.errors);
-      throw new MonoValidationError("Input validation failed", "workflow", validationResult.errors);
-    }
+    assert(validationResult.isValid, "Validation should pass");
+    
+    // Step 2: Test validation failure handling separately
+    const failBuilder = new ValidationBuilder();
+    const failResult = failBuilder
+      .check(true, "First check passed")
+      .check(false, "Second check failed")
+      .build();
+    
+    assert(!failResult.isValid, "Validation with failure should not be valid");
+    assert(failResult.errors.length > 0, "Should have error messages");
     
     // Step 3: Execute operation with error handling
-    const operation = () => {
-      if (Math.random() > 0.5) {
-        throw new MonoMethodError("Operation failed", "TestMethod", "TestClass");
-      }
-      return "operation result";
+    const successOperation = () => "operation result";
+    const wrappedOperation = withErrorHandling(successOperation, "workflow");
+    
+    const result = wrappedOperation();
+    assert(result === "operation result", "Should return operation result");
+    
+    // Step 4: Test error handling for failing operation
+    const failingOperation = () => {
+      throw new MonoMethodError("Operation failed", "TestMethod", "TestClass");
     };
     
-    const wrappedOperation = withErrorHandling(operation, "workflow");
+    const wrappedFailingOperation = withErrorHandling(failingOperation, "workflow");
     
-    try {
-      const result = wrappedOperation();
-      logger.info("Operation completed successfully", { result });
-    } catch (error) {
-      if (error instanceof MonoMethodError) {
-        logger.error("Method operation failed", { 
-          methodName: error.methodName, 
-          className: error.className 
-        });
-      }
-      throw error;
-    }
+    assertThrows(() => wrappedFailingOperation(), "Should throw MonoMethodError");
+    
+    logger.info("Comprehensive workflow test completed");
   }));
 
   suite.addResult(createIntegrationTest("Error handling integration - error recovery with logging", () => {
