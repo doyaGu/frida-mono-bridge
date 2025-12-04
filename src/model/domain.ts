@@ -1,8 +1,7 @@
 import { MonoApi } from "../runtime/api";
-import { allocUtf8 } from "../runtime/mem";
 import { pointerIsNull } from "../utils/memory";
-import { MonoHandle } from "./base";
 import { MonoAssembly } from "./assembly";
+import { MonoHandle } from "./base";
 import { MonoClass } from "./class";
 
 // ===== INTERFACES =====
@@ -142,7 +141,7 @@ export class MonoDomain extends MonoHandle {
    * ```
    */
   assemblyOpen(path: string): MonoAssembly {
-    const pathPtr = allocUtf8(path);
+    const pathPtr = Memory.allocUtf8String(path);
     const assemblyPtr = this.native.mono_domain_assembly_open(this.pointer, pathPtr);
     if (pointerIsNull(assemblyPtr)) {
       throw new Error(`Unable to open assembly at ${path}`);
@@ -548,7 +547,7 @@ export class MonoDomain extends MonoHandle {
     }
 
     try {
-      const namePtr = allocUtf8(friendlyName);
+      const namePtr = Memory.allocUtf8String(friendlyName);
       const configFilePtr = NULL; // No config file
       const domainPtr = this.native.mono_domain_create_appdomain(namePtr, configFilePtr);
 

@@ -2,10 +2,8 @@
  * String reading, writing, formatting, and conversion utilities for Mono
  */
 
-import { resolveNativePointer } from "./memory";
 import { MonoError } from "./errors";
-
-declare const NativePointer: any;
+import { resolveNativePointer } from "./memory";
 
 // ============================================================================
 // STRING READING/WRITING UTILITIES

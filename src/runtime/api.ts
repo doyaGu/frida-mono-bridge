@@ -1,14 +1,24 @@
-import { allocPointerArray, allocUtf8 } from "./mem";
-import { pointerIsNull } from "../utils/memory";
-import { readUtf8String, readUtf16String } from "../utils/string";
+import { LruCache } from "../utils/cache";
+import { allocPointerArray, pointerIsNull } from "../utils/memory";
+import { readUtf8String } from "../utils/string";
 import { MonoModuleInfo } from "./module";
 import { ALL_MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./signatures";
-import { LruCache } from "../utils/cache";
 import type { ThreadManager } from "./thread";
 
 type AnyNativeFunction = NativeFunction<any, NativeFunctionArgumentValue[]>;
 
 export type MonoArg = NativePointer | number | boolean | string | null | undefined;
+
+/** Argument types that can be passed to method/delegate invocation */
+export type InvocationArgument =
+  | { pointer: NativePointer }
+  | NativePointer
+  | string
+  | number
+  | bigint
+  | boolean
+  | null
+  | undefined;
 
 export type MonoNativeBindings = {
   [Name in MonoApiName]: (...args: MonoArg[]) => any;
@@ -118,7 +128,7 @@ export class MonoApi {
 
   stringNew(text: string): NativePointer {
     const domain = this.getRootDomain();
-    const data = allocUtf8(text);
+    const data = Memory.allocUtf8String(text);
     return this.native.mono_string_new(domain, data);
   }
 
@@ -170,7 +180,7 @@ export class MonoApi {
         const msgObj = this.native.mono_object_to_string(exception, excSlot);
 
         if (!pointerIsNull(msgObj) && pointerIsNull(excSlot.readPointer())) {
-          const message = this.monoStringToJs(msgObj);
+          const message = this.readMonoString(msgObj, true);
           return { type, message };
         }
       }
@@ -188,7 +198,7 @@ export class MonoApi {
           const strPtr = this.native.mono_runtime_invoke(toStringMethod, exception, NULL, excSlot);
 
           if (!pointerIsNull(strPtr) && pointerIsNull(excSlot.readPointer())) {
-            const message = this.monoStringToJs(strPtr);
+            const message = this.readMonoString(strPtr, true);
             return { type, message };
           }
         }
@@ -204,24 +214,33 @@ export class MonoApi {
   }
 
   /**
-   * Convert a MonoString pointer to JavaScript string
-   * Uses available Mono API with fallbacks
+   * Read a MonoString pointer to JavaScript string using Mono API.
+   * Tries mono_string_to_utf8 first, then falls back to UTF-16 methods.
+   *
+   * @param strPtr MonoString pointer
+   * @param fallbackToChars Whether to try mono_string_chars as fallback (default: true)
+   * @returns JavaScript string or empty string if failed
    */
-  private monoStringToJs(strPtr: NativePointer): string {
-    // Try mono_string_to_utf8 first (most common and available in Unity)
+  readMonoString(strPtr: NativePointer, fallbackToChars = true): string {
+    if (pointerIsNull(strPtr)) return "";
+
+    // Try mono_string_to_utf8 first (most common)
     if (this.hasExport("mono_string_to_utf8")) {
       const utf8Ptr = this.native.mono_string_to_utf8(strPtr);
       if (!pointerIsNull(utf8Ptr)) {
-        const result = utf8Ptr.readUtf8String();
-        return result || "";
+        const result = utf8Ptr.readUtf8String() || "";
+        this.tryFree(utf8Ptr);
+        return result;
       }
     }
+
+    if (!fallbackToChars) return "";
 
     // Fallback: Try mono_string_to_utf16
     if (this.hasExport("mono_string_to_utf16")) {
       const utf16Ptr = this.native.mono_string_to_utf16(strPtr);
       if (!pointerIsNull(utf16Ptr)) {
-        return readUtf16String(utf16Ptr);
+        return utf16Ptr.readUtf16String() || "";
       }
     }
 
@@ -229,10 +248,39 @@ export class MonoApi {
     if (this.hasExport("mono_string_chars") && this.hasExport("mono_string_length")) {
       const chars = this.native.mono_string_chars(strPtr);
       const length = this.native.mono_string_length(strPtr) as number;
-      return readUtf16String(chars, length);
+      if (!pointerIsNull(chars) && length > 0) {
+        return chars.readUtf16String(length) || "";
+      }
     }
 
     return "";
+  }
+
+  /**
+   * Prepare an argument for managed method/delegate invocation
+   * Converts JS values to appropriate Mono pointers
+   *
+   * @param arg The argument to prepare
+   * @returns NativePointer suitable for passing to mono_runtime_invoke
+   * @throws Error if primitive types need manual boxing
+   */
+  prepareInvocationArgument(arg: InvocationArgument): NativePointer {
+    if (arg === null || arg === undefined) {
+      return NULL;
+    }
+    if (typeof arg === "object" && "pointer" in arg) {
+      return arg.pointer;
+    }
+    if (arg instanceof NativePointer) {
+      return arg;
+    }
+    if (typeof arg === "string") {
+      return this.stringNew(arg);
+    }
+    if (typeof arg === "number" || typeof arg === "boolean" || typeof arg === "bigint") {
+      throw new Error("Primitive arguments need manual boxing before invocation");
+    }
+    return arg as NativePointer;
   }
 
   getDelegateThunk(delegateClass: NativePointer): DelegateThunkInfo {
@@ -268,7 +316,7 @@ export class MonoApi {
     if (pointerIsNull(callback)) {
       throw new Error("Internal call callback must not be NULL");
     }
-    const namePtr = allocUtf8(name);
+    const namePtr = Memory.allocUtf8String(name);
     this.native.mono_add_internal_call(namePtr, callback);
   }
 

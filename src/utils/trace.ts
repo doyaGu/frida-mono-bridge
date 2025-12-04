@@ -2,12 +2,15 @@
  * Tracing and hooking utilities for monitoring Mono runtime behavior
  */
 
-import { MonoApi } from "../runtime/api";
 import { MonoClass } from "../model/class";
-import { MonoMethod } from "../model/method";
 import { MonoField } from "../model/field";
+import { MonoMethod } from "../model/method";
 import { MonoProperty } from "../model/property";
+import { MonoApi } from "../runtime/api";
 import * as Find from "./find";
+import { Logger } from "./log";
+
+const traceLogger = Logger.withTag("Trace");
 
 export interface MethodCallbacks {
   onEnter?: (args: NativePointer[]) => void;
@@ -178,7 +181,7 @@ export function classAll(klass: MonoClass, callbacks: MethodCallbacks): () => vo
       detachers.push(detach);
     } catch (error) {
       // Some methods might not be hookable (abstract, etc)
-      console.warn(`Failed to hook ${m.getFullName()}: ${error}`);
+      traceLogger.warn(`Failed to hook ${m.getFullName()}: ${error}`);
     }
   }
 
@@ -207,27 +210,27 @@ export function methodsByPattern(api: MonoApi, pattern: string, callbacks: Metho
   const methods = Find.methods(api, pattern);
   const detachers: Array<() => void> = [];
 
-  console.log(`Tracing ${methods.length} methods matching "${pattern}"`);
+  traceLogger.info(`Tracing ${methods.length} methods matching "${pattern}"`);
 
   for (const m of methods) {
     try {
       const detach = method(m, {
         onEnter(args) {
           if (callbacks.onEnter) {
-            console.log(`→ ${m.getFullName()}`);
+            traceLogger.debug(`-> ${m.getFullName()}`);
             callbacks.onEnter(args);
           }
         },
         onLeave(retval) {
           if (callbacks.onLeave) {
-            console.log(`← ${m.getFullName()}`);
+            traceLogger.debug(`<- ${m.getFullName()}`);
             callbacks.onLeave(retval);
           }
         },
       });
       detachers.push(detach);
     } catch (error) {
-      console.warn(`Failed to hook ${m.getFullName()}`);
+      traceLogger.warn(`Failed to hook ${m.getFullName()}`);
     }
   }
 
@@ -256,7 +259,7 @@ export function classesByPattern(api: MonoApi, pattern: string, callbacks: Metho
   const classes = Find.classes(api, pattern);
   const detachers: Array<() => void> = [];
 
-  console.log(`Tracing ${classes.length} classes matching "${pattern}"`);
+  traceLogger.info(`Tracing ${classes.length} classes matching "${pattern}"`);
 
   for (const klass of classes) {
     const detach = classAll(klass, callbacks);
@@ -303,7 +306,7 @@ export function field(monoField: MonoField, callbacks: FieldAccessCallbacks): ((
     klass.tryGetProperty(`_${fieldName}`);
 
   if (property) {
-    console.log(`[Trace] Using property accessors for field ${fieldName}`);
+    traceLogger.debug(`Using property accessors for field ${fieldName}`);
     return propertyTrace(property, {
       onGet: callbacks.onRead,
       onSet: callbacks.onWrite,
@@ -315,8 +318,8 @@ export function field(monoField: MonoField, callbacks: FieldAccessCallbacks): ((
     return traceStaticField(monoField, callbacks);
   }
 
-  console.warn(`[Trace] Cannot trace field ${klass.getName()}.${fieldName} - no accessor methods found`);
-  console.warn(`[Trace] Consider using a memory watch or hooking methods that access this field`);
+  traceLogger.warn(`Cannot trace field ${klass.getName()}.${fieldName} - no accessor methods found`);
+  traceLogger.warn(`Consider using a memory watch or hooking methods that access this field`);
   return null;
 }
 
@@ -328,17 +331,17 @@ function traceStaticField(monoField: MonoField, _callbacks: FieldAccessCallbacks
   const vtable = klass.getVTable();
 
   if (!vtable || vtable.isNull()) {
-    console.warn(`[Trace] Cannot get VTable for ${klass.getName()}`);
+    traceLogger.warn(`Cannot get VTable for ${klass.getName()}`);
     return null;
   }
 
   // Static fields are stored in the VTable's static data area
   // This is a complex operation that requires understanding mono's internal structures
-  console.warn(`[Trace] Static field tracing via memory watch is experimental`);
+  traceLogger.warn(`Static field tracing via memory watch is experimental`);
 
   // Log the field info for manual debugging
   const offset = monoField.getOffset();
-  console.log(`[Trace] Static field ${monoField.getName()} offset: ${offset}`);
+  traceLogger.debug(`Static field ${monoField.getName()} offset: ${offset}`);
 
   return null;
 }
@@ -356,7 +359,7 @@ export function fieldsByPattern(api: MonoApi, pattern: string, callbacks: FieldA
   const detachers: Array<() => void> = [];
   let tracedCount = 0;
 
-  console.log(`[Trace] Attempting to trace ${fields.length} fields matching "${pattern}"`);
+  traceLogger.info(`Attempting to trace ${fields.length} fields matching "${pattern}"`);
 
   for (const f of fields) {
     try {
@@ -370,7 +373,7 @@ export function fieldsByPattern(api: MonoApi, pattern: string, callbacks: FieldA
     }
   }
 
-  console.log(`[Trace] Successfully traced ${tracedCount}/${fields.length} fields`);
+  traceLogger.info(`Successfully traced ${tracedCount}/${fields.length} fields`);
 
   return () => {
     detachers.forEach(d => d());
@@ -410,9 +413,9 @@ export function propertyTrace(monoProperty: MonoProperty, callbacks: PropertyAcc
         },
       });
       detachers.push(detach);
-      console.log(`[Trace] Hooked getter for ${className}.${propertyName}`);
+      traceLogger.debug(`Hooked getter for ${className}.${propertyName}`);
     } catch (error) {
-      console.warn(`[Trace] Failed to hook getter: ${error}`);
+      traceLogger.warn(`Failed to hook getter: ${error}`);
     }
   }
 
@@ -435,14 +438,14 @@ export function propertyTrace(monoProperty: MonoProperty, callbacks: PropertyAcc
         },
       });
       detachers.push(detach);
-      console.log(`[Trace] Hooked setter for ${className}.${propertyName}`);
+      traceLogger.debug(`Hooked setter for ${className}.${propertyName}`);
     } catch (error) {
-      console.warn(`[Trace] Failed to hook setter: ${error}`);
+      traceLogger.warn(`Failed to hook setter: ${error}`);
     }
   }
 
   if (detachers.length === 0) {
-    console.warn(`[Trace] No accessors found for property ${className}.${propertyName}`);
+    traceLogger.warn(`No accessors found for property ${className}.${propertyName}`);
   }
 
   return () => {
@@ -462,7 +465,7 @@ export function propertiesByPattern(api: MonoApi, pattern: string, callbacks: Pr
   const properties = Find.properties(api, pattern);
   const detachers: Array<() => void> = [];
 
-  console.log(`[Trace] Tracing ${properties.length} properties matching "${pattern}"`);
+  traceLogger.info(`Tracing ${properties.length} properties matching "${pattern}"`);
 
   for (const p of properties) {
     try {

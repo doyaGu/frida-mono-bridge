@@ -1,16 +1,14 @@
 import { MonoApi, MonoManagedExceptionError } from "../runtime/api";
-import { allocUtf8, readU32 } from "../runtime/mem";
-import { pointerIsNull } from "../utils/memory";
-import { readUtf8String } from "../utils/string";
-import { MonoHandle, MethodArgument, MemberAccessibility, CustomAttribute, parseCustomAttributes } from "./base";
-import { MonoImage } from "./image";
-import { MonoObject } from "./object";
-import { MonoClass } from "./class";
-import { MonoMethodSignature, MonoParameterInfo } from "./method-signature";
-import { MonoType, MonoTypeKind, MonoTypeSummary } from "./type";
 import { MethodAttribute, MethodImplAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
-import { unwrapInstance } from "../utils/memory";
 import { Logger } from "../utils/log";
+import { pointerIsNull, unwrapInstance } from "../utils/memory";
+import { readUtf8String } from "../utils/string";
+import { CustomAttribute, MemberAccessibility, MethodArgument, MonoHandle, parseCustomAttributes } from "./base";
+import { MonoClass } from "./class";
+import { MonoImage } from "./image";
+import { MonoMethodSignature, MonoParameterInfo } from "./method-signature";
+import { MonoObject } from "./object";
+import { MonoType, MonoTypeKind, MonoTypeSummary, isPointerLikeKind, readPrimitiveValue } from "./type";
 
 export interface InvokeOptions {
   throwOnManagedException?: boolean;
@@ -123,6 +121,8 @@ const METHOD_IMPL_FLAGS: Record<string, number> = {
   InternalCall: MethodImplAttribute.InternalCall,
 };
 
+const methodLogger = new Logger({ tag: "MonoMethod" });
+
 export class MonoMethod extends MonoHandle {
   #name: string | null = null;
   #signature: MonoMethodSignature | null = null;
@@ -130,7 +130,7 @@ export class MonoMethod extends MonoHandle {
   #flagCache: { flags: number; implementationFlags: number } | null = null;
 
   static find(api: MonoApi, image: MonoImage, descriptor: string): MonoMethod {
-    const descPtr = allocUtf8(descriptor);
+    const descPtr = Memory.allocUtf8String(descriptor);
     const methodDesc = api.native.mono_method_desc_new(descPtr, 1);
     if (pointerIsNull(methodDesc)) {
       throw new Error(`mono_method_desc_new failed for descriptor ${descriptor}`);
@@ -447,8 +447,8 @@ export class MonoMethod extends MonoHandle {
     }
 
     // Log warning if all approaches fail
-    console.log(
-      `[WARN] makeGenericMethod: Cannot instantiate ${this.getFullName()} with ` +
+    methodLogger.warn(
+      `makeGenericMethod: Cannot instantiate ${this.getFullName()} with ` +
         `[${typeArguments.map(t => t.getFullName()).join(", ")}]. ` +
         `No suitable API available.`,
     );
@@ -729,7 +729,7 @@ export class MonoMethod extends MonoHandle {
     options: InvokeOptions = {},
   ): NativePointer {
     const autoBox = options.autoBoxPrimitives !== false;
-    const prepared = autoBox ? this.prepareArguments(args) : args.map(arg => prepareArgumentRaw(this.api, arg));
+    const prepared = autoBox ? this.prepareArguments(args) : args.map(arg => this.api.prepareInvocationArgument(arg));
     try {
       const result = this.api.runtimeInvoke(this.pointer, unwrapInstance(instance), prepared);
       return result;
@@ -835,40 +835,14 @@ export class MonoMethod extends MonoHandle {
   private unboxValue(boxedPtr: NativePointer, kind: MonoTypeKind, options: InvokeOptions = {}): any {
     const unboxed = this.api.native.mono_object_unbox(boxedPtr);
 
+    // Try to read as primitive value first
+    const primitiveResult = readPrimitiveValue(unboxed, kind, { returnBigInt: options.returnBigInt });
+    if (primitiveResult !== null) {
+      return primitiveResult;
+    }
+
+    // Handle special cases
     switch (kind) {
-      case MonoTypeKind.Boolean:
-        return unboxed.readU8() !== 0;
-      case MonoTypeKind.I1:
-        return unboxed.readS8();
-      case MonoTypeKind.U1:
-        return unboxed.readU8();
-      case MonoTypeKind.I2:
-        return unboxed.readS16();
-      case MonoTypeKind.U2:
-      case MonoTypeKind.Char:
-        return unboxed.readU16();
-      case MonoTypeKind.I4:
-        return unboxed.readS32();
-      case MonoTypeKind.U4:
-        return unboxed.readU32();
-      case MonoTypeKind.I8:
-        // Return as bigint if requested, otherwise convert to number (may lose precision)
-        if (options.returnBigInt) {
-          const int64Val = unboxed.readS64();
-          return BigInt(int64Val.toString());
-        }
-        return unboxed.readS64().toNumber();
-      case MonoTypeKind.U8:
-        // Return as bigint if requested, otherwise convert to number (may lose precision)
-        if (options.returnBigInt) {
-          const uint64Val = unboxed.readU64();
-          return BigInt(uint64Val.toString());
-        }
-        return unboxed.readU64().toNumber();
-      case MonoTypeKind.R4:
-        return unboxed.readFloat();
-      case MonoTypeKind.R8:
-        return unboxed.readDouble();
       case MonoTypeKind.Enum:
         // For enums, get underlying type and unbox recursively
         const underlying = this.getReturnType().getUnderlyingType();
@@ -890,19 +864,7 @@ export class MonoMethod extends MonoHandle {
    * Read a MonoString pointer as a JavaScript string
    */
   private readMonoString(strPtr: NativePointer): string {
-    if (pointerIsNull(strPtr)) return "";
-
-    // Try mono_string_to_utf8 first (most common)
-    if (this.api.hasExport("mono_string_to_utf8")) {
-      const utf8Ptr = this.native.mono_string_to_utf8(strPtr);
-      if (!pointerIsNull(utf8Ptr)) {
-        const result = utf8Ptr.readUtf8String() || "";
-        this.api.tryFree(utf8Ptr);
-        return result;
-      }
-    }
-
-    return "";
+    return this.api.readMonoString(strPtr, false);
   }
 
   private prepareArguments(args: MethodArgument[]): NativePointer[] {
@@ -928,7 +890,7 @@ export class MonoMethod extends MonoHandle {
       return this.api.stringNew(value);
     }
     if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
-      if (type.isByRef() || this.isPointerLike(type)) {
+      if (type.isByRef() || isPointerLikeKind(type.getKind())) {
         throw new Error(
           `Parameter ${index} on ${this.getFullName()} expects a pointer or reference; received primitive value.`,
         );
@@ -1060,27 +1022,13 @@ export class MonoMethod extends MonoHandle {
     return type;
   }
 
-  private isPointerLike(type: MonoType): boolean {
-    const kind = type.getKind();
-    switch (kind) {
-      case MonoTypeKind.Pointer:
-      case MonoTypeKind.ByRef:
-      case MonoTypeKind.FunctionPointer:
-      case MonoTypeKind.Int:
-      case MonoTypeKind.UInt:
-        return true;
-      default:
-        return false;
-    }
-  }
-
   private getFlagValues(): { flags: number; implementationFlags: number } {
     if (this.#flagCache) {
       return this.#flagCache;
     }
     const implPtr = Memory.alloc(4);
     const flags = this.native.mono_method_get_flags(this.pointer, implPtr) as number;
-    const implementationFlags = readU32(implPtr);
+    const implementationFlags = implPtr.readU32();
     const result = { flags, implementationFlags };
     this.#flagCache = result;
     return result;
@@ -1312,25 +1260,7 @@ export class MonoMethod extends MonoHandle {
   }
 }
 
-function prepareArgumentRaw(api: MonoApi, arg: MethodArgument): NativePointer {
-  if (arg === null || arg === undefined) {
-    return NULL;
-  }
-  if (arg instanceof MonoObject) {
-    return arg.pointer;
-  }
-  if (typeof arg === "string") {
-    return api.stringNew(arg);
-  }
-  if (typeof arg === "number" || typeof arg === "boolean") {
-    throw new Error("Primitive arguments need manual boxing before invocation");
-  }
-  return arg as NativePointer;
-}
-
 // ===== METHOD INVOCATION UTILITIES =====
-
-const methodLogger = new Logger({ tag: "MethodInvocation" });
 
 /**
  * Method invocation operation with standardized error handling

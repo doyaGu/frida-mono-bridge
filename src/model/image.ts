@@ -1,10 +1,9 @@
 import { MonoApi } from "../runtime/api";
-import { allocUtf8 } from "../runtime/mem";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
 import { MonoHandle } from "./base";
-import { MonoDomain } from "./domain";
 import { MonoClass } from "./class";
+import { MonoDomain } from "./domain";
 
 /**
  * Summary information for a MonoImage, providing essential metadata about
@@ -148,8 +147,8 @@ export class MonoImage extends MonoHandle {
    * ```
    */
   classFromName(namespace: string, name: string): MonoClass {
-    const nsPtr = namespace ? allocUtf8(namespace) : NULL;
-    const namePtr = allocUtf8(name);
+    const nsPtr = namespace ? Memory.allocUtf8String(namespace) : NULL;
+    const namePtr = Memory.allocUtf8String(name);
     const klassPtr = this.native.mono_class_from_name(this.pointer, nsPtr, namePtr);
     if (pointerIsNull(klassPtr)) {
       throw new Error(`Class ${namespace}.${name} not found in image.`);
@@ -177,8 +176,8 @@ export class MonoImage extends MonoHandle {
     if (trimmedName.length === 0) {
       return null;
     }
-    const nsPtr = namespace ? allocUtf8(namespace) : NULL;
-    const namePtr = allocUtf8(trimmedName);
+    const nsPtr = namespace ? Memory.allocUtf8String(namespace) : NULL;
+    const namePtr = Memory.allocUtf8String(trimmedName);
     const klassPtr = this.native.mono_class_from_name(this.pointer, nsPtr, namePtr);
     return pointerIsNull(klassPtr) ? null : new MonoClass(this.api, klassPtr);
   }

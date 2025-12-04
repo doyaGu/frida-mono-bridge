@@ -1,8 +1,8 @@
 import { MonoApi } from "../runtime/api";
 import { readUtf8String } from "../utils/string";
-import { MonoHandle, CustomAttribute, parseCustomAttributes } from "./base";
-import { MonoImage } from "./image";
+import { CustomAttribute, MonoHandle, parseCustomAttributes } from "./base";
 import { MonoClass } from "./class";
+import { MonoImage } from "./image";
 
 /**
  * Represents a Mono assembly (.dll)
@@ -263,7 +263,9 @@ export class MonoAssembly extends MonoHandle {
     // Do a sample lookup
     try {
       image.tryClassFromName("System", "Object");
-    } catch {}
+    } catch {
+      // Ignore errors during performance measurement
+    }
     const classLookupTime = Date.now() - classStart;
 
     // Measure method lookup time
@@ -275,7 +277,9 @@ export class MonoAssembly extends MonoHandle {
         const firstClass = classes[0];
         methodCount = firstClass.getMethods().length;
       }
-    } catch {}
+    } catch {
+      // Ignore errors during performance measurement
+    }
     const methodLookupTime = Date.now() - methodStart;
 
     // Measure field access time
@@ -287,7 +291,9 @@ export class MonoAssembly extends MonoHandle {
         const firstClass = classes[0];
         fieldCount = firstClass.getFields().length;
       }
-    } catch {}
+    } catch {
+      // Ignore errors during performance measurement
+    }
     const fieldAccessTime = Date.now() - fieldStart;
 
     // Estimate memory usage based on class count and metadata

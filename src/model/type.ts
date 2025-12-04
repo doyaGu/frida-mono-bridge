@@ -1,178 +1,360 @@
-import { readU32 } from "../runtime/mem";
+import { MonoEnums } from "../runtime/enums";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
 import { MonoHandle } from "./base";
 import { MonoClass } from "./class";
-import { MonoEnums } from "../runtime/enums";
 
 const MonoTypeEnum = MonoEnums.MonoTypeEnum;
+
+// ============================================================================
+// MONO TYPE KIND CONSTANTS
+// ============================================================================
 
 /**
  * Constants representing the different kind of Mono types.
  *
  * These map to the internal MONO_TYPE_* enum values and classify
  * the fundamental type categories in the Mono type system.
- *
- * @remarks
- * This includes primitive types (Int32, String, etc.), composite types
- * (Class, ValueType, Array), and special types (ByRef, Pointer, Generic).
- *
- * @example
- * ```typescript
- * if (type.getKind() === MonoTypeKind.String) {
- *   console.log("This is a string type");
- * }
- *
- * const isNumeric = [
- *   MonoTypeKind.I4, MonoTypeKind.I8,
- *   MonoTypeKind.R4, MonoTypeKind.R8
- * ].includes(type.getKind());
- * ```
  */
 export const MonoTypeKind = Object.freeze({
-  /** End marker type */
   End: MonoTypeEnum.MONO_TYPE_END,
-  /** void type */
   Void: MonoTypeEnum.MONO_TYPE_VOID,
-  /** System.Boolean */
   Boolean: MonoTypeEnum.MONO_TYPE_BOOLEAN,
-  /** System.Char */
   Char: MonoTypeEnum.MONO_TYPE_CHAR,
-  /** System.SByte (signed 8-bit) */
   I1: MonoTypeEnum.MONO_TYPE_I1,
-  /** System.Byte (unsigned 8-bit) */
   U1: MonoTypeEnum.MONO_TYPE_U1,
-  /** System.Int16 (signed 16-bit) */
   I2: MonoTypeEnum.MONO_TYPE_I2,
-  /** System.UInt16 (unsigned 16-bit) */
   U2: MonoTypeEnum.MONO_TYPE_U2,
-  /** System.Int32 (signed 32-bit) */
   I4: MonoTypeEnum.MONO_TYPE_I4,
-  /** System.UInt32 (unsigned 32-bit) */
   U4: MonoTypeEnum.MONO_TYPE_U4,
-  /** System.Int64 (signed 64-bit) */
   I8: MonoTypeEnum.MONO_TYPE_I8,
-  /** System.UInt64 (unsigned 64-bit) */
   U8: MonoTypeEnum.MONO_TYPE_U8,
-  /** System.Single (32-bit float) */
   R4: MonoTypeEnum.MONO_TYPE_R4,
-  /** System.Double (64-bit float) */
   R8: MonoTypeEnum.MONO_TYPE_R8,
-  /** System.String */
   String: MonoTypeEnum.MONO_TYPE_STRING,
-  /** Pointer type (T*) */
   Pointer: MonoTypeEnum.MONO_TYPE_PTR,
-  /** ByRef type (ref T) */
   ByRef: MonoTypeEnum.MONO_TYPE_BYREF,
-  /** Value type (struct) */
   ValueType: MonoTypeEnum.MONO_TYPE_VALUETYPE,
-  /** Reference type (class) */
   Class: MonoTypeEnum.MONO_TYPE_CLASS,
-  /** Generic type parameter (T in List<T>) */
   GenericVar: MonoTypeEnum.MONO_TYPE_VAR,
-  /** Multi-dimensional array */
   Array: MonoTypeEnum.MONO_TYPE_ARRAY,
-  /** Instantiated generic type (List<int>) */
   GenericInstance: MonoTypeEnum.MONO_TYPE_GENERICINST,
-  /** TypedReference */
   TypedByRef: MonoTypeEnum.MONO_TYPE_TYPEDBYREF,
-  /** Native integer (IntPtr) */
   Int: MonoTypeEnum.MONO_TYPE_I,
-  /** Native unsigned integer (UIntPtr) */
   UInt: MonoTypeEnum.MONO_TYPE_U,
-  /** Function pointer */
   FunctionPointer: MonoTypeEnum.MONO_TYPE_FNPTR,
-  /** System.Object */
   Object: MonoTypeEnum.MONO_TYPE_OBJECT,
-  /** Single-dimensional zero-based array (T[]) */
   SingleDimArray: MonoTypeEnum.MONO_TYPE_SZARRAY,
-  /** Generic method parameter (T in Method<T>) */
   GenericMethodVar: MonoTypeEnum.MONO_TYPE_MVAR,
-  /** Required custom modifier */
   CModReqd: MonoTypeEnum.MONO_TYPE_CMOD_REQD,
-  /** Optional custom modifier */
   CModOpt: MonoTypeEnum.MONO_TYPE_CMOD_OPT,
-  /** Internal use */
   Internal: MonoTypeEnum.MONO_TYPE_INTERNAL,
-  /** Type modifier */
   Modifier: MonoTypeEnum.MONO_TYPE_MODIFIER,
-  /** Sentinel for vararg */
   Sentinel: MonoTypeEnum.MONO_TYPE_SENTINEL,
-  /** Pinned type */
   Pinned: MonoTypeEnum.MONO_TYPE_PINNED,
-  /** Enum type */
   Enum: MonoTypeEnum.MONO_TYPE_ENUM,
 } as const);
 
 export type MonoTypeKind = (typeof MonoTypeKind)[keyof typeof MonoTypeKind];
 
-const MonoTypeNameFormatEnum = MonoEnums.MonoTypeNameFormat;
+// ============================================================================
+// TYPE KIND METADATA TABLES
+// ============================================================================
+
+/** Maps MonoTypeKind to Frida NativeFunction type strings */
+const NATIVE_TYPE_MAP: Record<number, string> = {
+  [MonoTypeKind.Void]: "void",
+  [MonoTypeKind.Boolean]: "bool",
+  [MonoTypeKind.Char]: "uint16",
+  [MonoTypeKind.I1]: "int8",
+  [MonoTypeKind.U1]: "uint8",
+  [MonoTypeKind.I2]: "int16",
+  [MonoTypeKind.U2]: "uint16",
+  [MonoTypeKind.I4]: "int32",
+  [MonoTypeKind.U4]: "uint32",
+  [MonoTypeKind.I8]: "int64",
+  [MonoTypeKind.U8]: "uint64",
+  [MonoTypeKind.R4]: "float",
+  [MonoTypeKind.R8]: "double",
+};
+
+/** Primitive type sizes in bytes (fixed-size types only) */
+const PRIMITIVE_SIZES: Record<number, number> = {
+  [MonoTypeKind.Boolean]: 1,
+  [MonoTypeKind.I1]: 1,
+  [MonoTypeKind.U1]: 1,
+  [MonoTypeKind.Char]: 2,
+  [MonoTypeKind.I2]: 2,
+  [MonoTypeKind.U2]: 2,
+  [MonoTypeKind.I4]: 4,
+  [MonoTypeKind.U4]: 4,
+  [MonoTypeKind.R4]: 4,
+  [MonoTypeKind.I8]: 8,
+  [MonoTypeKind.U8]: 8,
+  [MonoTypeKind.R8]: 8,
+};
+
+/** Type kind classification sets */
+const TYPE_CATEGORIES = {
+  pointer: new Set<number>([
+    MonoTypeKind.Pointer,
+    MonoTypeKind.ByRef,
+    MonoTypeKind.FunctionPointer,
+    MonoTypeKind.Int,
+    MonoTypeKind.UInt,
+  ]),
+  numeric: new Set<number>([
+    MonoTypeKind.I1,
+    MonoTypeKind.U1,
+    MonoTypeKind.I2,
+    MonoTypeKind.U2,
+    MonoTypeKind.I4,
+    MonoTypeKind.U4,
+    MonoTypeKind.I8,
+    MonoTypeKind.U8,
+    MonoTypeKind.R4,
+    MonoTypeKind.R8,
+    MonoTypeKind.Int,
+    MonoTypeKind.UInt,
+  ]),
+  primitive: new Set<number>([
+    MonoTypeKind.Boolean,
+    MonoTypeKind.Char,
+    MonoTypeKind.I1,
+    MonoTypeKind.U1,
+    MonoTypeKind.I2,
+    MonoTypeKind.U2,
+    MonoTypeKind.I4,
+    MonoTypeKind.U4,
+    MonoTypeKind.I8,
+    MonoTypeKind.U8,
+    MonoTypeKind.R4,
+    MonoTypeKind.R8,
+    MonoTypeKind.Int,
+    MonoTypeKind.UInt,
+  ]),
+  value: new Set<number>([
+    MonoTypeKind.ValueType,
+    MonoTypeKind.Enum,
+    MonoTypeKind.Boolean,
+    MonoTypeKind.Char,
+    MonoTypeKind.I1,
+    MonoTypeKind.U1,
+    MonoTypeKind.I2,
+    MonoTypeKind.U2,
+    MonoTypeKind.I4,
+    MonoTypeKind.U4,
+    MonoTypeKind.I8,
+    MonoTypeKind.U8,
+    MonoTypeKind.R4,
+    MonoTypeKind.R8,
+    MonoTypeKind.Int,
+    MonoTypeKind.UInt,
+  ]),
+  array: new Set<number>([MonoTypeKind.Array, MonoTypeKind.SingleDimArray]),
+} as const;
+
+/** Native type aliases for compatibility checking */
+const NATIVE_TYPE_ALIASES: Record<string, string[]> = {
+  int: ["int32"],
+  int32: ["int"],
+  uint: ["uint32"],
+  uint32: ["uint"],
+  long: ["int64"],
+  int64: ["long"],
+  ulong: ["uint64"],
+  uint64: ["ulong"],
+  pointer: ["void*"],
+  "void*": ["pointer"],
+};
+
+// ============================================================================
+// TYPE KIND UTILITY FUNCTIONS
+// ============================================================================
+
+/** Convert MonoTypeKind to native type string for NativeFunction */
+export function monoTypeKindToNative(kind: MonoTypeKind): string {
+  return NATIVE_TYPE_MAP[kind] ?? "pointer";
+}
+
+/** Check if two native types are compatible */
+export function isCompatibleNativeType(
+  provided: NativeFunctionReturnType | NativeFunctionArgumentType,
+  expected: string,
+): boolean {
+  if (provided === expected) return true;
+  if (NATIVE_TYPE_ALIASES[provided as string]?.includes(expected)) return true;
+  const isPtr = (t: string) => t === "pointer" || t === "void*" || t.endsWith("*");
+  return isPtr(provided as string) && isPtr(expected);
+}
+
+/** Check if a MonoTypeKind represents a pointer-like type */
+export function isPointerLikeKind(kind: MonoTypeKind): boolean {
+  return TYPE_CATEGORIES.pointer.has(kind);
+}
+
+/** Get the size in bytes for a primitive MonoTypeKind */
+export function getPrimitiveSize(kind: MonoTypeKind): number {
+  if (TYPE_CATEGORIES.pointer.has(kind)) return Process.pointerSize;
+  return PRIMITIVE_SIZES[kind] ?? 0;
+}
+
+/** Check if kind is a numeric type */
+export function isNumericKind(kind: MonoTypeKind): boolean {
+  return TYPE_CATEGORIES.numeric.has(kind);
+}
+
+/** Check if kind is a primitive type */
+export function isPrimitiveKind(kind: MonoTypeKind): boolean {
+  return TYPE_CATEGORIES.primitive.has(kind);
+}
+
+/** Check if kind is a value type */
+export function isValueTypeKind(kind: MonoTypeKind): boolean {
+  return TYPE_CATEGORIES.value.has(kind);
+}
+
+/** Check if kind is an array type */
+export function isArrayKind(kind: MonoTypeKind): boolean {
+  return TYPE_CATEGORIES.array.has(kind);
+}
+
+// ============================================================================
+// PRIMITIVE VALUE READ/WRITE
+// ============================================================================
+
+/** Options for reading primitive values */
+export interface ValueReadOptions {
+  /** Return Int64/UInt64 as bigint instead of number */
+  returnBigInt?: boolean;
+}
 
 /**
- * Format options for type name output.
- *
- * @example
- * ```typescript
- * const ilName = type.getFullName(MonoTypeNameFormat.IL);
- * const reflectionName = type.getFullName(MonoTypeNameFormat.Reflection);
- * const asmQualified = type.getFullName(MonoTypeNameFormat.AssemblyQualified);
- * ```
+ * Read a primitive value from memory based on MonoTypeKind
  */
+export function readPrimitiveValue(ptr: NativePointer, kind: MonoTypeKind, options: ValueReadOptions = {}): unknown {
+  switch (kind) {
+    case MonoTypeKind.Boolean:
+      return ptr.readU8() !== 0;
+    case MonoTypeKind.I1:
+      return ptr.readS8();
+    case MonoTypeKind.U1:
+      return ptr.readU8();
+    case MonoTypeKind.Char:
+      return ptr.readU16();
+    case MonoTypeKind.I2:
+      return ptr.readS16();
+    case MonoTypeKind.U2:
+      return ptr.readU16();
+    case MonoTypeKind.I4:
+      return ptr.readS32();
+    case MonoTypeKind.U4:
+      return ptr.readU32();
+    case MonoTypeKind.I8:
+      return options.returnBigInt ? BigInt(ptr.readS64().toString()) : ptr.readS64().toNumber();
+    case MonoTypeKind.U8:
+      return options.returnBigInt ? BigInt(ptr.readU64().toString()) : ptr.readU64().toNumber();
+    case MonoTypeKind.R4:
+      return ptr.readFloat();
+    case MonoTypeKind.R8:
+      return ptr.readDouble();
+    case MonoTypeKind.Pointer:
+    case MonoTypeKind.ByRef:
+    case MonoTypeKind.FunctionPointer:
+    case MonoTypeKind.Int:
+    case MonoTypeKind.UInt:
+      return ptr.readPointer();
+    default:
+      return null;
+  }
+}
+
+/**
+ * Write a primitive value to memory based on MonoTypeKind
+ */
+export function writePrimitiveValue(ptr: NativePointer, kind: MonoTypeKind, value: unknown): void {
+  switch (kind) {
+    case MonoTypeKind.Boolean:
+      ptr.writeU8(value ? 1 : 0);
+      break;
+    case MonoTypeKind.I1:
+      ptr.writeS8(value as number);
+      break;
+    case MonoTypeKind.U1:
+      ptr.writeU8(value as number);
+      break;
+    case MonoTypeKind.Char:
+      ptr.writeU16(value as number);
+      break;
+    case MonoTypeKind.I2:
+      ptr.writeS16(value as number);
+      break;
+    case MonoTypeKind.U2:
+      ptr.writeU16(value as number);
+      break;
+    case MonoTypeKind.I4:
+      ptr.writeS32(value as number);
+      break;
+    case MonoTypeKind.U4:
+      ptr.writeU32(value as number);
+      break;
+    case MonoTypeKind.I8:
+      ptr.writeS64(value as number | Int64);
+      break;
+    case MonoTypeKind.U8:
+      ptr.writeU64(value as number | UInt64);
+      break;
+    case MonoTypeKind.R4:
+      ptr.writeFloat(value as number);
+      break;
+    case MonoTypeKind.R8:
+      ptr.writeDouble(value as number);
+      break;
+    case MonoTypeKind.Pointer:
+    case MonoTypeKind.ByRef:
+    case MonoTypeKind.FunctionPointer:
+    case MonoTypeKind.Int:
+    case MonoTypeKind.UInt:
+      ptr.writePointer(value as NativePointer);
+      break;
+  }
+}
+
+// ============================================================================
+// TYPE NAME FORMAT
+// ============================================================================
+
+const MonoTypeNameFormatEnum = MonoEnums.MonoTypeNameFormat;
+
+/** Format options for type name output */
 export const MonoTypeNameFormat = Object.freeze({
-  /** IL format (e.g., "int32") */
   IL: MonoTypeNameFormatEnum.MONO_TYPE_NAME_FORMAT_IL,
-  /** Reflection format (e.g., "Int32") */
   Reflection: MonoTypeNameFormatEnum.MONO_TYPE_NAME_FORMAT_REFLECTION,
-  /** Full name with namespace (e.g., "System.Int32") */
   FullName: MonoTypeNameFormatEnum.MONO_TYPE_NAME_FORMAT_FULL_NAME,
-  /** Assembly qualified name */
   AssemblyQualified: MonoTypeNameFormatEnum.MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED,
 } as const);
 
 export type MonoTypeNameFormat = (typeof MonoTypeNameFormat)[keyof typeof MonoTypeNameFormat];
 
-/**
- * Summary information for a MonoType, providing comprehensive type metadata.
- *
- * @remarks
- * Use `type.getSummary()` to generate this summary for any MonoType instance.
- *
- * @example
- * ```typescript
- * const summary = type.getSummary();
- * console.log(`Type: ${summary.fullName}`);
- * console.log(`Is value type: ${summary.isValueType}`);
- * console.log(`Size: ${summary.size} bytes, Alignment: ${summary.alignment}`);
- * ```
- */
+// ============================================================================
+// TYPE SUMMARY INTERFACE
+// ============================================================================
+
+/** Summary information for a MonoType */
 export interface MonoTypeSummary {
-  /** Short type name (e.g., "Int32") */
   name: string;
-  /** Full type name with namespace (e.g., "System.Int32") */
   fullName: string;
-  /** Type kind classification */
   kind: MonoTypeKind;
-  /** Whether this is a by-reference type (ref T) */
   isByRef: boolean;
-  /** Whether this is a pointer type (T*) */
   isPointer: boolean;
-  /** Whether this is a reference type (class) */
   isReferenceType: boolean;
-  /** Whether this is a value type (struct) */
   isValueType: boolean;
-  /** Whether this is a generic type parameter */
   isGeneric: boolean;
-  /** Whether this is the void type */
   isVoid: boolean;
-  /** Whether this is an array type */
   isArray: boolean;
-  /** Array rank (dimensions), 0 for non-arrays */
   arrayRank: number;
-  /** Value size in bytes */
   size: number;
-  /** Memory alignment in bytes */
   alignment: number;
-  /** Native pointer address as hex string */
   pointer: string;
 }
 
@@ -459,30 +641,7 @@ export class MonoType extends MonoHandle {
    * ```
    */
   isValueType(): boolean {
-    const kind = this.getKind();
-    // Determine if it's a value type based on the type kind
-    // ValueType, Enum, Primitive types (Boolean, Char, I1-I8, U1-U8, R4, R8) are all value types
-    switch (kind) {
-      case MonoTypeKind.ValueType:
-      case MonoTypeKind.Enum:
-      case MonoTypeKind.Boolean:
-      case MonoTypeKind.Char:
-      case MonoTypeKind.I1:
-      case MonoTypeKind.U1:
-      case MonoTypeKind.I2:
-      case MonoTypeKind.U2:
-      case MonoTypeKind.I4:
-      case MonoTypeKind.U4:
-      case MonoTypeKind.I8:
-      case MonoTypeKind.U8:
-      case MonoTypeKind.R4:
-      case MonoTypeKind.R8:
-      case MonoTypeKind.Int: // native int
-      case MonoTypeKind.UInt: // native uint
-        return true;
-      default:
-        return false;
-    }
+    return isValueTypeKind(this.getKind());
   }
 
   /**
@@ -563,7 +722,7 @@ export class MonoType extends MonoHandle {
   getStackSize(): { size: number; alignment: number } {
     const alignPtr = Memory.alloc(4);
     const size = this.native.mono_type_stack_size(this.pointer, alignPtr) as number;
-    const alignment = readU32(alignPtr);
+    const alignment = alignPtr.readU32();
     return { size, alignment };
   }
 
@@ -581,7 +740,7 @@ export class MonoType extends MonoHandle {
   getValueSize(): { size: number; alignment: number } {
     const alignPtr = Memory.alloc(4);
     const size = this.native.mono_type_size(this.pointer, alignPtr) as number;
-    const alignment = readU32(alignPtr);
+    const alignment = alignPtr.readU32();
     return { size, alignment };
   }
 
@@ -639,8 +798,6 @@ export class MonoType extends MonoHandle {
    * Get a human-readable description of this type.
    *
    * @returns Formatted string with type details
-   *
-   * @deprecated Use getSummary() for programmatic access
    *
    * @example
    * ```typescript
@@ -720,26 +877,7 @@ export class MonoType extends MonoHandle {
    * ```
    */
   isPrimitive(): boolean {
-    const kind = this.getKind();
-    switch (kind) {
-      case MonoTypeKind.Boolean:
-      case MonoTypeKind.Char:
-      case MonoTypeKind.I1:
-      case MonoTypeKind.U1:
-      case MonoTypeKind.I2:
-      case MonoTypeKind.U2:
-      case MonoTypeKind.I4:
-      case MonoTypeKind.U4:
-      case MonoTypeKind.I8:
-      case MonoTypeKind.U8:
-      case MonoTypeKind.R4:
-      case MonoTypeKind.R8:
-      case MonoTypeKind.Int:
-      case MonoTypeKind.UInt:
-        return true;
-      default:
-        return false;
-    }
+    return isPrimitiveKind(this.getKind());
   }
 
   /**
@@ -755,24 +893,7 @@ export class MonoType extends MonoHandle {
    * ```
    */
   isNumeric(): boolean {
-    const kind = this.getKind();
-    switch (kind) {
-      case MonoTypeKind.I1:
-      case MonoTypeKind.U1:
-      case MonoTypeKind.I2:
-      case MonoTypeKind.U2:
-      case MonoTypeKind.I4:
-      case MonoTypeKind.U4:
-      case MonoTypeKind.I8:
-      case MonoTypeKind.U8:
-      case MonoTypeKind.R4:
-      case MonoTypeKind.R8:
-      case MonoTypeKind.Int:
-      case MonoTypeKind.UInt:
-        return true;
-      default:
-        return false;
-    }
+    return isNumericKind(this.getKind());
   }
 
   /**

@@ -1,10 +1,8 @@
 import { MonoApi } from "../runtime/api";
-import { MonoObject } from "./object";
-import { MonoClass } from "./class";
-import { MonoTypeKind } from "./type";
 import { pointerIsNull } from "../utils/memory";
-import { setArrayReferenceWithBarrier } from "../utils/write-barrier";
-import { allocUtf8 } from "../runtime/mem";
+import { MonoClass } from "./class";
+import { MonoObject } from "./object";
+import { MonoTypeKind } from "./type";
 
 /**
  * Summary information about a MonoArray instance.
@@ -128,7 +126,7 @@ export class MonoArray<T = any> extends MonoObject {
 
     // Get the Length property getter
     // mono_class_get_method_from_name(klass, name, param_count)
-    const methodName = allocUtf8("get_Length");
+    const methodName = Memory.allocUtf8String("get_Length");
     const getLengthMethod = this.native.mono_class_get_method_from_name(arrayClass, methodName, 0);
 
     if (pointerIsNull(getLengthMethod)) {
@@ -272,11 +270,17 @@ export class MonoArray<T = any> extends MonoObject {
   /**
    * Set a reference element (for object arrays)
    * Uses write barrier for SGen GC compatibility
-   * @see WRITE_BARRIER_ANALYSIS.md for details
    */
   setReference(index: number, value: NativePointer): void {
     const address = this.getElementAddress(index);
-    setArrayReferenceWithBarrier(this.api, this.pointer, address, value);
+    // Write barrier for SGen GC
+    if (value.isNull()) {
+      address.writePointer(value);
+    } else if (this.api.hasExport("mono_gc_wbarrier_set_arrayref")) {
+      this.native.mono_gc_wbarrier_set_arrayref(this.pointer, address, value);
+    } else {
+      address.writePointer(value);
+    }
   }
 
   /**
@@ -975,27 +979,6 @@ export class MonoArray<T = any> extends MonoObject {
   override equals(other: MonoArray | MonoObject): boolean {
     if (!other) return false;
     return this.pointer.equals(other.pointer);
-  }
-
-  /**
-   * Get array information (legacy method, prefer getSummary()).
-   *
-   * @returns Basic array information object
-   * @deprecated Use getSummary() for more comprehensive information
-   */
-  getArrayInfo(): {
-    elementClass: string;
-    length: number;
-    elementSize: number;
-    totalSize: number;
-  } {
-    const elementClass = this.getElementClass();
-    return {
-      elementClass: elementClass.getFullName(),
-      length: this.length,
-      elementSize: this.getElementSize(),
-      totalSize: this.length * this.getElementSize(),
-    };
   }
 
   /**

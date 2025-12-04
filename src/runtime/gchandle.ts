@@ -1,4 +1,7 @@
+import { Logger } from "../utils/log";
 import { MonoApi } from "./api";
+
+const gcLogger = Logger.withTag("GCHandle");
 
 export class GCHandle {
   #handle: number;
@@ -55,7 +58,7 @@ export class GCHandlePool {
 
   createWeak(object: NativePointer, trackResurrection = false): GCHandle {
     if (!this.api.hasExport("mono_gchandle_new_weakref")) {
-      console.warn("[Mono] Weak GCHandles are not supported on this runtime; using a strong handle instead.");
+      gcLogger.warn("Weak GCHandles are not supported on this runtime; using a strong handle instead.");
       return this.create(object, false);
     }
     const handleId = this.api.native.mono_gchandle_new_weakref(object, trackResurrection) as number;

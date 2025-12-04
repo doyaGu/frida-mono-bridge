@@ -1,13 +1,12 @@
-import { MonoHandle, MemberAccessibility, CustomAttribute, parseCustomAttributes } from "./base";
-import { pointerIsNull } from "../utils/memory";
-import { readUtf8String, readUtf16String } from "../utils/string";
+import { FieldAttribute, getMaskedValue, hasFlag } from "../runtime/metadata";
+import { pointerIsNull, unwrapInstance, unwrapInstanceRequired } from "../utils/memory";
+import { readUtf8String } from "../utils/string";
+import { CustomAttribute, MemberAccessibility, MonoHandle, parseCustomAttributes } from "./base";
 import { MonoClass } from "./class";
+import { MonoDomain } from "./domain";
 import { MonoObject } from "./object";
 import { MonoString } from "./string";
-import { MonoDomain } from "./domain";
-import { MonoType, MonoTypeKind, MonoTypeSummary } from "./type";
-import { FieldAttribute, getMaskedValue, hasFlag } from "../runtime/metadata";
-import { unwrapInstance, unwrapInstanceRequired } from "../utils/memory";
+import { isPointerLikeKind, MonoType, MonoTypeKind, MonoTypeSummary, readPrimitiveValue } from "./type";
 
 export type FieldAccessibility = MemberAccessibility;
 
@@ -371,9 +370,8 @@ export class MonoField<T = any> extends MonoHandle {
     }
 
     const kind = type.getKind();
-    const pointerLike = isPointerLike(kind);
     const isValueType = type.isValueType();
-    const treatAsReference = !isValueType && !pointerLike;
+    const treatAsReference = !isValueType && !isPointerLikeKind(kind);
     const valuePointer = treatAsReference ? storage.readPointer() : storage;
 
     return { storage, valuePointer, type };
@@ -405,52 +403,41 @@ export class MonoField<T = any> extends MonoHandle {
     const { storage, valuePointer } = raw;
     const kind = type.getKind();
 
-    switch (kind) {
-      case MonoTypeKind.Boolean:
-        return storage.readU8() !== 0;
-      case MonoTypeKind.I1:
-        return storage.readS8();
-      case MonoTypeKind.U1:
-        return storage.readU8();
-      case MonoTypeKind.Char:
-        return String.fromCharCode(storage.readU16());
-      case MonoTypeKind.I2:
-        return storage.readS16();
-      case MonoTypeKind.U2:
-        return storage.readU16();
-      case MonoTypeKind.I4:
-        return storage.readS32();
-      case MonoTypeKind.U4:
-        return storage.readU32();
-      case MonoTypeKind.I8:
-        return storage.readS64();
-      case MonoTypeKind.U8:
-        return storage.readU64();
-      case MonoTypeKind.R4:
-        return storage.readFloat();
-      case MonoTypeKind.R8:
-        return storage.readDouble();
-      case MonoTypeKind.String:
-        return pointerIsNull(valuePointer) ? null : this.readMonoString(valuePointer);
-      case MonoTypeKind.Pointer:
-      case MonoTypeKind.ByRef:
-      case MonoTypeKind.FunctionPointer:
-      case MonoTypeKind.Int:
-      case MonoTypeKind.UInt:
-        return storage.readPointer();
-      case MonoTypeKind.Enum: {
-        const underlying = type.getUnderlyingType();
-        if (underlying) {
-          return this.coerceValue({ storage, valuePointer, type: underlying }, underlying);
-        }
-        return storage;
-      }
-      default:
-        if (type.isValueType()) {
-          return storage;
-        }
-        return pointerIsNull(valuePointer) ? null : valuePointer;
+    // Handle Char specially (return string instead of number)
+    if (kind === MonoTypeKind.Char) {
+      return String.fromCharCode(storage.readU16());
     }
+
+    // Handle String specially
+    if (kind === MonoTypeKind.String) {
+      return pointerIsNull(valuePointer) ? null : this.readMonoString(valuePointer);
+    }
+
+    // Handle pointer-like types
+    if (isPointerLikeKind(kind)) {
+      return storage.readPointer();
+    }
+
+    // Handle Enum recursively
+    if (kind === MonoTypeKind.Enum) {
+      const underlying = type.getUnderlyingType();
+      if (underlying) {
+        return this.coerceValue({ storage, valuePointer, type: underlying }, underlying);
+      }
+      return storage;
+    }
+
+    // Try to read as primitive (note: I8/U8 return Int64/UInt64 objects here)
+    const primitiveResult = readPrimitiveValue(storage, kind);
+    if (primitiveResult !== null) {
+      return primitiveResult;
+    }
+
+    // Handle value types and reference types
+    if (type.isValueType()) {
+      return storage;
+    }
+    return pointerIsNull(valuePointer) ? null : valuePointer;
   }
 
   private convertToMonoValue(value: any): MonoObject | NativePointer | null {
@@ -477,31 +464,7 @@ export class MonoField<T = any> extends MonoHandle {
    * Read a MonoString to JavaScript string using available API
    */
   private readMonoString(pointer: NativePointer): string {
-    // Try mono_string_to_utf8 first (most common)
-    if (this.api.hasExport("mono_string_to_utf8")) {
-      const utf8Ptr = this.native.mono_string_to_utf8(pointer);
-      if (!pointerIsNull(utf8Ptr)) {
-        const result = utf8Ptr.readUtf8String();
-        return result || "";
-      }
-    }
-
-    // Fallback: Try mono_string_to_utf16
-    if (this.api.hasExport("mono_string_to_utf16")) {
-      const utf16Ptr = this.native.mono_string_to_utf16(pointer);
-      if (!pointerIsNull(utf16Ptr)) {
-        return readUtf16String(utf16Ptr);
-      }
-    }
-
-    // Last resort: Try mono_string_chars + mono_string_length
-    if (this.api.hasExport("mono_string_chars") && this.api.hasExport("mono_string_length")) {
-      const chars = this.native.mono_string_chars(pointer);
-      const length = this.native.mono_string_length(pointer) as number;
-      return readUtf16String(chars, length);
-    }
-
-    return "";
+    return this.api.readMonoString(pointer, true);
   }
 }
 
@@ -518,17 +481,4 @@ export interface FieldInfo {
   offset: number;
   token: number;
   declaringType: string;
-}
-
-function isPointerLike(kind: MonoTypeKind): boolean {
-  switch (kind) {
-    case MonoTypeKind.Pointer:
-    case MonoTypeKind.ByRef:
-    case MonoTypeKind.FunctionPointer:
-    case MonoTypeKind.Int:
-    case MonoTypeKind.UInt:
-      return true;
-    default:
-      return false;
-  }
 }

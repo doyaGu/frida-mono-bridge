@@ -3,10 +3,51 @@
  */
 
 import { MonoMemoryError, MonoValidationError } from "./errors";
-import { isNativePointer } from "./type-operations";
 
-declare const Memory: any;
-declare const ptr: any;
+const POINTER_SIZE = Process.pointerSize;
+
+// ============================================================================
+// TYPE GUARDS
+// ============================================================================
+
+/**
+ * Check if value is a valid NativePointer or NativePointer-like object
+ */
+export function isNativePointer(value: unknown): value is NativePointer {
+  if (value instanceof NativePointer) {
+    return true;
+  }
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    typeof (value as { isNull?: unknown }).isNull === "function" &&
+    typeof (value as { toString?: unknown }).toString === "function"
+  );
+}
+
+// ============================================================================
+// MEMORY ALLOCATION UTILITIES
+// ============================================================================
+
+/**
+ * Allocate an array of pointers in memory
+ * @param items Array of pointers to store
+ * @returns Pointer to allocated array
+ */
+export function allocPointerArray(items: NativePointer[]): NativePointer {
+  if (items.length === 0) {
+    return NULL;
+  }
+
+  const buffer = Memory.alloc(items.length * POINTER_SIZE);
+  for (let index = 0; index < items.length; index += 1) {
+    const offset = index * POINTER_SIZE;
+    const pointer = buffer.add(offset);
+    pointer.writePointer(items[index] ?? NULL);
+  }
+
+  return buffer;
+}
 
 // ============================================================================
 // POINTER UTILITIES
@@ -44,6 +85,10 @@ export function resolveNativePointer(value: any): NativePointer | null {
  */
 export function tryMakePointer(value: string | number | bigint): NativePointer | null {
   try {
+    // Frida's ptr() doesn't accept bigint directly, convert to hex string
+    if (typeof value === "bigint") {
+      return ptr("0x" + value.toString(16));
+    }
     return ptr(value);
   } catch (_error) {
     return null;
@@ -94,14 +139,6 @@ export function ensurePointer(value: NativePointer | null | undefined, message: 
     throw new MonoValidationError(message || "Invalid pointer", "pointer", value ?? null);
   }
   return pointer;
-}
-
-/**
- * Require a valid pointer or throw an error with context
- * This is an alias for ensurePointer with more explicit naming
- */
-export function requireValidPointer(pointer: NativePointer | null | undefined, errorMessage: string): NativePointer {
-  return ensurePointer(pointer, errorMessage);
 }
 
 /**
@@ -240,4 +277,43 @@ export function safeWriteMemory(pointer: NativePointer, data: ArrayBuffer | numb
   } catch (error) {
     throw new MonoMemoryError(`Failed to write memory at ${pointer}`, error instanceof Error ? error : undefined);
   }
+}
+
+// ============================================================================
+// MONO HANDLE ENUMERATION
+// ============================================================================
+
+/**
+ * Generic Mono handle enumeration using iterator pattern
+ * Used for enumerating methods, fields, properties, etc.
+ *
+ * @param fetch Function that takes iterator pointer and returns next handle
+ * @param factory Function to create typed object from handle pointer
+ * @returns Array of enumerated objects
+ *
+ * @example
+ * ```typescript
+ * const methods = enumerateMonoHandles(
+ *   (iter) => api.native.mono_class_get_methods(classPtr, iter),
+ *   (ptr) => new MonoMethod(api, ptr)
+ * );
+ * ```
+ */
+export function enumerateMonoHandles<T>(
+  fetch: (iter: NativePointer) => NativePointer,
+  factory: (ptr: NativePointer) => T,
+): T[] {
+  const iterator = Memory.alloc(Process.pointerSize);
+  iterator.writePointer(NULL);
+  const results: T[] = [];
+
+  while (true) {
+    const handle = fetch(iterator);
+    if (pointerIsNull(handle)) {
+      break;
+    }
+    results.push(factory(handle));
+  }
+
+  return results;
 }

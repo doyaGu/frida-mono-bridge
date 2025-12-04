@@ -1,8 +1,11 @@
 import { MonoApi, MonoArg, MonoManagedExceptionError } from "../runtime/api";
+import { Logger } from "../utils/log";
 import { MonoClass } from "./class";
 import { MonoMethod } from "./method";
 import { MonoObject } from "./object";
-import { MonoType, MonoTypeKind } from "./type";
+import { isCompatibleNativeType, MonoType, MonoTypeKind, monoTypeKindToNative } from "./type";
+
+const delegateLogger = Logger.withTag("MonoDelegate");
 
 type AnyNativeFunction = NativeFunction<any, any[]>;
 
@@ -81,36 +84,6 @@ export interface MonoDelegateSummary {
     argTypes: string[];
   };
 }
-
-/**
- * Maps MonoTypeKind to expected Frida NativeFunctionReturnType
- */
-const MONO_TO_NATIVE_TYPE_MAP: Partial<Record<MonoTypeKind, NativeFunctionReturnType | NativeFunctionArgumentType>> = {
-  [MonoTypeKind.Void]: "void",
-  [MonoTypeKind.Boolean]: "bool",
-  [MonoTypeKind.Char]: "uint16",
-  [MonoTypeKind.I1]: "int8",
-  [MonoTypeKind.U1]: "uint8",
-  [MonoTypeKind.I2]: "int16",
-  [MonoTypeKind.U2]: "uint16",
-  [MonoTypeKind.I4]: "int32",
-  [MonoTypeKind.U4]: "uint32",
-  [MonoTypeKind.I8]: "int64",
-  [MonoTypeKind.U8]: "uint64",
-  [MonoTypeKind.R4]: "float",
-  [MonoTypeKind.R8]: "double",
-  [MonoTypeKind.String]: "pointer",
-  [MonoTypeKind.Pointer]: "pointer",
-  [MonoTypeKind.ByRef]: "pointer",
-  [MonoTypeKind.Class]: "pointer",
-  [MonoTypeKind.Object]: "pointer",
-  [MonoTypeKind.Array]: "pointer",
-  [MonoTypeKind.SingleDimArray]: "pointer",
-  [MonoTypeKind.GenericInstance]: "pointer",
-  [MonoTypeKind.ValueType]: "pointer", // Value types are passed by pointer in managed calls
-  [MonoTypeKind.Int]: "pointer", // IntPtr
-  [MonoTypeKind.UInt]: "pointer", // UIntPtr
-};
 
 // ===== MAIN CLASS =====
 
@@ -299,7 +272,7 @@ export class MonoDelegate extends MonoObject {
    */
   invokeManaged(args: MonoArg[] = [], options: DelegateInvokeOptions = {}): NativePointer {
     const { invoke } = this.ensureInvokeData();
-    const prepared = args.map(arg => prepareDelegateArgument(this.api, arg));
+    const prepared = args.map(arg => this.api.prepareInvocationArgument(arg));
     try {
       return this.api.runtimeInvoke(invoke, this.pointer, prepared);
     } catch (error) {
@@ -368,7 +341,7 @@ export class MonoDelegate extends MonoObject {
         throw new Error(errorMsg);
       }
       if (validation.warnings.length > 0) {
-        console.warn(`[MonoDelegate] ABI warnings: ${validation.warnings.join("; ")}`);
+        delegateLogger.warn(`ABI warnings: ${validation.warnings.join("; ")}`);
       }
     }
 
@@ -531,7 +504,7 @@ export class MonoDelegate extends MonoObject {
       return delegates.length > 0 ? delegates : [this];
     } catch (error) {
       // If invocation fails, return self
-      console.warn(`[MonoDelegate] getInvocationList failed: ${error}`);
+      delegateLogger.warn(`getInvocationList failed: ${error}`);
       return [this];
     }
   }
@@ -690,75 +663,9 @@ export class MonoDelegate extends MonoObject {
   }
 }
 
-function prepareDelegateArgument(api: MonoApi, arg: MonoArg): NativePointer {
-  if (arg === null || arg === undefined) {
-    return NULL;
-  }
-  if (arg instanceof MonoObject) {
-    return arg.pointer;
-  }
-  if (typeof arg === "string") {
-    return api.stringNew(arg);
-  }
-  if (typeof arg === "number" || typeof arg === "boolean") {
-    throw new Error("Primitive arguments need manual boxing before invocation");
-  }
-  return arg as NativePointer;
-}
-
 /**
  * Convert a MonoType to the corresponding native type string for Frida NativeFunction
  */
 function monoTypeToNativeType(monoType: MonoType): string {
-  const kind = monoType.getKind();
-
-  // Check the mapping first
-  const mapped = MONO_TO_NATIVE_TYPE_MAP[kind];
-  if (mapped !== undefined) {
-    return mapped as string;
-  }
-
-  // For unknown types, default to pointer (safest assumption for references)
-  return "pointer";
-}
-
-/**
- * Check if two native types are compatible
- */
-function isCompatibleNativeType(
-  provided: NativeFunctionReturnType | NativeFunctionArgumentType,
-  expected: string,
-): boolean {
-  // Exact match
-  if (provided === expected) {
-    return true;
-  }
-
-  // Compatible aliases
-  const aliases: Record<string, string[]> = {
-    int: ["int32"],
-    int32: ["int"],
-    uint: ["uint32"],
-    uint32: ["uint"],
-    long: ["int64"],
-    int64: ["long"],
-    ulong: ["uint64"],
-    uint64: ["ulong"],
-    pointer: ["void*"],
-    "void*": ["pointer"],
-  };
-
-  const providedAliases = aliases[provided as string] || [];
-  if (providedAliases.includes(expected)) {
-    return true;
-  }
-
-  // Pointer types are compatible with each other
-  const isPointerType = (t: string) => ["pointer", "void*"].includes(t) || t.endsWith("*");
-
-  if (isPointerType(provided as string) && isPointerType(expected)) {
-    return true;
-  }
-
-  return false;
+  return monoTypeKindToNative(monoType.getKind());
 }

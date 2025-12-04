@@ -1,9 +1,8 @@
 import { pointerIsNull } from "../utils/memory";
-import { readUtf16String } from "../utils/string";
 import { MonoHandle } from "./base";
 import { MonoClass } from "./class";
-import { MonoMethod } from "./method";
 import { MonoField } from "./field";
+import { MonoMethod } from "./method";
 
 /**
  * Represents a Mono object instance
@@ -149,8 +148,6 @@ export class MonoObject extends MonoHandle {
    *
    * Note: For value types (structs), this automatically uses the unboxed
    * pointer as the 'this' argument.
-   *
-   * @deprecated Use call() instead for automatic unboxing
    */
   invoke(name: string, args: any[] = []): NativePointer {
     const method = this.method(name, args.length) || this.methodInHierarchy(name, args.length);
@@ -274,7 +271,7 @@ export class MonoObject extends MonoHandle {
         }
 
         if (!pointerIsNull(strPtr)) {
-          return this.monoStringToJs(strPtr);
+          return this.api.readMonoString(strPtr, true);
         }
       }
 
@@ -294,7 +291,7 @@ export class MonoObject extends MonoHandle {
         }
 
         if (!pointerIsNull(strPtr)) {
-          return this.monoStringToJs(strPtr);
+          return this.api.readMonoString(strPtr, true);
         }
       }
     } catch (e) {
@@ -302,38 +299,6 @@ export class MonoObject extends MonoHandle {
     }
 
     return `[${this.getClass().fullName}]`;
-  }
-
-  /**
-   * Convert a MonoString pointer to JavaScript string
-   * Uses available Mono API with fallbacks
-   */
-  private monoStringToJs(strPtr: NativePointer): string {
-    // Try mono_string_to_utf8 first (most common)
-    if (this.api.hasExport("mono_string_to_utf8")) {
-      const utf8Ptr = this.native.mono_string_to_utf8(strPtr);
-      if (!pointerIsNull(utf8Ptr)) {
-        const result = utf8Ptr.readUtf8String();
-        return result || "";
-      }
-    }
-
-    // Fallback: Try mono_string_to_utf16
-    if (this.api.hasExport("mono_string_to_utf16")) {
-      const utf16Ptr = this.native.mono_string_to_utf16(strPtr);
-      if (!pointerIsNull(utf16Ptr)) {
-        return readUtf16String(utf16Ptr);
-      }
-    }
-
-    // Last resort: Try mono_string_chars + mono_string_length
-    if (this.api.hasExport("mono_string_chars") && this.api.hasExport("mono_string_length")) {
-      const chars = this.native.mono_string_chars(strPtr);
-      const length = this.native.mono_string_length(strPtr) as number;
-      return readUtf16String(chars, length);
-    }
-
-    return "";
   }
 
   // ===== CONSISTENT API PATTERNS =====

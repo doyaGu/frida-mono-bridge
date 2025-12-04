@@ -3,17 +3,16 @@
  * Provides a fluent, discoverable API similar to frida-il2cpp-bridge
  */
 
-import { MonoApi, createMonoApi } from "./runtime/api";
+import { MonoDomain } from "./model/domain";
+import { createMonoApi, MonoApi } from "./runtime/api";
 import { findMonoModule, MonoModuleInfo } from "./runtime/module";
 import { ThreadManager } from "./runtime/thread";
-import { MonoDomain } from "./model/domain";
 import { MonoRuntimeVersion } from "./runtime/version";
 
 // Import utilities
 import * as Find from "./utils/find";
-import * as Trace from "./utils/trace";
-import * as Types from "./utils/types";
 import { GCUtilities } from "./utils/gc";
+import * as Trace from "./utils/trace";
 
 /**
  * Main Mono namespace
@@ -116,17 +115,10 @@ export class MonoNamespace {
   }
 
   /**
-   * Tracing utilities for hooking and monitoring
+   * Tracing utilities for method interception
    */
   get trace(): typeof Trace {
     return Trace;
-  }
-
-  /**
-   * Type utilities for boxing/unboxing and type operations
-   */
-  get types(): typeof Types {
-    return Types;
   }
 
   /**

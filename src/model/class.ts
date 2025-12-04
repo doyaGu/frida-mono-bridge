@@ -1,15 +1,17 @@
-import { allocUtf8, readU32 } from "../runtime/mem";
-import { pointerIsNull } from "../utils/memory";
+import { TypeAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
+import { Logger } from "../utils/log";
+import { enumerateMonoHandles, pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { MonoHandle, CustomAttribute, parseCustomAttributes } from "./base";
+import { CustomAttribute, MonoHandle, parseCustomAttributes } from "./base";
+import { MonoDomain } from "./domain";
 import { MonoField } from "./field";
+import { MonoImage } from "./image";
 import { MonoMethod } from "./method";
 import { MonoObject } from "./object";
 import { MonoProperty } from "./property";
-import { MonoImage } from "./image";
 import { MonoType, MonoTypeSummary } from "./type";
-import { MonoDomain } from "./domain";
-import { TypeAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
+
+const classLogger = Logger.withTag("MonoClass");
 
 export interface MonoClassSummary {
   name: string;
@@ -521,8 +523,8 @@ export class MonoClass extends MonoHandle {
     }
 
     // Cannot create generic type - log warning
-    console.log(
-      `[WARN] makeGenericType: Cannot create ${this.getFullName()}<${typeArguments.map(t => t.getFullName()).join(", ")}>. ` +
+    classLogger.warn(
+      `makeGenericType: Cannot create ${this.getFullName()}<${typeArguments.map(t => t.getFullName()).join(", ")}>. ` +
         `Neither mono_reflection_type_from_name nor Unity-specific APIs are available or successful.`,
     );
     return null;
@@ -556,7 +558,7 @@ export class MonoClass extends MonoHandle {
   private makeGenericTypeViaReflection(typeArguments: MonoClass[]): MonoClass | null {
     try {
       const typeName = this.buildGenericTypeName(typeArguments);
-      const typeNamePtr = allocUtf8(typeName);
+      const typeNamePtr = Memory.allocUtf8String(typeName);
       const image = this.getImage();
 
       // mono_reflection_type_from_name(name, image) -> MonoType*
@@ -630,7 +632,7 @@ export class MonoClass extends MonoHandle {
   }
 
   tryGetMethod(name: string, paramCount = -1): MonoMethod | null {
-    const namePtr = allocUtf8(name);
+    const namePtr = Memory.allocUtf8String(name);
     const methodPtr = this.native.mono_class_get_method_from_name(this.pointer, namePtr, paramCount);
     return pointerIsNull(methodPtr) ? null : new MonoMethod(this.api, methodPtr);
   }
@@ -639,7 +641,7 @@ export class MonoClass extends MonoHandle {
     if (!refreshCache && this.#methods) {
       return this.#methods.slice();
     }
-    const methods = enumerateHandles(
+    const methods = enumerateMonoHandles(
       iter => this.native.mono_class_get_methods(this.pointer, iter),
       ptr => new MonoMethod(this.api, ptr),
     );
@@ -656,7 +658,7 @@ export class MonoClass extends MonoHandle {
   }
 
   tryGetField(name: string): MonoField | null {
-    const namePtr = allocUtf8(name);
+    const namePtr = Memory.allocUtf8String(name);
     const fieldPtr = this.native.mono_class_get_field_from_name(this.pointer, namePtr);
     return pointerIsNull(fieldPtr) ? null : new MonoField(this.api, fieldPtr);
   }
@@ -665,7 +667,7 @@ export class MonoClass extends MonoHandle {
     if (!refreshCache && this.#fields) {
       return this.#fields.slice();
     }
-    const fields = enumerateHandles(
+    const fields = enumerateMonoHandles(
       iter => this.native.mono_class_get_fields(this.pointer, iter),
       ptr => new MonoField(this.api, ptr),
     );
@@ -682,7 +684,7 @@ export class MonoClass extends MonoHandle {
   }
 
   tryGetProperty(name: string): MonoProperty | null {
-    const namePtr = allocUtf8(name);
+    const namePtr = Memory.allocUtf8String(name);
     const propertyPtr = this.native.mono_class_get_property_from_name(this.pointer, namePtr);
     return pointerIsNull(propertyPtr) ? null : new MonoProperty(this.api, propertyPtr);
   }
@@ -691,7 +693,7 @@ export class MonoClass extends MonoHandle {
     if (!refreshCache && this.#properties) {
       return this.#properties.slice();
     }
-    const properties = enumerateHandles(
+    const properties = enumerateMonoHandles(
       iter => this.native.mono_class_get_properties(this.pointer, iter),
       ptr => new MonoProperty(this.api, ptr),
     );
@@ -703,7 +705,7 @@ export class MonoClass extends MonoHandle {
     if (!refreshCache && this.#interfaces) {
       return this.#interfaces.slice();
     }
-    const interfaces = enumerateHandles(
+    const interfaces = enumerateMonoHandles(
       iter => this.native.mono_class_get_interfaces(this.pointer, iter),
       ptr => new MonoClass(this.api, ptr),
     );
@@ -715,7 +717,7 @@ export class MonoClass extends MonoHandle {
     if (!refreshCache && this.#nestedTypes) {
       return this.#nestedTypes.slice();
     }
-    const nested = enumerateHandles(
+    const nested = enumerateMonoHandles(
       iter => this.native.mono_class_get_nested_types(this.pointer, iter),
       ptr => new MonoClass(this.api, ptr),
     );
@@ -730,7 +732,7 @@ export class MonoClass extends MonoHandle {
   getValueSize(): { size: number; alignment: number } {
     const alignmentPtr = Memory.alloc(4);
     const size = this.native.mono_class_value_size(this.pointer, alignmentPtr) as number;
-    const alignment = readU32(alignmentPtr);
+    const alignment = alignmentPtr.readU32();
     return { size, alignment };
   }
 
@@ -830,18 +832,4 @@ export class MonoClass extends MonoHandle {
       errors,
     };
   }
-}
-
-function enumerateHandles<T>(fetch: (iter: NativePointer) => NativePointer, factory: (ptr: NativePointer) => T): T[] {
-  const iterator = Memory.alloc(Process.pointerSize);
-  iterator.writePointer(NULL);
-  const results: T[] = [];
-  while (true) {
-    const handle = fetch(iterator);
-    if (pointerIsNull(handle)) {
-      break;
-    }
-    results.push(factory(handle));
-  }
-  return results;
 }
