@@ -921,7 +921,9 @@ export function createMonoArrayTests(): TestResult[] {
       const str = arr.toString();
       
       assert(typeof str === 'string', 'toString() should return string');
-      assert(str.includes('MonoArray'), 'toString() should include MonoArray');
+      // toString() returns format like "System.Int32[5]"
+      assert(str.includes('Int32'), 'toString() should include element type');
+      assert(str.includes('[5]'), 'toString() should include array length');
     }
   ));
 

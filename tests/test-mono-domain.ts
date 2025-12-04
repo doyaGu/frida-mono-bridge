@@ -770,6 +770,162 @@ export function testMonoDomain(): TestResult {
   }));
 
   // ============================================================================
+  // SUMMARY AND DESCRIPTION TESTS
+  // ============================================================================
+
+  suite.addResult(createDomainTest("Domain.getSummary should return complete summary object", domain => {
+    const summary = domain.getSummary();
+    assertNotNull(summary, "getSummary should return an object");
+    
+    // Verify all required properties
+    assert(typeof summary.id === "number", "Summary should have id");
+    assert(typeof summary.isRoot === "boolean", "Summary should have isRoot");
+    assert(typeof summary.assemblyCount === "number", "Summary should have assemblyCount");
+    assert(Array.isArray(summary.assemblyNames), "Summary should have assemblyNames array");
+    assert(typeof summary.namespaceCount === "number", "Summary should have namespaceCount");
+    assert(typeof summary.pointer === "string", "Summary should have pointer");
+    
+    console.log(`    Summary: ID=${summary.id}, isRoot=${summary.isRoot}, assemblies=${summary.assemblyCount}`);
+  }));
+
+  suite.addResult(createDomainTest("Domain.getSummary should have consistent data", domain => {
+    const summary = domain.getSummary();
+    
+    // Verify consistency with direct methods
+    assert(summary.id === domain.id, "Summary id should match domain.id");
+    assert(summary.isRoot === domain.isRootDomain(), "Summary isRoot should match isRootDomain()");
+    assert(summary.assemblyCount === domain.assemblyCount, "Summary assemblyCount should match domain.assemblyCount");
+    assert(summary.assemblyNames.length === domain.assemblyCount, "Summary assemblyNames length should match assemblyCount");
+  }));
+
+  suite.addResult(createDomainTest("Domain.describe should return formatted string", domain => {
+    const description = domain.describe();
+    assertNotNull(description, "describe should return a string");
+    
+    // Verify key information is included
+    assert(description.includes("MonoDomain"), "Description should include MonoDomain");
+    assert(description.includes("Assemblies"), "Description should include assembly info");
+    assert(description.includes("Namespaces"), "Description should include namespace info");
+    
+    console.log("    describe() output:");
+    description.split("\n").forEach(line => console.log(`      ${line}`));
+  }));
+
+  suite.addResult(createDomainTest("Domain.toString should return correct format", domain => {
+    const str = domain.toString();
+    assertNotNull(str, "toString should return a string");
+    
+    assert(str.includes("MonoDomain"), "toString should include MonoDomain");
+    assert(str.includes("assemblies"), "toString should include assembly count");
+    
+    // Should include root label if it is root
+    if (domain.isRootDomain()) {
+      assert(str.includes("root"), "toString should include 'root' for root domain");
+    }
+    
+    console.log(`    toString: ${str}`);
+  }));
+
+  // ============================================================================
+  // ACCESSOR PROPERTIES TESTS
+  // ============================================================================
+
+  suite.addResult(createDomainTest("Domain.assemblyCount accessor should return correct count", domain => {
+    const countFromAccessor = domain.assemblyCount;
+    const countFromMethod = domain.getAssemblies().length;
+    
+    assert(countFromAccessor === countFromMethod, "assemblyCount accessor should match getAssemblies().length");
+    assert(typeof countFromAccessor === "number", "assemblyCount should be a number");
+    assert(countFromAccessor > 0, "assemblyCount should be positive");
+    
+    console.log(`    Assembly count: ${countFromAccessor}`);
+  }));
+
+  suite.addResult(createDomainTest("Domain.isRoot accessor should match isRootDomain()", domain => {
+    const fromAccessor = domain.isRoot;
+    const fromMethod = domain.isRootDomain();
+    
+    assert(fromAccessor === fromMethod, "isRoot accessor should match isRootDomain()");
+    assert(typeof fromAccessor === "boolean", "isRoot should be a boolean");
+    
+    console.log(`    Is root domain: ${fromAccessor}`);
+  }));
+
+  // ============================================================================
+  // UTILITY METHODS TESTS
+  // ============================================================================
+
+  suite.addResult(createDomainTest("Domain.hasAssembly should return true for existing assembly", domain => {
+    assert(domain.hasAssembly("mscorlib") === true, "Should find mscorlib");
+    
+    // Also test with other common assemblies
+    const unityCore = domain.hasAssembly("UnityEngine.CoreModule");
+    const unityEngine = domain.hasAssembly("UnityEngine");
+    console.log(`    Has UnityEngine.CoreModule: ${unityCore}, Has UnityEngine: ${unityEngine}`);
+  }));
+
+  suite.addResult(createDomainTest("Domain.hasAssembly should return false for non-existing assembly", domain => {
+    assert(domain.hasAssembly("NonExistent.Assembly") === false, "Should not find NonExistent.Assembly");
+    assert(domain.hasAssembly("") === false, "Should return false for empty string");
+  }));
+
+  suite.addResult(createDomainTest("Domain.hasClass should return true for existing class", domain => {
+    assert(domain.hasClass("System.String") === true, "Should find System.String");
+    assert(domain.hasClass("System.Object") === true, "Should find System.Object");
+  }));
+
+  suite.addResult(createDomainTest("Domain.hasClass should return false for non-existing class", domain => {
+    assert(domain.hasClass("NonExistent.Class") === false, "Should not find NonExistent.Class");
+    assert(domain.hasClass("") === false, "Should return false for empty string");
+  }));
+
+  suite.addResult(createDomainTest("Domain.searchAssemblies should find by pattern", domain => {
+    // Search for "System" assemblies
+    const systemAssemblies = domain.searchAssemblies("system");
+    assert(Array.isArray(systemAssemblies), "Should return an array");
+    
+    // Search for "Unity" assemblies
+    const unityAssemblies = domain.searchAssemblies("unity");
+    console.log(`    Found ${systemAssemblies.length} System assemblies, ${unityAssemblies.length} Unity assemblies`);
+    
+    // Verify case-insensitivity
+    const lower = domain.searchAssemblies("mono");
+    const upper = domain.searchAssemblies("MONO");
+    assert(lower.length === upper.length, "Search should be case-insensitive");
+  }));
+
+  suite.addResult(createDomainTest("Domain.searchClasses should find by pattern", domain => {
+    // Search for "String" classes
+    const stringClasses = domain.searchClasses("string", 20);
+    assert(Array.isArray(stringClasses), "Should return an array");
+    assert(stringClasses.length > 0, "Should find classes containing 'string'");
+    assert(stringClasses.length <= 20, "Should respect maxResults");
+    
+    // Verify all contain the pattern (case-insensitive)
+    const allMatch = stringClasses.every(c => 
+      c.getName().toLowerCase().includes("string")
+    );
+    assert(allMatch, "All found classes should contain the pattern");
+    
+    console.log(`    Found ${stringClasses.length} classes containing 'string'`);
+  }));
+
+  suite.addResult(createDomainTest("Domain.getTotalClassCount should return positive number", domain => {
+    const totalCount = domain.getTotalClassCount();
+    assert(typeof totalCount === "number", "Should return a number");
+    assert(totalCount > 0, "Should have positive total class count");
+    
+    // Verify it matches sum of individual assembly class counts
+    let manualCount = 0;
+    for (const asm of domain.getAssemblies()) {
+      manualCount += asm.image.getClassCount();
+    }
+    assert(totalCount === manualCount, "getTotalClassCount should match sum of individual counts");
+    
+    console.log(`    Total class count: ${totalCount}`);
+  }));
+
+  // ============================================================================
   // DOMAIN CREATION AND SWITCHING TESTS
   // ============================================================================
 

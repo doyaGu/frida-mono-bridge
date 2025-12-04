@@ -536,6 +536,228 @@ export function createMonoImageTests(): TestResult[] {
       const stringRep = image.toString();
       assertNotNull(stringRep, "toString should return a value");
       assert(stringRep.includes("MonoImage"), "toString should include class type");
+      assert(stringRep.includes("classes"), "toString should include class count info");
+    }
+  ));
+
+  // ===== SUMMARY AND DESCRIBE TESTS =====
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getSummary should return complete summary object",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const summary = mscorlib!.image.getSummary();
+      assertNotNull(summary, "getSummary should return an object");
+      
+      // Verify all required properties
+      assert(typeof summary.name === "string", "Summary should have name");
+      assert(typeof summary.classCount === "number", "Summary should have classCount");
+      assert(typeof summary.namespaceCount === "number", "Summary should have namespaceCount");
+      assert(Array.isArray(summary.namespaces), "Summary should have namespaces array");
+      assert(typeof summary.pointer === "string", "Summary should have pointer");
+      
+      console.log(`  - Summary: ${summary.name}, ${summary.classCount} classes, ${summary.namespaceCount} namespaces`);
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getSummary should have consistent data",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const image = mscorlib!.image;
+      const summary = image.getSummary();
+      
+      // Verify consistency with direct methods
+      assert(summary.name === image.getName(), "Summary name should match getName()");
+      assert(summary.classCount === image.getClassCount(), "Summary classCount should match getClassCount()");
+      assert(summary.namespaceCount === image.getNamespaces().length, "Summary namespaceCount should match getNamespaces().length");
+      assert(summary.namespaces.length === image.getNamespaces().length, "Summary namespaces should match getNamespaces()");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.describe should return formatted string",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const description = mscorlib!.image.describe();
+      assertNotNull(description, "describe should return a string");
+      
+      // Verify key information is included
+      assert(description.includes("MonoImage"), "Description should include MonoImage");
+      assert(description.includes("Classes:"), "Description should include class count");
+      assert(description.includes("Namespaces"), "Description should include namespace info");
+      assert(description.includes("Pointer:"), "Description should include pointer");
+      
+      console.log("  - describe() output:");
+      description.split("\n").forEach(line => console.log(`    ${line}`));
+    }
+  ));
+
+  // ===== ACCESSOR PROPERTIES TESTS =====
+
+  results.push(createMonoDependentTest(
+    "MonoImage.classCount accessor should return correct count",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const image = mscorlib!.image;
+      const countFromAccessor = image.classCount;
+      const countFromMethod = image.getClassCount();
+      
+      assert(countFromAccessor === countFromMethod, "classCount accessor should match getClassCount()");
+      assert(typeof countFromAccessor === "number", "classCount should be a number");
+      assert(countFromAccessor > 0, "classCount should be positive for mscorlib");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.namespaces accessor should return array",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const image = mscorlib!.image;
+      const nsFromAccessor = image.namespaces;
+      const nsFromMethod = image.getNamespaces();
+      
+      assert(Array.isArray(nsFromAccessor), "namespaces accessor should return array");
+      assert(nsFromAccessor.length === nsFromMethod.length, "namespaces accessor should match getNamespaces()");
+    }
+  ));
+
+  // ===== UTILITY METHODS TESTS =====
+
+  results.push(createMonoDependentTest(
+    "MonoImage.hasClass should return true for existing class",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const image = mscorlib!.image;
+      
+      assert(image.hasClass("System.String") === true, "Should find System.String");
+      assert(image.hasClass("System.Object") === true, "Should find System.Object");
+      assert(image.hasClass("System.Int32") === true, "Should find System.Int32");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.hasClass should return false for non-existing class",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const image = mscorlib!.image;
+      
+      assert(image.hasClass("NonExistent.Class") === false, "Should not find NonExistent.Class");
+      assert(image.hasClass("") === false, "Should return false for empty string");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.hasClassByName should work correctly",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const image = mscorlib!.image;
+      
+      assert(image.hasClassByName("System", "String") === true, "Should find System.String");
+      assert(image.hasClassByName("System", "Object") === true, "Should find System.Object");
+      assert(image.hasClassByName("NonExistent", "Class") === false, "Should not find NonExistent.Class");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.getNamespaceCount should return correct count",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const image = mscorlib!.image;
+      const count = image.getNamespaceCount();
+      const namespaces = image.getNamespaces();
+      
+      assert(count === namespaces.length, "getNamespaceCount should match getNamespaces().length");
+      assert(count > 0, "Should have at least one namespace");
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.findClasses should filter with predicate",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const image = mscorlib!.image;
+      
+      // Find all classes starting with "Int"
+      const intClasses = image.findClasses(c => c.getName().startsWith("Int"));
+      assert(intClasses.length > 0, "Should find classes starting with Int");
+      
+      // Verify all match predicate
+      const allMatch = intClasses.every(c => c.getName().startsWith("Int"));
+      assert(allMatch, "All found classes should match predicate");
+      
+      console.log(`  - Found ${intClasses.length} classes starting with "Int"`);
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.searchClasses should find by pattern",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const image = mscorlib!.image;
+      
+      // Search for "String" (case-insensitive)
+      const stringClasses = image.searchClasses("string");
+      assert(stringClasses.length > 0, "Should find classes containing 'string'");
+      
+      // Verify all contain the pattern (case-insensitive)
+      const allMatch = stringClasses.every(c => 
+        c.getName().toLowerCase().includes("string")
+      );
+      assert(allMatch, "All found classes should contain the pattern");
+      
+      console.log(`  - Found ${stringClasses.length} classes containing "string"`);
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    "MonoImage.searchClasses should be case-insensitive",
+    () => {
+      const domain = Mono.domain;
+      const mscorlib = domain.getAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
+      
+      const image = mscorlib!.image;
+      
+      const lower = image.searchClasses("string");
+      const upper = image.searchClasses("STRING");
+      const mixed = image.searchClasses("String");
+      
+      assert(lower.length === upper.length, "Search should be case-insensitive (lower vs upper)");
+      assert(lower.length === mixed.length, "Search should be case-insensitive (lower vs mixed)");
     }
   ));
 
