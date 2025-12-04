@@ -44,9 +44,9 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "prepublishOnly": "npm run clean && npm run build && npm run lint && node scripts/pre-publish.js",
+    "prepublishOnly": "npm run clean && npm run build && npm run lint && node scripts/pre-publish.cjs",
     "prepack": "npm run build",
-    "build": "mkdir dist && frida-compile src/index.ts -o dist/agent.js",
+    "build": "mkdir -p dist && frida-compile src/index.ts -o dist/agent.js",
     "watch": "frida-compile -w src/index.ts -o dist/agent.js",
     "lint": "eslint src/ && tsc --noEmit",
     "lint:fix": "eslint src/ --fix",
