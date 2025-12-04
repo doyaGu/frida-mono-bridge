@@ -5,28 +5,141 @@ import { MonoHandle } from "./base";
 import { MonoAssembly } from "./assembly";
 import { MonoClass } from "./class";
 
+// ===== INTERFACES =====
+
 /**
- * Represents a Mono application domain
+ * Summary information for a MonoDomain, providing essential metadata about
+ * an application domain in the Mono runtime.
+ * 
+ * @remarks
+ * Use `domain.getSummary()` to generate this summary for any MonoDomain instance.
+ * The summary provides a snapshot of the domain's state for logging, debugging,
+ * and analysis purposes.
+ * 
+ * @example
+ * ```typescript
+ * const summary = domain.getSummary();
+ * console.log(`Domain: ${summary.id}`);
+ * console.log(`Assemblies: ${summary.assemblyCount}`);
+ * ```
+ */
+export interface MonoDomainSummary {
+  /** Domain identifier (pointer address) */
+  id: number;
+  /** Whether this is the root domain */
+  isRoot: boolean;
+  /** Total number of loaded assemblies */
+  assemblyCount: number;
+  /** Names of loaded assemblies */
+  assemblyNames: string[];
+  /** Total number of unique namespaces across all assemblies */
+  namespaceCount: number;
+  /** Native pointer address as hex string */
+  pointer: string;
+}
+
+/**
+ * Result of an assembly unload operation.
+ */
+export interface UnloadAssemblyResult {
+  /** Whether the unload operation completed without error */
+  success: boolean;
+  /** Reason for failure or success note */
+  reason: string;
+  /** Whether assembly unloading is supported by this runtime */
+  supported: boolean;
+}
+
+/**
+ * Represents a Mono application domain.
+ * 
+ * A MonoDomain is a container for code execution in the Mono runtime,
+ * providing isolation for assemblies and their types. In most Unity/Mono
+ * applications, there is only one active domain (the root domain).
  *
- * No thread management needed - all native calls are automatically thread-safe
+ * @remarks
+ * - All native calls are automatically thread-safe
+ * - No manual thread management is needed
+ * - Use `MonoDomain.getRoot()` to get the root application domain
+ * - Use `MonoDomain.current()` to get the current thread's domain
+ * 
+ * @example
+ * ```typescript
+ * // Get the root domain
+ * const domain = MonoDomain.getRoot(api);
+ * 
+ * // List all loaded assemblies
+ * domain.assemblies.forEach(asm => console.log(asm.name));
+ * 
+ * // Find a class by full name
+ * const playerClass = domain.class("Game.Player");
+ * 
+ * // Get domain summary
+ * console.log(domain.describe());
+ * ```
  */
 export class MonoDomain extends MonoHandle {
+  /** Cached root domain pointer for comparison */
+  private static rootDomainPtr: NativePointer | null = null;
+
+  /**
+   * Get the root application domain.
+   * 
+   * @param api The Mono API instance
+   * @returns The root MonoDomain instance
+   * 
+   * @example
+   * ```typescript
+   * const domain = MonoDomain.getRoot(api);
+   * console.log(`Root domain: ${domain.id}`);
+   * ```
+   */
   static getRoot(api: MonoApi): MonoDomain {
     const domainPtr = api.getRootDomain();
+    MonoDomain.rootDomainPtr = domainPtr;
     return new MonoDomain(api, domainPtr);
   }
 
+  /**
+   * Get the current thread's application domain.
+   * 
+   * @param api The Mono API instance
+   * @returns The current MonoDomain instance
+   * 
+   * @example
+   * ```typescript
+   * const current = MonoDomain.current(api);
+   * console.log(`Current domain: ${current.id}`);
+   * ```
+   */
   static current(api: MonoApi): MonoDomain {
     const domainPtr = api.native.mono_domain_get();
     return new MonoDomain(api, domainPtr);
   }
 
+  /**
+   * Create a MonoDomain from a native pointer.
+   * 
+   * @param api The Mono API instance
+   * @param pointer Native pointer to the MonoDomain
+   * @returns MonoDomain instance
+   */
   static fromPointer(api: MonoApi, pointer: NativePointer): MonoDomain {
     return new MonoDomain(api, pointer);
   }
 
   /**
-   * Open an assembly from a file path
+   * Open an assembly from a file path.
+   * 
+   * @param path Path to the assembly file (.dll)
+   * @returns The loaded MonoAssembly
+   * @throws Error if the assembly cannot be loaded
+   * 
+   * @example
+   * ```typescript
+   * const assembly = domain.assemblyOpen("MyPlugin.dll");
+   * console.log(`Loaded: ${assembly.name}`);
+   * ```
    */
   assemblyOpen(path: string): MonoAssembly {
     const pathPtr = allocUtf8(path);
@@ -38,14 +151,40 @@ export class MonoDomain extends MonoHandle {
   }
 
   /**
-   * Get all assemblies loaded in this domain
+   * Get all assemblies loaded in this domain.
+   * 
+   * @example
+   * ```typescript
+   * const assemblies = domain.assemblies;
+   * assemblies.forEach(asm => console.log(asm.name));
+   * ```
    */
   get assemblies(): MonoAssembly[] {
     return this.getAssemblies();
   }
 
   /**
-   * Get all assemblies loaded in this domain
+   * Get the number of loaded assemblies.
+   * 
+   * @example
+   * ```typescript
+   * console.log(`Domain has ${domain.assemblyCount} assemblies`);
+   * ```
+   */
+  get assemblyCount(): number {
+    return this.getAssemblies().length;
+  }
+
+  /**
+   * Get all assemblies loaded in this domain.
+   * 
+   * @returns Array of MonoAssembly instances
+   * 
+   * @example
+   * ```typescript
+   * const assemblies = domain.getAssemblies();
+   * console.log(`Loaded ${assemblies.length} assemblies`);
+   * ```
    */
   getAssemblies(): MonoAssembly[] {
     const assemblies: MonoAssembly[] = [];
@@ -54,14 +193,34 @@ export class MonoDomain extends MonoHandle {
   }
 
   /**
-   * Find an assembly by name
+   * Find an assembly by name.
+   * 
+   * @param name Assembly name (with or without .dll extension)
+   * @returns MonoAssembly if found, null otherwise
+   * 
+   * @example
+   * ```typescript
+   * const asm = domain.assembly("UnityEngine");
+   * if (asm) {
+   *   console.log(`Found: ${asm.name}`);
+   * }
+   * ```
    */
   assembly(name: string): MonoAssembly | null {
     return this.getAssembly(name);
   }
 
   /**
-   * Get an assembly by name
+   * Get an assembly by name.
+   * 
+   * @param name Assembly name (with or without .dll extension)
+   * @returns MonoAssembly if found, null otherwise
+   * 
+   * @example
+   * ```typescript
+   * const mscorlib = domain.getAssembly("mscorlib");
+   * const unity = domain.getAssembly("UnityEngine.CoreModule");
+   * ```
    */
   getAssembly(name: string): MonoAssembly | null {
     const normalizedName = name.endsWith(".dll") ? name.slice(0, -4) : name;
@@ -77,14 +236,40 @@ export class MonoDomain extends MonoHandle {
   }
 
   /**
-   * Load an assembly from file path
+   * Load an assembly from file path.
+   * 
+   * @param path Path to the assembly file (.dll)
+   * @returns The loaded MonoAssembly
+   * @throws Error if the assembly cannot be loaded
+   * 
+   * @remarks
+   * This is an alias for `assemblyOpen()`.
+   * 
+   * @example
+   * ```typescript
+   * const assembly = domain.loadAssembly("MyPlugin.dll");
+   * ```
    */
   loadAssembly(path: string): MonoAssembly {
     return this.assemblyOpen(path);
   }
 
   /**
-   * Find a class by full name across all assemblies
+   * Find a class by full name across all assemblies.
+   * 
+   * @param fullName Full class name including namespace (e.g., "UnityEngine.GameObject")
+   * @returns MonoClass if found, null otherwise
+   * 
+   * @remarks
+   * This method searches through all loaded assemblies until it finds a match.
+   * For better performance when you know which assembly contains the class,
+   * use `assembly.image.class()` directly.
+   * 
+   * @example
+   * ```typescript
+   * const go = domain.class("UnityEngine.GameObject");
+   * const player = domain.class("Game.Player");
+   * ```
    */
   class(fullName: string): MonoClass | null {
     const trimmed = fullName ? fullName.trim() : "";
@@ -101,7 +286,19 @@ export class MonoDomain extends MonoHandle {
   }
 
   /**
-   * Get all root namespaces in this domain
+   * Get all root namespaces in this domain.
+   * 
+   * @returns Array of top-level namespace names, sorted alphabetically
+   * 
+   * @remarks
+   * Root namespaces are the first component of namespace paths.
+   * For example, "System.Collections.Generic" has root namespace "System".
+   * 
+   * @example
+   * ```typescript
+   * const roots = domain.getRootNamespaces();
+   * // ["System", "UnityEngine", "Game", ...]
+   * ```
    */
   getRootNamespaces(): string[] {
     const namespaces = new Set<string>();
@@ -120,7 +317,15 @@ export class MonoDomain extends MonoHandle {
   }
 
   /**
-   * Get all namespaces in this domain (full namespace paths)
+   * Get all namespaces in this domain (full namespace paths).
+   * 
+   * @returns Array of all unique namespace paths, sorted alphabetically
+   * 
+   * @example
+   * ```typescript
+   * const namespaces = domain.getAllNamespaces();
+   * // ["System", "System.Collections", "System.Collections.Generic", ...]
+   * ```
    */
   getAllNamespaces(): string[] {
     const namespaces = new Set<string>();
@@ -138,7 +343,20 @@ export class MonoDomain extends MonoHandle {
   }
 
   /**
-   * Get classes in a specific namespace
+   * Get classes in a specific namespace.
+   * 
+   * @param namespace Full namespace path to filter by
+   * @returns Array of classes in the specified namespace
+   * 
+   * @remarks
+   * This searches across all loaded assemblies. For better performance
+   * when searching within a single assembly, use `image.getClassesByNamespace()`.
+   * 
+   * @example
+   * ```typescript
+   * const systemClasses = domain.getClassesInNamespace("System");
+   * const gameClasses = domain.getClassesInNamespace("Game.Player");
+   * ```
    */
   getClassesInNamespace(namespace: string): MonoClass[] {
     const classes: MonoClass[] = [];
@@ -155,21 +373,43 @@ export class MonoDomain extends MonoHandle {
   }
 
   /**
-   * Get domain name (if available)
+   * Get domain name (if available).
+   * 
+   * @remarks
+   * Mono doesn't expose domain names directly in all configurations.
+   * This typically returns null.
    */
   get name(): string | null {
     return null; // Mono doesn't expose domain names directly
   }
 
   /**
-   * Get domain ID
+   * Get domain ID (derived from pointer address).
+   * 
+   * @example
+   * ```typescript
+   * console.log(`Domain ID: ${domain.id}`);
+   * ```
    */
   get id(): number {
     return this.pointer.toInt32();
   }
 
   /**
-   * Enumerate all assemblies in this domain
+   * Enumerate all assemblies in this domain.
+   * 
+   * @param visitor Callback function called for each assembly
+   * 
+   * @remarks
+   * This is more memory-efficient than `getAssemblies()` for large domains
+   * as it doesn't create an array of all assemblies.
+   * 
+   * @example
+   * ```typescript
+   * domain.enumerateAssemblies(assembly => {
+   *   console.log(assembly.name);
+   * });
+   * ```
    */
   enumerateAssemblies(visitor: (assembly: MonoAssembly) => void): void {
     const seen = new Set<string>();
@@ -344,15 +584,221 @@ export class MonoDomain extends MonoHandle {
       return null;
     }
   }
-}
 
-// ===== INTERFACES =====
+  // ===== SUMMARY & DESCRIPTION METHODS =====
 
-export interface UnloadAssemblyResult {
-  /** Whether the unload operation completed without error */
-  success: boolean;
-  /** Reason for failure or success note */
-  reason: string;
-  /** Whether assembly unloading is supported by this runtime */
-  supported: boolean;
+  /**
+   * Check if this is the root application domain.
+   * 
+   * @returns true if this is the root domain
+   * 
+   * @example
+   * ```typescript
+   * const domain = MonoDomain.getRoot(api);
+   * console.log(domain.isRoot); // true
+   * ```
+   */
+  get isRoot(): boolean {
+    return this.isRootDomain();
+  }
+
+  /**
+   * Check if this is the root application domain.
+   * 
+   * @returns true if this is the root domain
+   * 
+   * @example
+   * ```typescript
+   * if (domain.isRootDomain()) {
+   *   console.log("This is the root domain");
+   * }
+   * ```
+   */
+  isRootDomain(): boolean {
+    try {
+      const rootPtr = this.api.getRootDomain();
+      return this.pointer.equals(rootPtr);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get a summary object containing key domain information.
+   * 
+   * @returns An object with essential domain metadata
+   * 
+   * @example
+   * ```typescript
+   * const summary = domain.getSummary();
+   * console.log(JSON.stringify(summary, null, 2));
+   * // {
+   * //   "id": 123456,
+   * //   "isRoot": true,
+   * //   "assemblyCount": 45,
+   * //   "assemblyNames": ["mscorlib", "UnityEngine", ...],
+   * //   "namespaceCount": 200,
+   * //   "pointer": "0x12345678"
+   * // }
+   * ```
+   */
+  getSummary(): MonoDomainSummary {
+    const assemblies = this.getAssemblies();
+    const namespaces = this.getAllNamespaces();
+    
+    return {
+      id: this.id,
+      isRoot: this.isRootDomain(),
+      assemblyCount: assemblies.length,
+      assemblyNames: assemblies.map(a => a.getName()),
+      namespaceCount: namespaces.length,
+      pointer: this.pointer.toString(),
+    };
+  }
+
+  /**
+   * Get a human-readable description of this domain.
+   * 
+   * @returns Formatted string with domain details
+   * 
+   * @example
+   * ```typescript
+   * console.log(domain.describe());
+   * // MonoDomain: 0x12345678 (root)
+   * //   Assemblies (45): mscorlib, UnityEngine, ...
+   * //   Namespaces: 200 total
+   * ```
+   */
+  describe(): string {
+    const assemblies = this.getAssemblies();
+    const rootLabel = this.isRootDomain() ? " (root)" : "";
+    const asmPreview = assemblies.slice(0, 5).map(a => a.getName()).join(", ");
+    const asmMore = assemblies.length > 5 ? `, ... (+${assemblies.length - 5} more)` : "";
+    
+    return [
+      `MonoDomain: ${this.pointer}${rootLabel}`,
+      `  ID: ${this.id}`,
+      `  Assemblies (${assemblies.length}): ${asmPreview}${asmMore}`,
+      `  Namespaces: ${this.getAllNamespaces().length} total`,
+    ].join("\n");
+  }
+
+  /**
+   * Returns a string representation of this domain.
+   * 
+   * @returns String in format "MonoDomain(id, assemblies)"
+   * 
+   * @example
+   * ```typescript
+   * console.log(domain.toString());
+   * // "MonoDomain(123456, 45 assemblies, root)"
+   * ```
+   */
+  override toString(): string {
+    const rootLabel = this.isRootDomain() ? ", root" : "";
+    return `MonoDomain(${this.id}, ${this.assemblyCount} assemblies${rootLabel})`;
+  }
+
+  // ===== ADDITIONAL UTILITY METHODS =====
+
+  /**
+   * Check if this domain has a specific assembly loaded.
+   * 
+   * @param name Assembly name (with or without .dll extension)
+   * @returns true if the assembly is loaded
+   * 
+   * @example
+   * ```typescript
+   * if (domain.hasAssembly("UnityEngine")) {
+   *   console.log("Unity is loaded");
+   * }
+   * ```
+   */
+  hasAssembly(name: string): boolean {
+    return this.getAssembly(name) !== null;
+  }
+
+  /**
+   * Check if this domain has a specific class.
+   * 
+   * @param fullName Full class name including namespace
+   * @returns true if the class exists in any loaded assembly
+   * 
+   * @example
+   * ```typescript
+   * if (domain.hasClass("UnityEngine.GameObject")) {
+   *   console.log("GameObject class is available");
+   * }
+   * ```
+   */
+  hasClass(fullName: string): boolean {
+    return this.class(fullName) !== null;
+  }
+
+  /**
+   * Search for assemblies by name pattern (substring match).
+   * 
+   * @param pattern Substring to search for in assembly names (case-insensitive)
+   * @returns Array of matching assemblies
+   * 
+   * @example
+   * ```typescript
+   * const unityAssemblies = domain.searchAssemblies("unity");
+   * // Finds: UnityEngine, UnityEngine.CoreModule, UnityEngine.UI, etc.
+   * ```
+   */
+  searchAssemblies(pattern: string): MonoAssembly[] {
+    const lowerPattern = pattern.toLowerCase();
+    return this.getAssemblies().filter(asm => 
+      asm.getName().toLowerCase().includes(lowerPattern)
+    );
+  }
+
+  /**
+   * Search for classes by name pattern across all assemblies.
+   * 
+   * @param pattern Substring to search for in class names (case-insensitive)
+   * @param maxResults Maximum number of results to return (default: 100)
+   * @returns Array of matching classes
+   * 
+   * @example
+   * ```typescript
+   * const managerClasses = domain.searchClasses("manager", 50);
+   * ```
+   */
+  searchClasses(pattern: string, maxResults: number = 100): MonoClass[] {
+    const lowerPattern = pattern.toLowerCase();
+    const results: MonoClass[] = [];
+    
+    for (const assembly of this.assemblies) {
+      for (const klass of assembly.image.classes) {
+        if (klass.getName().toLowerCase().includes(lowerPattern)) {
+          results.push(klass);
+          if (results.length >= maxResults) {
+            return results;
+          }
+        }
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Get total class count across all assemblies.
+   * 
+   * @returns Total number of classes in all loaded assemblies
+   * 
+   * @example
+   * ```typescript
+   * console.log(`Domain has ${domain.getTotalClassCount()} classes`);
+   * ```
+   */
+  getTotalClassCount(): number {
+    let count = 0;
+    for (const assembly of this.assemblies) {
+      count += assembly.image.getClassCount();
+    }
+    return count;
+  }
 }

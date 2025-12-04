@@ -4,6 +4,31 @@ import { pointerIsNull } from "../utils/memory";
 import { MonoObject } from "./object";
 
 /**
+ * Summary information about a MonoString instance.
+ * Provides comprehensive metadata for inspection and debugging.
+ * 
+ * @example
+ * ```typescript
+ * const summary = str.getSummary();
+ * console.log(`String "${summary.preview}" has ${summary.length} characters`);
+ * ```
+ */
+export interface MonoStringSummary {
+  /** Pointer address of this string in memory */
+  pointer: string;
+  /** Length of the string in characters */
+  length: number;
+  /** Preview of the string content (first 50 chars with ellipsis if truncated) */
+  preview: string;
+  /** Whether the string is empty */
+  isEmpty: boolean;
+  /** Whether the string contains only whitespace */
+  isWhitespace: boolean;
+  /** Full string value */
+  value: string;
+}
+
+/**
  * Represents a Mono string object (System.String)
  */
 export class MonoString extends MonoObject {
@@ -273,11 +298,106 @@ export class MonoString extends MonoObject {
     return this.trim() === '';
   }
 
+  // ===== SUMMARY AND DESCRIPTION METHODS =====
+
+  /**
+   * Get comprehensive summary information about this string.
+   * 
+   * @returns MonoStringSummary object with all string metadata
+   * 
+   * @example
+   * ```typescript
+   * const summary = str.getSummary();
+   * if (summary.isEmpty) {
+   *   console.log("String is empty");
+   * } else {
+   *   console.log(`Content: ${summary.preview}`);
+   * }
+   * ```
+   */
+  getSummary(): MonoStringSummary {
+    const value = this.toString();
+    const length = value.length;
+    const isEmpty = length === 0;
+    const isWhitespace = value.trim() === '';
+    
+    // Create a preview (first 50 chars with ellipsis)
+    let preview = value;
+    if (length > 50) {
+      preview = value.substring(0, 50) + '...';
+    }
+    
+    return {
+      pointer: this.pointer.toString(),
+      length,
+      preview,
+      isEmpty,
+      isWhitespace,
+      value
+    };
+  }
+
+  /**
+   * Get a human-readable description of this string.
+   * 
+   * @returns A multi-line string with detailed string information
+   * 
+   * @example
+   * ```typescript
+   * console.log(str.describe());
+   * // Output:
+   * // MonoString: "Hello World"
+   * //   Length: 11 characters
+   * //   Pointer: 0x12345678
+   * ```
+   */
+  describe(): string {
+    const value = this.toString();
+    const length = value.length;
+    
+    // Escape special characters for display
+    let displayValue = value;
+    if (length > 100) {
+      displayValue = value.substring(0, 100) + '...';
+    }
+    displayValue = displayValue
+      .replace(/\\/g, '\\\\')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t');
+    
+    const lines = [
+      `MonoString: "${displayValue}"`,
+      `  Length: ${length} characters`,
+      `  Pointer: ${this.pointer}`
+    ];
+    
+    return lines.join('\n');
+  }
+
+  /**
+   * Compare two strings for equality.
+   * 
+   * @param other Another MonoString to compare with
+   * @returns true if both strings have the same content
+   * 
+   * @example
+   * ```typescript
+   * if (str1.equals(str2)) {
+   *   console.log("Strings are equal");
+   * }
+   * ```
+   */
+  stringEquals(other: MonoString | null): boolean {
+    if (!other) return false;
+    return this.toString() === other.toString();
+  }
+
   /**
    * Convert the Mono string to a JavaScript string
    * Uses mono_string_to_utf8 or mono_string_to_utf16, with caching
    */
-  toString(): string {
+  override toString(): string {
     if (this._cachedString !== null) {
       return this._cachedString;
     }

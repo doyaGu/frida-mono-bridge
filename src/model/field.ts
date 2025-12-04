@@ -285,7 +285,7 @@ export class MonoField<T = any> extends MonoHandle {
       isLiteral: this.isLiteral(),
       isInitOnly: this.isInitOnly(),
       hasDefault: this.hasDefault(),
-      type: type.describe(),
+      type: type.getSummary(),
       token: this.getToken()
     };
   }

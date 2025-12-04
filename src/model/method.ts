@@ -246,9 +246,9 @@ export class MonoMethod extends MonoHandle {
     const parameters = this.getParameters().map((param) => ({
       index: param.index,
       isOut: param.isOut,
-      type: param.type.describe(),
+      type: param.type.getSummary(),
     }));
-    const returnType = this.getReturnType().describe();
+    const returnType = this.getReturnType().getSummary();
     return {
       name: this.getName(),
       fullName: this.getFullName(),

@@ -640,7 +640,7 @@ export class MonoClass extends MonoHandle {
       fieldCount: this.getFields().length,
       propertyCount: this.getProperties().length,
       typeToken: this.getTypeToken(),
-      type: this.getType().describe(),
+      type: this.getType()?.getSummary(),
     };
   }
 

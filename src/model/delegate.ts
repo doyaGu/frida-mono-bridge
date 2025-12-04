@@ -2,14 +2,23 @@ import { MonoApi, MonoArg, MonoManagedExceptionError } from "../runtime/api";
 import { MonoClass } from "./class";
 import { MonoMethod } from "./method";
 import { MonoObject } from "./object";
-import { MonoType, MonoTypeKind } from "./type";
+import { MonoType, MonoTypeKind, MonoTypeSummary } from "./type";
 
 type AnyNativeFunction = NativeFunction<any, any[]>;
 
+// ===== TYPE DEFINITIONS =====
+
+/**
+ * Options for managed delegate invocation
+ */
 export interface DelegateInvokeOptions {
+  /** Whether to throw on managed exceptions (default: true) */
   throwOnManagedException?: boolean;
 }
 
+/**
+ * Options for compiling native delegate thunks
+ */
 export interface CompileNativeOptions {
   /** Whether to cache the compiled thunk (default: true) */
   cache?: boolean;
@@ -17,11 +26,57 @@ export interface CompileNativeOptions {
   validateAbi?: boolean;
 }
 
+/**
+ * Result of ABI validation for native delegate compilation
+ */
 export interface AbiValidationResult {
+  /** Whether the ABI is valid */
   valid: boolean;
+  /** List of validation errors */
   errors: string[];
+  /** List of validation warnings */
   warnings: string[];
+  /** Expected native signature based on managed delegate */
   expectedSignature: {
+    returnType: string;
+    argTypes: string[];
+  };
+}
+
+/**
+ * Information about a delegate's target
+ */
+export interface DelegateTargetInfo {
+  /** Whether the delegate has a target instance */
+  hasTarget: boolean;
+  /** Target object (null for static methods) */
+  target: MonoObject | null;
+  /** The method bound to the delegate */
+  method: MonoMethod | null;
+}
+
+/**
+ * Summary information for a delegate
+ */
+export interface MonoDelegateSummary {
+  /** Delegate type name */
+  typeName: string;
+  /** Full delegate type name */
+  fullTypeName: string;
+  /** Whether this is a multicast delegate */
+  isMulticast: boolean;
+  /** Number of delegates in invocation list */
+  invocationCount: number;
+  /** Return type name */
+  returnTypeName: string;
+  /** Parameter type names */
+  parameterTypeNames: string[];
+  /** Parameter count */
+  parameterCount: number;
+  /** Whether the delegate has a target instance */
+  hasTarget: boolean;
+  /** Expected native signature */
+  nativeSignature: {
     returnType: string;
     argTypes: string[];
   };
@@ -57,18 +112,41 @@ const MONO_TO_NATIVE_TYPE_MAP: Partial<Record<MonoTypeKind, NativeFunctionReturn
   [MonoTypeKind.UInt]: "pointer", // UIntPtr
 };
 
-export interface DelegateInvokeOptions {
-  throwOnManagedException?: boolean;
-}
+// ===== MAIN CLASS =====
 
 /**
  * Wrapper for Mono delegate objects with managed and native invocation support.
+ * 
  * Provides both safe managed invocation and high-performance native thunk compilation.
+ * Delegates in .NET are type-safe function pointers that can reference both static
+ * and instance methods.
+ * 
+ * @extends MonoObject
+ * 
+ * @example
+ * ```typescript
+ * // Create a delegate for a static method
+ * const delegate = MonoDelegate.create(api, actionClass, null, staticMethod);
+ * 
+ * // Invoke using managed mode (safe)
+ * delegate.invokeManaged([arg1, arg2]);
+ * 
+ * // Compile native thunk for high-performance invocation
+ * const thunk = delegate.compileNative<NativeFunction<"void", ["pointer"]>>("void", ["pointer"]);
+ * thunk(delegate.pointer);
+ * 
+ * // Get delegate information
+ * console.log(delegate.describe());
+ * console.log(delegate.getSummary());
+ * ```
  */
 export class MonoDelegate extends MonoObject {
   #invokePtr: NativePointer | null = null;
   #thunkPtr: NativePointer | null = null;
   #nativeFunctions = new Map<string, AnyNativeFunction>();
+  #invokeMethod: MonoMethod | null = null;
+
+  // ===== STATIC FACTORY =====
 
   /**
    * Creates a new delegate instance bound to a target and method.
@@ -78,6 +156,15 @@ export class MonoDelegate extends MonoObject {
    * @param target Target object instance (null for static methods)
    * @param method MonoMethod or method pointer to bind
    * @returns New MonoDelegate instance
+   * 
+   * @example
+   * ```typescript
+   * // Create delegate for static method
+   * const delegate = MonoDelegate.create(api, actionClass, null, staticMethod);
+   * 
+   * // Create delegate for instance method
+   * const delegate = MonoDelegate.create(api, actionClass, targetInstance, instanceMethod);
+   * ```
    */
   static create(api: MonoApi, delegateClass: MonoClass, target: MonoObject | NativePointer | null, method: MonoMethod | NativePointer): MonoDelegate {
     const instance = delegateClass.newObject(false);
@@ -88,16 +175,123 @@ export class MonoDelegate extends MonoObject {
     return delegate;
   }
 
-  getInvokeMethod(): MonoMethod {
-    const { invoke } = this.ensureInvokeData();
-    return new MonoMethod(this.api, invoke);
+  // ===== ACCESSOR PROPERTIES =====
+
+  /**
+   * Get the Invoke method for this delegate type
+   */
+  get invokeMethod(): MonoMethod {
+    return this.getInvokeMethod();
   }
 
+  /**
+   * Get the native thunk pointer for direct invocation
+   */
+  get nativeThunk(): NativePointer {
+    return this.getNativeThunk();
+  }
+
+  /**
+   * Get the return type of this delegate
+   */
+  get returnType(): MonoType {
+    return this.getInvokeMethod().getReturnType();
+  }
+
+  /**
+   * Get the parameter types of this delegate
+   */
+  get parameterTypes(): MonoType[] {
+    return this.getInvokeMethod().getParameterTypes();
+  }
+
+  /**
+   * Get the number of parameters this delegate accepts
+   */
+  get parameterCount(): number {
+    return this.getInvokeMethod().getParameterCount();
+  }
+
+  // ===== BASIC METHODS =====
+
+  /**
+   * Get the Invoke method for this delegate type.
+   * The Invoke method defines the delegate's signature.
+   * 
+   * @returns MonoMethod representing the Invoke method
+   */
+  getInvokeMethod(): MonoMethod {
+    if (this.#invokeMethod) {
+      return this.#invokeMethod;
+    }
+    const { invoke } = this.ensureInvokeData();
+    this.#invokeMethod = new MonoMethod(this.api, invoke);
+    return this.#invokeMethod;
+  }
+
+  /**
+   * Get the native thunk pointer for this delegate.
+   * The thunk is used for high-performance native invocation.
+   * 
+   * @returns Native pointer to the delegate's thunk
+   */
   getNativeThunk(): NativePointer {
     const { thunk } = this.ensureInvokeData();
     return thunk;
   }
 
+  /**
+   * Get the return type of this delegate's Invoke method.
+   * 
+   * @returns MonoType representing the return type
+   */
+  getReturnType(): MonoType {
+    return this.getInvokeMethod().getReturnType();
+  }
+
+  /**
+   * Get the parameter types of this delegate's Invoke method.
+   * 
+   * @returns Array of MonoType representing parameter types
+   */
+  getParameterTypes(): MonoType[] {
+    return this.getInvokeMethod().getParameterTypes();
+  }
+
+  /**
+   * Get the number of parameters this delegate accepts.
+   * 
+   * @returns Number of parameters
+   */
+  getParameterCount(): number {
+    return this.getInvokeMethod().getParameterCount();
+  }
+
+  // ===== INVOCATION METHODS =====
+
+  /**
+   * Invoke the delegate using managed invocation (safe mode).
+   * 
+   * This method is safer than native invocation as it handles
+   * type conversion and exception handling automatically.
+   * 
+   * @param args Arguments to pass to the delegate
+   * @param options Invocation options
+   * @returns Result pointer from the delegate invocation
+   * @throws MonoManagedExceptionError if the delegate throws and throwOnManagedException is true
+   * 
+   * @example
+   * ```typescript
+   * // Invoke with no arguments
+   * delegate.invokeManaged();
+   * 
+   * // Invoke with arguments
+   * delegate.invokeManaged([arg1, arg2]);
+   * 
+   * // Invoke without throwing on managed exceptions
+   * const result = delegate.invokeManaged([], { throwOnManagedException: false });
+   * ```
+   */
   invokeManaged(args: MonoArg[] = [], options: DelegateInvokeOptions = {}): NativePointer {
     const { invoke } = this.ensureInvokeData();
     const prepared = args.map((arg) => prepareDelegateArgument(this.api, arg));
@@ -361,6 +555,130 @@ export class MonoDelegate extends MonoObject {
   getInvocationCount(): number {
     return this.getInvocationList().length;
   }
+
+  // ===== TARGET AND METHOD INFO =====
+
+  /**
+   * Get information about the delegate's target and method.
+   * 
+   * @returns DelegateTargetInfo with target and method details
+   */
+  getTargetInfo(): DelegateTargetInfo {
+    const klass = this.getClass();
+    let target: MonoObject | null = null;
+    let method: MonoMethod | null = null;
+    let hasTarget = false;
+
+    // Try to get _target field (internal delegate implementation)
+    try {
+      const targetField = klass.tryGetField("_target") || klass.tryGetField("m_target");
+      if (targetField) {
+        const targetPtr = targetField.getValue(this);
+        if (targetPtr && !targetPtr.isNull()) {
+          hasTarget = true;
+          target = new MonoObject(this.api, targetPtr);
+        }
+      }
+    } catch {
+      // Ignore field access errors
+    }
+
+    // Get the Invoke method
+    method = this.getInvokeMethod();
+
+    return { hasTarget, target, method };
+  }
+
+  /**
+   * Check if this delegate has a target instance (instance method delegate).
+   * 
+   * @returns true if delegate targets an instance method
+   */
+  hasTarget(): boolean {
+    return this.getTargetInfo().hasTarget;
+  }
+
+  // ===== METADATA AND REFLECTION =====
+
+  /**
+   * Get comprehensive summary information about this delegate.
+   * 
+   * @returns MonoDelegateSummary with detailed delegate information
+   * 
+   * @example
+   * ```typescript
+   * const summary = delegate.getSummary();
+   * console.log(`Delegate: ${summary.fullTypeName}`);
+   * console.log(`Parameters: ${summary.parameterCount}`);
+   * console.log(`Returns: ${summary.returnTypeName}`);
+   * ```
+   */
+  getSummary(): MonoDelegateSummary {
+    const klass = this.getClass();
+    const invokeMethod = this.getInvokeMethod();
+    const returnType = invokeMethod.getReturnType();
+    const parameterTypes = invokeMethod.getParameterTypes();
+    const nativeSignature = this.getExpectedNativeSignature();
+    const targetInfo = this.getTargetInfo();
+
+    return {
+      typeName: klass.getName(),
+      fullTypeName: klass.getFullName(),
+      isMulticast: this.isMulticast(),
+      invocationCount: this.getInvocationCount(),
+      returnTypeName: returnType.getName(),
+      parameterTypeNames: parameterTypes.map(t => t.getName()),
+      parameterCount: parameterTypes.length,
+      hasTarget: targetInfo.hasTarget,
+      nativeSignature,
+    };
+  }
+
+  /**
+   * Get a human-readable description of this delegate.
+   * 
+   * @returns Formatted delegate signature string
+   * 
+   * @example
+   * ```typescript
+   * // Returns: "Action<String, Int32>(String, Int32) -> Void"
+   * // Returns: "Func<Int32>(Int32) -> Boolean [multicast: 3]"
+   * ```
+   */
+  describe(): string {
+    const klass = this.getClass();
+    const invokeMethod = this.getInvokeMethod();
+    const returnType = invokeMethod.getReturnType();
+    const parameterTypes = invokeMethod.getParameterTypes();
+    
+    const typeName = klass.getName();
+    const params = parameterTypes.map(t => t.getName()).join(', ');
+    const returnTypeName = returnType.getName();
+    
+    let description = `${typeName}(${params}) -> ${returnTypeName}`;
+    
+    const invocationCount = this.getInvocationCount();
+    if (invocationCount > 1) {
+      description += ` [multicast: ${invocationCount}]`;
+    }
+    
+    return description;
+  }
+
+  /**
+   * Get string representation of this delegate.
+   * 
+   * @returns String in format "DelegateType(params) -> ReturnType"
+   */
+  override toString(): string {
+    try {
+      return this.describe();
+    } catch {
+      return `MonoDelegate(${this.pointer})`;
+    }
+  }
+
+  // ===== PRIVATE METHODS =====
 
   private ensureInvokeData(): { invoke: NativePointer; thunk: NativePointer } {
     if (this.#invokePtr && this.#thunkPtr) {

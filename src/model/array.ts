@@ -7,6 +7,38 @@ import { setArrayReferenceWithBarrier } from "../utils/write-barrier";
 import { allocUtf8 } from "../runtime/mem";
 
 /**
+ * Summary information about a MonoArray instance.
+ * Provides comprehensive metadata for inspection and debugging.
+ * 
+ * @example
+ * ```typescript
+ * const summary = array.getSummary();
+ * console.log(`Array of ${summary.elementType} with ${summary.length} elements`);
+ * console.log(`Total size: ${summary.totalSize} bytes`);
+ * ```
+ */
+export interface MonoArraySummary {
+  /** Pointer address of this array in memory */
+  pointer: string;
+  /** Full name of the element type (e.g., "System.Int32") */
+  elementType: string;
+  /** Number of elements in the array */
+  length: number;
+  /** Size of each element in bytes */
+  elementSize: number;
+  /** Total memory size of array data (length * elementSize) */
+  totalSize: number;
+  /** Whether elements are value types */
+  isValueType: boolean;
+  /** Whether elements are reference types */
+  isReferenceType: boolean;
+  /** Whether this is a primitive array (int, float, etc.) */
+  isPrimitiveArray: boolean;
+  /** Whether this is a string array */
+  isStringArray: boolean;
+}
+
+/**
  * Type guards for MonoArray operations
  */
 export namespace ArrayTypeGuards {
@@ -785,15 +817,162 @@ export class MonoArray<T = any> extends MonoObject {
   // ===== UTILITY METHODS =====
 
   /**
-   * Get a human-readable description of this array
+   * Get a human-readable description of this array.
+   * 
+   * @returns A multi-line string with detailed array information
+   * 
+   * @example
+   * ```typescript
+   * console.log(array.describe());
+   * // Output:
+   * // MonoArray: System.Int32[10]
+   * //   Element Type: System.Int32 (ValueType)
+   * //   Length: 10, Element Size: 4 bytes, Total: 40 bytes
+   * //   Pointer: 0x12345678
+   * ```
    */
   describe(): string {
     const elementClass = this.getElementClass();
-    return `${elementClass.getFullName()}[${this.length}] (size: ${this.getElementSize()} bytes)`;
+    const elementType = elementClass.getType();
+    const isValueType = elementClass.isValueType();
+    const elementSize = this.getElementSize();
+    const totalSize = this.length * elementSize;
+    
+    const lines = [
+      `MonoArray: ${elementClass.getFullName()}[${this.length}]`,
+      `  Element Type: ${elementClass.getFullName()} (${isValueType ? 'ValueType' : 'ReferenceType'})`,
+      `  Length: ${this.length}, Element Size: ${elementSize} bytes, Total: ${totalSize} bytes`,
+      `  Pointer: ${this.pointer}`
+    ];
+    
+    return lines.join('\n');
   }
 
   /**
-   * Get array information
+   * Get comprehensive summary information about this array.
+   * 
+   * @returns MonoArraySummary object with all array metadata
+   * 
+   * @example
+   * ```typescript
+   * const summary = array.getSummary();
+   * if (summary.isPrimitiveArray) {
+   *   console.log(`Primitive array of ${summary.elementType}`);
+   * }
+   * ```
+   */
+  getSummary(): MonoArraySummary {
+    const elementClass = this.getElementClass();
+    const elementType = elementClass.getType();
+    const kind = elementType.getKind();
+    const elementSize = this.getElementSize();
+    const isValueType = elementClass.isValueType();
+    const isPrimitive = kind >= MonoTypeKind.I1 && kind <= MonoTypeKind.R8;
+    const isString = kind === MonoTypeKind.String;
+    
+    return {
+      pointer: this.pointer.toString(),
+      elementType: elementClass.getFullName(),
+      length: this.length,
+      elementSize: elementSize,
+      totalSize: this.length * elementSize,
+      isValueType: isValueType,
+      isReferenceType: !isValueType,
+      isPrimitiveArray: isPrimitive,
+      isStringArray: isString
+    };
+  }
+
+  /**
+   * Check if this array is empty (length === 0).
+   * 
+   * @returns true if the array has no elements
+   * 
+   * @example
+   * ```typescript
+   * if (array.isEmpty()) {
+   *   console.log("Array is empty");
+   * }
+   * ```
+   */
+  isEmpty(): boolean {
+    return this.length === 0;
+  }
+
+  /**
+   * Check if this array is not empty (length > 0).
+   * 
+   * @returns true if the array has at least one element
+   * 
+   * @example
+   * ```typescript
+   * if (array.isNotEmpty()) {
+   *   console.log(`First element: ${array.getTyped(0)}`);
+   * }
+   * ```
+   */
+  isNotEmpty(): boolean {
+    return this.length > 0;
+  }
+
+  /**
+   * Check if this array contains primitive numeric types.
+   * 
+   * @returns true if elements are primitive numbers (int, float, etc.)
+   * 
+   * @example
+   * ```typescript
+   * if (array.isPrimitiveArray()) {
+   *   const numbers = array.toArray() as number[];
+   * }
+   * ```
+   */
+  isPrimitiveArray(): boolean {
+    const elementType = this.getElementClass().getType();
+    const kind = elementType.getKind();
+    return kind >= MonoTypeKind.I1 && kind <= MonoTypeKind.R8;
+  }
+
+  /**
+   * Check if this array contains string elements.
+   * 
+   * @returns true if elements are System.String
+   * 
+   * @example
+   * ```typescript
+   * if (array.isStringArray()) {
+   *   const strings = array.toStringArray();
+   * }
+   * ```
+   */
+  isStringArray(): boolean {
+    const elementType = this.getElementClass().getType();
+    return elementType.getKind() === MonoTypeKind.String;
+  }
+
+  /**
+   * Compare two arrays for equality.
+   * 
+   * @param other Another MonoHandle to compare with
+   * @returns true if both have the same pointer
+   * 
+   * @example
+   * ```typescript
+   * if (array1.equals(array2)) {
+   *   console.log("Same array instance");
+   * }
+   * ```
+   */
+  override equals(other: MonoArray | MonoObject): boolean {
+    if (!other) return false;
+    return this.pointer.equals(other.pointer);
+  }
+
+  /**
+   * Get array information (legacy method, prefer getSummary()).
+   * 
+   * @returns Basic array information object
+   * @deprecated Use getSummary() for more comprehensive information
    */
   getArrayInfo(): {
     elementClass: string;
@@ -898,8 +1077,20 @@ export class MonoArray<T = any> extends MonoObject {
     return MonoArray.new(api, elementClass, length) as MonoArray<T>;
   }
 
-  toString(): string {
-    return `MonoArray(${this.describe()})`;
+  /**
+   * Returns a string representation of this array for debugging.
+   * 
+   * @returns A concise string like "System.Int32[10]"
+   * 
+   * @example
+   * ```typescript
+   * console.log(array.toString());
+   * // "System.Int32[10]"
+   * ```
+   */
+  override toString(): string {
+    const elementClass = this.getElementClass();
+    return `${elementClass.getFullName()}[${this.length}]`;
   }
 }
 

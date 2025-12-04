@@ -496,7 +496,7 @@ export class MonoProperty<TValue = any> extends MonoHandle {
     return {
       name: this.getName(),
       typeName: propType.getName(),
-      type: propType.describe(),
+      type: propType.getSummary(),
       declaringType: this.getParent().getFullName(),
       flags,
       flagNames: pickFlags(flags, PROPERTY_FLAGS),
