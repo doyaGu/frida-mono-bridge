@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.2.0] - 2025-12-04
+
+### Added
+- ES module support with proper `exports` field in package.json
+- Resilient method interception with graceful fallbacks for unhookable methods
+- Method compatibility detection for InternalCall, P/Invoke, and Runtime implementations
+- Non-throwing hooking variants that return null instead of exceptions
+- `detachIfExiting()` method for safe thread detachment using `mono_thread_detach_if_exiting`
+- `Mono.detachIfExiting()` top-level API for convenience
+- Resilient batch hooking with automatic skip of incompatible methods
+- Centralized thread management in test framework with automatic `Mono.perform` wrapping
+- Enhanced error recovery in tracing utilities
+- ESLint and Prettier for code quality
+
+### Changed
+- **BREAKING**: Consolidated utility modules - several utility files removed or merged
+- **BREAKING**: Removed `types` utility from main Mono namespace
+- Centralized type utilities and primitive operations in `type.ts`
+- Unified Mono handle enumeration in `utils/memory.ts`
+- Standardized logging with `Logger.withTag()` pattern
+- TypeScript module settings updated to use ESNext and bundler resolution
+- Node.js engine requirement updated to >=18.0.0
+- `detachAll()` now uses `detachIfExiting()` for current thread to prevent script hangs
+- Consolidated memory allocation functions using Frida's built-in `Memory.allocUtf8String`
+
+### Removed
+- Deprecated utility files: `batch.ts`, `retry.ts`, `safe-access.ts`
+- Write-barrier utilities in favor of direct API usage
+- Deprecated tests for `MonoArray` and `TypesUtils`
+
+### Fixed
+- Thread detachment no longer causes script hangs during normal execution
+- Instance field setValue now works correctly with proper memory allocation
+- Method hooking handles Mono's lazy JIT compilation gracefully
+
 ## [0.1.0] - 2025-12-03
 
 ### Added
@@ -62,4 +99,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - IL2CPP runtime is not supported (use frida-il2cpp-bridge instead)
 - Some edge cases in generic type resolution
 
+---
+
+## Version History
+
+- **0.2.0** - ES module support, resilient method interception, utility consolidation
+- **0.1.0** - Initial public release
+
+[Unreleased]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/doyaGu/frida-mono-bridge/releases/tag/v0.1.0

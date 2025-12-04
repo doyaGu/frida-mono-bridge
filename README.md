@@ -2,9 +2,10 @@
 
 A TypeScript bridge that exposes the Mono runtime (Unity/Xamarin/embedded Mono) to Frida scripts with a clean, high-level API.
 
+[![npm version](https://img.shields.io/npm/v/frida-mono-bridge.svg)](https://www.npmjs.com/package/frida-mono-bridge)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](tsconfig.json)
-[![Status](https://img.shields.io/badge/status-production%20ready-brightgreen.svg)]()
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)]()
 
 ## Features
 
@@ -13,7 +14,8 @@ A TypeScript bridge that exposes the Mono runtime (Unity/Xamarin/embedded Mono) 
 - **Type-Safe**: Full TypeScript strict mode with comprehensive type definitions
 - **Performance**: LRU caching, native delegate thunks, optimized invocation paths
 - **Thread-Safe**: Automatic thread attachment with proper lifecycle management
-- **Well-Tested**: 750+ tests across 37 modules with 100% pass rate
+- **Resilient**: Graceful fallbacks for unhookable methods and lazy JIT compilation
+- **Well-Tested**: Comprehensive test suite across 37 test modules
 - **Well-Documented**: Comprehensive JSDoc and guides
 
 ## Quick Start
@@ -21,15 +23,15 @@ A TypeScript bridge that exposes the Mono runtime (Unity/Xamarin/embedded Mono) 
 ### Installation
 
 ```bash
-npm install
+npm install frida-mono-bridge
 ```
 
 ### Basic Usage
 
 ```typescript
-import Mono from "./src";
+import Mono from "frida-mono-bridge";
 
-// Modern fluent API
+// Modern fluent API with automatic thread management
 Mono.perform(() => {
   // Get root domain
   const domain = Mono.domain;
@@ -46,7 +48,7 @@ Mono.perform(() => {
 
 ### Build & Run
 
-```powershell
+```bash
 # Build the bridge
 npm run build
 
@@ -64,11 +66,11 @@ frida-mono-bridge/
 │   ├── utils/              # Utilities: find, trace, gc, cache, logging
 │   ├── mono.ts             # MonoNamespace - Main fluent API entry point
 │   └── index.ts            # Global entry point and exports
-├── tests/                  # Test suite (37 files, 750+ tests)
+├── tests/                  # Test suite (37 test modules)
 │   ├── runners/            # Individual test runners (32 files)
-│   ├── test-framework.ts   # Test framework
+│   ├── test-framework.ts   # Test framework with auto thread management
 │   └── index.ts            # Test suite orchestrator
-├── docs/                   # Documentation (12 files)
+├── docs/                   # Documentation
 ├── unity-explorer/         # Unity scene exploration tool
 └── dist/                   # Compiled output
 ```
@@ -78,6 +80,8 @@ frida-mono-bridge/
 ### Core APIs
 
 ```typescript
+import Mono from "frida-mono-bridge";
+
 // Modern Fluent API (recommended)
 Mono.perform(() => {
   // Module & Version
@@ -93,19 +97,13 @@ Mono.perform(() => {
   const result = method.invoke(null, ["Hello"]);
 });
 
-// Legacy API (still supported)
-Mono.attachThread();
-Mono.api.getRootDomain();
-Mono.model.Image.fromAssemblyPath(Mono.api, path);
-image.classFromName(namespace, name);
-klass.getMethod(name, paramCount);
-method.invoke(instance, args);
-Mono.dispose();
+// Thread-safe cleanup (safe to call anytime)
+Mono.detachIfExiting();  // Only detaches if thread is exiting
 ```
 
 ## Testing
 
-The Frida Mono Bridge includes a comprehensive test suite with **750+ tests** organized across **37 test files** in 7 categories. The test suite validates all aspects of the bridge from core infrastructure to advanced Unity integration.
+The Frida Mono Bridge includes a comprehensive test suite organized across **37 test modules** in 7 categories. The test suite validates all aspects of the bridge from core infrastructure to advanced Unity integration.
 
 ### Test Architecture
 
