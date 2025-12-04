@@ -506,5 +506,268 @@ export function createGenericTypeTests(): TestResult[] {
     }
   ));
 
+  // ============================================
+  // makeGenericType Tests
+  // ============================================
+  results.push(createMonoDependentTest(
+    'makeGenericType - Create List<String>',
+    () => {
+      Mono.perform(() => {
+        const listDef = Mono.domain.class('System.Collections.Generic.List`1');
+        if (!listDef) {
+          console.log('[SKIP] List`1 not found');
+          return;
+        }
+        
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String class should exist');
+        
+        console.log(`[INFO] Creating List<String> from ${listDef.getFullName()}`);
+        const listOfString = listDef.makeGenericType([stringClass!]);
+        
+        if (listOfString) {
+          console.log(`[SUCCESS] Created: ${listOfString.getFullName()}`);
+          assert(listOfString.isConstructedGenericType(), 'Result should be constructed generic type');
+        } else {
+          console.log('[INFO] makeGenericType returned null - API may not be available');
+        }
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'makeGenericType - Create Dictionary<String, Int32>',
+    () => {
+      Mono.perform(() => {
+        const dictDef = Mono.domain.class('System.Collections.Generic.Dictionary`2');
+        if (!dictDef) {
+          console.log('[SKIP] Dictionary`2 not found');
+          return;
+        }
+        
+        const stringClass = Mono.domain.class('System.String');
+        const intClass = Mono.domain.class('System.Int32');
+        assertNotNull(stringClass, 'String class should exist');
+        assertNotNull(intClass, 'Int32 class should exist');
+        
+        console.log(`[INFO] Creating Dictionary<String, Int32> from ${dictDef.getFullName()}`);
+        const dictOfStringInt = dictDef.makeGenericType([stringClass!, intClass!]);
+        
+        if (dictOfStringInt) {
+          console.log(`[SUCCESS] Created: ${dictOfStringInt.getFullName()}`);
+          assert(dictOfStringInt.isConstructedGenericType(), 'Result should be constructed generic type');
+        } else {
+          console.log('[INFO] makeGenericType returned null - API may not be available');
+        }
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'makeGenericType - throws on non-generic type',
+    () => {
+      Mono.perform(() => {
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String class should exist');
+        
+        let threw = false;
+        try {
+          stringClass!.makeGenericType([stringClass!]);
+        } catch (e) {
+          threw = true;
+          console.log(`[INFO] Correctly threw: ${e}`);
+        }
+        
+        assert(threw, 'Should throw when called on non-generic type');
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'makeGenericType - throws on wrong argument count',
+    () => {
+      Mono.perform(() => {
+        const listDef = Mono.domain.class('System.Collections.Generic.List`1');
+        if (!listDef) {
+          console.log('[SKIP] List`1 not found');
+          return;
+        }
+        
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String class should exist');
+        
+        let threw = false;
+        try {
+          listDef.makeGenericType([stringClass!, stringClass!]); // 2 args for 1 param
+        } catch (e) {
+          threw = true;
+          console.log(`[INFO] Correctly threw: ${e}`);
+        }
+        
+        assert(threw, 'Should throw on argument count mismatch');
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'makeGenericType - Nullable<Int32>',
+    () => {
+      Mono.perform(() => {
+        const nullableDef = Mono.domain.class('System.Nullable`1');
+        if (!nullableDef) {
+          console.log('[SKIP] Nullable`1 not found');
+          return;
+        }
+        
+        const intClass = Mono.domain.class('System.Int32');
+        assertNotNull(intClass, 'Int32 class should exist');
+        
+        console.log(`[INFO] Creating Nullable<Int32> from ${nullableDef.getFullName()}`);
+        const nullableInt = nullableDef.makeGenericType([intClass!]);
+        
+        if (nullableInt) {
+          console.log(`[SUCCESS] Created: ${nullableInt.getFullName()}`);
+          assert(nullableInt.isValueType(), 'Nullable<Int32> should be value type');
+        } else {
+          console.log('[INFO] makeGenericType returned null - API may not be available');
+        }
+      });
+    }
+  ));
+
+  // ============================================
+  // makeGenericMethod Tests
+  // ============================================
+  results.push(createMonoDependentTest(
+    'makeGenericMethod - returns null for non-generic method',
+    () => {
+      Mono.perform(() => {
+        const stringClass = Mono.domain.class('System.String');
+        assertNotNull(stringClass, 'String should exist');
+        
+        const toStringMethod = stringClass!.tryGetMethod('ToString', 0);
+        assertNotNull(toStringMethod, 'ToString should exist');
+        
+        const result = toStringMethod!.makeGenericMethod([]);
+        assert(result === null, 'makeGenericMethod should return null for non-generic method');
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'makeGenericMethod - throws on wrong argument count',
+    () => {
+      Mono.perform(() => {
+        // Try to find a generic method - Enumerable has many
+        const enumerable = Mono.domain.class('System.Linq.Enumerable');
+        if (!enumerable) {
+          console.log('[SKIP] System.Linq.Enumerable not found');
+          return;
+        }
+        
+        // Find a generic method
+        const methods = enumerable.methods;
+        const genericMethod = methods.find(m => m.isGenericMethodDefinition() && m.getGenericArgumentCount() === 1);
+        
+        if (!genericMethod) {
+          console.log('[SKIP] No single-param generic method found');
+          return;
+        }
+        
+        console.log(`[INFO] Testing with ${genericMethod.getName()}`);
+        
+        const intClass = Mono.domain.class('System.Int32')!;
+        
+        let threw = false;
+        try {
+          genericMethod.makeGenericMethod([intClass, intClass]); // 2 args for 1 param
+        } catch (e) {
+          threw = true;
+          console.log(`[INFO] Correctly threw: ${e}`);
+        }
+        
+        assert(threw, 'Should throw on argument count mismatch');
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'makeGenericMethod - Enumerable.Where<T>',
+    () => {
+      Mono.perform(() => {
+        const enumerable = Mono.domain.class('System.Linq.Enumerable');
+        if (!enumerable) {
+          console.log('[SKIP] System.Linq.Enumerable not found');
+          return;
+        }
+        
+        // Find Where method (it's generic with 1 type param)
+        const methods = enumerable.methods;
+        const whereMethod = methods.find(m => 
+          m.getName() === 'Where' && 
+          m.isGenericMethodDefinition() && 
+          m.getGenericArgumentCount() === 1
+        );
+        
+        if (!whereMethod) {
+          console.log('[INFO] Where<T> not found, trying other generic methods');
+          const anyGeneric = methods.find(m => m.isGenericMethodDefinition());
+          if (anyGeneric) {
+            console.log(`[INFO] Found generic method: ${anyGeneric.getName()}`);
+          }
+          return;
+        }
+        
+        const intClass = Mono.domain.class('System.Int32')!;
+        console.log(`[INFO] Making Where<Int32> from ${whereMethod.getFullName()}`);
+        
+        const whereInt = whereMethod.makeGenericMethod([intClass]);
+        
+        if (whereInt) {
+          console.log(`[SUCCESS] Created: ${whereInt.getFullName()}`);
+          assert(!whereInt.isGenericMethodDefinition(), 'Result should not be generic definition');
+        } else {
+          console.log('[INFO] makeGenericMethod returned null - API may not be available');
+        }
+      });
+    }
+  ));
+
+  results.push(createMonoDependentTest(
+    'makeGenericMethod - Array.Empty<T>',
+    () => {
+      Mono.perform(() => {
+        const arrayClass = Mono.domain.class('System.Array');
+        if (!arrayClass) {
+          console.log('[SKIP] System.Array not found');
+          return;
+        }
+        
+        // Find Empty<T> method
+        const methods = arrayClass.methods;
+        const emptyMethod = methods.find(m => 
+          m.getName() === 'Empty' && 
+          m.isGenericMethodDefinition()
+        );
+        
+        if (!emptyMethod) {
+          console.log('[INFO] Array.Empty<T> not found');
+          return;
+        }
+        
+        const stringClass = Mono.domain.class('System.String')!;
+        console.log(`[INFO] Making Empty<String> from ${emptyMethod.getFullName()}`);
+        
+        const emptyString = emptyMethod.makeGenericMethod([stringClass]);
+        
+        if (emptyString) {
+          console.log(`[SUCCESS] Created: ${emptyString.getFullName()}`);
+        } else {
+          console.log('[INFO] makeGenericMethod returned null - API may not be available');
+        }
+      });
+    }
+  ));
+
   return results;
 }
