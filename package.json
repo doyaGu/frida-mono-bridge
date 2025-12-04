@@ -58,6 +58,7 @@
     "test:mono-string": "frida-compile tests/runners/test-mono-string.ts -o dist/test-mono-string.js",
     "test:mono-array": "frida-compile tests/runners/test-mono-array.ts -o dist/test-mono-array.js",
     "test:mono-delegate": "frida-compile tests/runners/test-mono-delegate.ts -o dist/test-mono-delegate.js",
+    "test:mono-object": "frida-compile tests/runners/test-mono-object.ts -o dist/test-mono-object.js",
     "test:mono-types": "frida-compile tests/runners/test-mono-types.ts -o dist/test-mono-types.js",
     "test:generic-types": "frida-compile tests/runners/test-generic-types.ts -o dist/test-generic-types.js",
     "test:find-tools": "frida-compile tests/runners/test-find-tools.ts -o dist/test-find-tools.js",

@@ -205,6 +205,7 @@ frida -n "YourUnityApp.exe" -l dist/test-unity-gameobject.js
 - `test:mono-string` - String operations
 - `test:mono-array` - Array operations
 - `test:mono-delegate` - Delegate operations
+- `test:mono-object` - Object operations
 - `test:mono-data` - Data manipulation operations
 
 **Domain & Assembly Tests:**
