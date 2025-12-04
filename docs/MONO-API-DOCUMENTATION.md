@@ -460,6 +460,76 @@ const elementPtr = Mono.api.mono_array_addr_with_size(array, elementSize, index)
 - Don't ignore return codes from functions
 - Don't mix pointer types without proper casting
 
+## Generic Type and Method APIs
+
+### Generic Type Operations
+
+**Creating Generic Types:**
+```typescript
+// Using MonoClass.makeGenericType()
+const listGenericDef = image.getClass("System.Collections.Generic", "List`1");
+const stringClass = image.getClass("System", "String");
+const listString = listGenericDef.makeGenericType([stringClass]);
+// Result: List<string>
+```
+
+**Querying Generic Types:**
+| Function | Description | Availability |
+|----------|-------------|--------------|
+| `mono_class_is_generic` | Check if class is a generic type definition | Standard |
+| `mono_class_is_inflated` | Check if class is an instantiated generic | Standard |
+| `mono_unity_class_get_generic_argument_count` | Get number of generic arguments | Unity only |
+| `mono_unity_class_get_generic_argument_at` | Get specific generic argument | Unity only |
+| `mono_unity_class_get_generic_type_definition` | Get generic definition from instantiated type | Unity only |
+
+### Generic Method Operations
+
+**Creating Generic Methods:**
+```typescript
+// Using MonoMethod.makeGenericMethod()
+const genericMethod = cls.getMethod("Parse"); // e.g., Parse<T>()
+const intClass = image.getClass("System", "Int32");
+const parseInt = genericMethod.makeGenericMethod([intClass]);
+// Result: Parse<int>()
+```
+
+**Implementation Strategies** (in priority order):
+1. **Unity API**: `mono_unity_method_make_generic(method, typeClasses, count)`
+2. **Standard Inflation**: `mono_class_inflate_generic_method(method, context)`
+3. **Reflection**: Invoke `MethodInfo.MakeGenericMethod()` via runtime
+
+**Querying Generic Methods:**
+| Function | Description | Availability |
+|----------|-------------|--------------|
+| `unity_mono_method_is_generic` | Check if method has type parameters | Unity only |
+| `unity_mono_method_is_inflated` | Check if method is instantiated generic | Unity only |
+| `mono_method_get_generic_container` | Get generic container | Unity 2022.3+ |
+
+### Reflection APIs for Generics
+
+| Function | Description | Availability |
+|----------|-------------|--------------|
+| `mono_reflection_type_from_name` | Parse type name string to MonoType | Standard |
+| `mono_reflection_type_get_type` | Get MonoType from System.Type object | Unity 2022.3+ |
+| `mono_reflection_type_get_handle` | Get MonoType from System.Type (older name) | Standard |
+| `unity_mono_reflection_method_get_method` | Extract MonoMethod from MethodInfo | Unity only |
+
+### API Version Compatibility
+
+The `src/runtime/signatures/manual.ts` file organizes APIs with automatic fallbacks:
+
+1. **Standard Mono APIs** - Work across all Mono versions
+2. **Unity-specific APIs** - Available only in Unity's Mono runtime
+3. **API Aliases** - Handle naming differences between versions
+
+**Example alias configuration:**
+```typescript
+// mono_reflection_type_get_type is preferred, but falls back to _get_handle
+mono_reflection_type_get_type: {
+  aliases: ["mono_reflection_type_get_handle"],
+}
+```
+
 ## Performance Considerations
 
 ### High-Impact Functions
