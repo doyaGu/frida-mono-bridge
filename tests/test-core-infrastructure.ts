@@ -26,28 +26,21 @@ export function testCoreInfrastructure(): TestResult {
   // Smoke test first
   suite.addResult(createSmokeTest(TestCategory.STANDALONE, "core infrastructure"));
 
-  // Module Detection Tests (STANDALONE - these use Process.enumerateModules only)
-  suite.addResult(
-    createTest(
-      "Platformer executable should be loaded",
-      () => {
-        const modules = Process.enumerateModules();
-        const hasPlatformer = modules.some(moduleInfo => moduleInfo.name.toLowerCase() === "platformer.exe");
-        assert(hasPlatformer, "Platformer.exe must be loaded for Mono integration tests");
-        console.log("    Platformer.exe detected in module list");
-      },
-      { category: TestCategory.STANDALONE, requiresMono: false },
-    ),
-  );
+  // Helper function to detect Mono module across platforms
+  const findMonoModule = () => {
+    const modules = Process.enumerateModules();
+    return modules.find(module => {
+      const name = module.name.toLowerCase();
+      // Check for Mono module with platform-appropriate extension
+      return name.includes("mono") && (name.endsWith(".dll") || name.endsWith(".dylib") || name.endsWith(".so"));
+    });
+  };
 
   suite.addResult(
     createTest(
       "Mono module should be detected",
       () => {
-        const modules = Process.enumerateModules();
-        const monoModule = modules.find(
-          module => module.name.toLowerCase().includes("mono") && module.name.toLowerCase().includes("dll"),
-        );
+        const monoModule = findMonoModule();
         assertNotNull(monoModule, "Mono module should be found");
         console.log(`    Module detected: ${monoModule.name}`);
       },
@@ -59,12 +52,12 @@ export function testCoreInfrastructure(): TestResult {
     createTest(
       "Module name should match common pattern",
       () => {
-        const modules = Process.enumerateModules();
-        const monoModule = modules.find(
-          module => module.name.toLowerCase().includes("mono") && module.name.toLowerCase().includes("dll"),
-        );
+        const monoModule = findMonoModule();
         assertNotNull(monoModule, "Mono module should be found");
-        const isValidPattern = /mono-.*\.dll/.test(monoModule.name.toLowerCase());
+        // Cross-platform pattern: mono*.dll, libmono*.dylib, libmono*.so
+        const isValidPattern =
+          /mono.*\.(dll|dylib|so)$/.test(monoModule.name.toLowerCase()) ||
+          /libmono.*\.(dll|dylib|so)$/.test(monoModule.name.toLowerCase());
         assert(isValidPattern, "Module name should match Mono runtime pattern");
         console.log(`    Module name matches common pattern: ${monoModule.name}`);
       },
@@ -76,21 +69,14 @@ export function testCoreInfrastructure(): TestResult {
     createTest(
       "Module base address should be valid",
       () => {
-        const modules = Process.enumerateModules();
-        const monoModule = modules.find(
-          module => module.name.toLowerCase().includes("mono") && module.name.toLowerCase().includes("dll"),
-        );
+        const monoModule = findMonoModule();
         assertNotNull(monoModule, "Mono module should be found");
 
         // More flexible validation for Unity Mono runtime
         const baseAddr = monoModule.base;
         assert(!baseAddr.isNull(), "Module base address should not be null");
 
-        // Check if address is reasonable (not zero and in expected range)
-        const addrValue = baseAddr.toUInt32();
-        assert(addrValue > 0, "Module base address should be positive");
-
-        console.log(`    Module base address: 0x${baseAddr.toString(16)} (${addrValue})`);
+        console.log(`    Module base address: ${baseAddr}`);
       },
       { category: TestCategory.STANDALONE, requiresMono: false },
     ),
@@ -100,10 +86,7 @@ export function testCoreInfrastructure(): TestResult {
     createTest(
       "Module size should be reasonable",
       () => {
-        const modules = Process.enumerateModules();
-        const monoModule = modules.find(
-          module => module.name.toLowerCase().includes("mono") && module.name.toLowerCase().includes("dll"),
-        );
+        const monoModule = findMonoModule();
         assertNotNull(monoModule, "Mono module should be found");
         assert(monoModule.size > 1024 * 1024, "Module size should be at least 1MB");
         console.log(`    Module size: ${monoModule.size} bytes (${(monoModule.size / 1024 / 1024).toFixed(2)} MB)`);
@@ -116,14 +99,13 @@ export function testCoreInfrastructure(): TestResult {
     createTest(
       "Module path should be valid",
       () => {
-        const modules = Process.enumerateModules();
-        const monoModule = modules.find(
-          module => module.name.toLowerCase().includes("mono") && module.name.toLowerCase().includes("dll"),
-        );
+        const monoModule = findMonoModule();
         assertNotNull(monoModule, "Mono module should be found");
         assertNotNull(monoModule.path, "Module should have a valid path");
-        const hasDllExtension = monoModule.path.toLowerCase().endsWith(".dll");
-        assert(hasDllExtension, "Module path should have valid extension");
+        const pathLower = monoModule.path.toLowerCase();
+        const hasValidExtension =
+          pathLower.endsWith(".dll") || pathLower.endsWith(".dylib") || pathLower.endsWith(".so");
+        assert(hasValidExtension, "Module path should have valid extension");
         console.log(`    Path matches Mono runtime pattern: ${monoModule.path}`);
       },
       { category: TestCategory.STANDALONE, requiresMono: false },

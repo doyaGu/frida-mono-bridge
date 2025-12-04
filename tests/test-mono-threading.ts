@@ -12,6 +12,7 @@ import Mono from "../src";
 import {
   TestResult,
   TestSuite,
+  createTest,
   createMonoDependentTest,
   createPerformanceTest,
   createErrorHandlingTest,
@@ -153,22 +154,24 @@ export function testMonoThreading(): TestResult {
 
       assertNotNull(threadManager, "Thread manager should be available");
 
-      // Test attachment state tracking
-      if (typeof threadManager.isInAttachedContext === "function") {
-        const initialState = threadManager.isInAttachedContext();
-        console.log(`    Initial attachment state: ${initialState}`);
+      // Test isInAttachedContext - we're inside a Mono.perform, so should be in context
+      // Note: isInAttachedContext tracks active *run* contexts, not just attachment
+      const initialState = threadManager.isInAttachedContext();
+      console.log(`    Initial attachment context state: ${initialState}`);
 
-        // Ensure attachment
-        threadManager.ensureAttached();
-        const afterAttachState = threadManager.isInAttachedContext();
-        console.log(`    After attachment state: ${afterAttachState}`);
+      // Ensure attachment and verify isAttached
+      threadManager.ensureAttached();
+      const isAttached = threadManager.isAttached();
+      assert(isAttached === true, "Thread should be attached after ensureAttached");
 
-        // State may remain false in some implementations
-        // Just verify the method doesn't throw
-        console.log("    Attachment state tracking verified");
-      } else {
-        console.log("    isInAttachedContext method not available");
-      }
+      // When we call run(), we should be in attached context
+      threadManager.run(() => {
+        const inContext = threadManager.isInAttachedContext();
+        assert(inContext === true, "Should be in attached context inside run()");
+      });
+
+      console.log(`    isAttached: ${isAttached}`);
+      console.log("    Attachment state tracking verified");
     }),
   );
 
@@ -180,38 +183,37 @@ export function testMonoThreading(): TestResult {
       assertNotNull(threadManager, "Thread manager should be available");
 
       // Test run method
-      if (typeof threadManager.run === "function") {
-        let executionCount = 0;
+      let executionCount = 0;
+      const result = threadManager.run(() => {
+        executionCount++;
+        return "test result";
+      });
 
-        const result = threadManager.run(() => {
-          executionCount++;
-          return "test result";
-        });
-
-        assert(result === "test result", "Run should return function result");
-        assert(executionCount === 1, "Function should be executed once");
-
-        console.log("    Context-aware execution working correctly");
-      } else {
-        console.log("    Run method not available");
-      }
+      assert(result === "test result", "Run should return function result");
+      assert(executionCount === 1, "Function should be executed once");
+      console.log("    run() execution working correctly");
 
       // Test runIfNeeded method
-      if (typeof threadManager.runIfNeeded === "function") {
-        let executionCount = 0;
+      let neededCount = 0;
+      const neededResult = threadManager.runIfNeeded(() => {
+        neededCount++;
+        return "needed result";
+      });
 
-        const result = threadManager.runIfNeeded(() => {
-          executionCount++;
-          return "needed result";
-        });
+      assert(neededResult === "needed result", "runIfNeeded should return function result");
+      assert(neededCount === 1, "Function should be executed once");
+      console.log("    runIfNeeded() execution working correctly");
 
-        assert(result === "needed result", "RunIfNeeded should return function result");
-        assert(executionCount === 1, "Function should be executed once");
+      // Test withAttachedThread (alias for run)
+      let attachedCount = 0;
+      const attachedResult = threadManager.withAttachedThread(() => {
+        attachedCount++;
+        return "attached result";
+      });
 
-        console.log("    RunIfNeeded execution working correctly");
-      } else {
-        console.log("    RunIfNeeded method not available");
-      }
+      assert(attachedResult === "attached result", "withAttachedThread should return function result");
+      assert(attachedCount === 1, "Function should be executed once");
+      console.log("    withAttachedThread() execution working correctly");
     }),
   );
 
@@ -223,31 +225,31 @@ export function testMonoThreading(): TestResult {
       assertNotNull(threadManager, "Thread manager should be available");
 
       // Test nested run operations
-      if (typeof threadManager.run === "function") {
-        let outerCount = 0;
-        let innerCount = 0;
+      let outerCount = 0;
+      let innerCount = 0;
 
+      threadManager.run(() => {
+        outerCount++;
+        const outerInContext = threadManager.isInAttachedContext();
+        assert(outerInContext === true, "Should be in context in outer run");
+
+        // Nested call should work without double attachment
         threadManager.run(() => {
-          outerCount++;
-
-          // Nested call should work without double attachment
-          threadManager.run(() => {
-            innerCount++;
-          });
-
-          // Another nested call
-          threadManager.run(() => {
-            innerCount++;
-          });
+          innerCount++;
+          const innerInContext = threadManager.isInAttachedContext();
+          assert(innerInContext === true, "Should be in context in inner run");
         });
 
-        assert(outerCount === 1, "Outer function should execute once");
-        assert(innerCount === 2, "Inner functions should execute twice");
+        // Another nested call
+        threadManager.run(() => {
+          innerCount++;
+        });
+      });
 
-        console.log("    Nested operations handled correctly");
-      } else {
-        console.log("    Nested operations test skipped (run method not available)");
-      }
+      assert(outerCount === 1, "Outer function should execute once");
+      assert(innerCount === 2, "Inner functions should execute twice");
+
+      console.log("    Nested operations handled correctly");
     }),
   );
 
@@ -263,23 +265,24 @@ export function testMonoThreading(): TestResult {
       assertNotNull(threadManager, "Thread manager should be available");
 
       // Test runBatch method
-      if (typeof threadManager.runBatch === "function") {
-        const results = threadManager.runBatch(
-          () => "result1",
-          () => "result2",
-          () => "result3",
-        );
+      const results = threadManager.runBatch(
+        () => "result1",
+        () => "result2",
+        () => "result3",
+      );
 
-        assert(Array.isArray(results), "RunBatch should return array");
-        assert(results.length === 3, "Should return results for all operations");
-        assert(results[0] === "result1", "First result should match");
-        assert(results[1] === "result2", "Second result should match");
-        assert(results[2] === "result3", "Third result should match");
+      assert(Array.isArray(results), "runBatch should return array");
+      assert(results.length === 3, "Should return results for all operations");
+      assert(results[0] === "result1", "First result should match");
+      assert(results[1] === "result2", "Second result should match");
+      assert(results[2] === "result3", "Third result should match");
 
-        console.log("    Batch operations working correctly");
-      } else {
-        console.log("    RunBatch method not available");
-      }
+      // Test empty batch
+      const emptyResults = threadManager.runBatch();
+      assert(Array.isArray(emptyResults), "Empty batch should return array");
+      assert(emptyResults.length === 0, "Empty batch should return empty array");
+
+      console.log("    Batch operations working correctly");
     }),
   );
 
@@ -291,36 +294,25 @@ export function testMonoThreading(): TestResult {
       assertNotNull(threadManager, "Thread manager should be available");
 
       // Test that multiple rapid operations don't interfere
-      const operations = [];
+      const results: string[] = [];
 
       for (let i = 0; i < 10; i++) {
-        operations.push(() => {
+        const result = threadManager.run(() => {
           return `operation_${i}_${Date.now()}`;
         });
+        results.push(result);
       }
 
-      // Execute operations rapidly
-      const results = [];
-      for (const operation of operations) {
-        try {
-          if (typeof threadManager.run === "function") {
-            const result = threadManager.run(operation);
-            results.push(result);
-          } else {
-            // Fallback to direct execution
-            const result = operation();
-            results.push(result);
-          }
-        } catch (error) {
-          console.log(`    Concurrent operation error: ${error}`);
-        }
-      }
-
-      assert(results.length === operations.length, "All operations should complete");
+      assert(results.length === 10, "All operations should complete");
 
       // Check that results are unique (no interference)
       const uniqueResults = new Set(results);
       assert(uniqueResults.size === results.length, "Results should be unique");
+
+      // Verify each result has correct prefix
+      for (let i = 0; i < results.length; i++) {
+        assert(results[i].startsWith(`operation_${i}_`), `Result ${i} should have correct prefix`);
+      }
 
       console.log(`    Concurrent access test: ${results.length} operations completed`);
     }),
@@ -337,21 +329,17 @@ export function testMonoThreading(): TestResult {
       let stateCheckCount = 0;
 
       for (let i = 0; i < 5; i++) {
-        try {
-          if (typeof threadManager.run === "function") {
-            threadManager.run(() => {
-              stateCheckCount++;
+        threadManager.run(() => {
+          stateCheckCount++;
 
-              // Check attachment state during operation
-              if (typeof threadManager.isInAttachedContext === "function") {
-                const inContext = threadManager.isInAttachedContext();
-                assert(inContext === true, "Should be in attached context during operation");
-              }
-            });
-          }
-        } catch (error) {
-          console.log(`    State consistency error: ${error}`);
-        }
+          // Check attachment state during operation
+          const inContext = threadManager.isInAttachedContext();
+          assert(inContext === true, "Should be in attached context during operation");
+
+          // Check isAttached as well
+          const isAttached = threadManager.isAttached();
+          assert(isAttached === true, "Thread should be attached during operation");
+        });
       }
 
       assert(stateCheckCount === 5, "All state checks should complete");
@@ -371,23 +359,24 @@ export function testMonoThreading(): TestResult {
       assertNotNull(threadManager, "Thread manager should be available");
 
       // Test that thread manager maintains per-thread state
-      if (typeof threadManager.ensureAttached === "function") {
-        const thread1 = threadManager.ensureAttached();
+      const thread1 = threadManager.ensureAttached();
+      assertNotNull(thread1, "ensureAttached should return a handle");
+      assert(!thread1.isNull(), "Thread handle should not be null");
 
-        // Get current thread ID for comparison
-        const currentThreadId = typeof Process.getCurrentThreadId === "function" ? Process.getCurrentThreadId() : 0;
+      // Get current thread ID for comparison
+      const currentThreadId = Process.getCurrentThreadId();
+      console.log(`    Thread ID: ${currentThreadId}`);
+      console.log(`    Thread handle: 0x${thread1.toString(16)}`);
 
-        console.log(`    Thread ID: ${currentThreadId}`);
-        console.log(`    Thread handle: 0x${thread1.toString(16)}`);
+      // Test that multiple calls return same handle for same thread
+      const thread2 = threadManager.ensureAttached();
+      assert(thread1.equals(thread2), "Same thread should get same handle");
 
-        // Test that multiple calls return same handle for same thread
-        const thread2 = threadManager.ensureAttached();
-        assert(thread1.equals(thread2), "Same thread should get same handle");
+      // Verify getStats shows this thread
+      const stats = threadManager.getStats();
+      assert(stats.attachedThreadIds.includes(currentThreadId), "Stats should include current thread ID");
 
-        console.log("    Thread-local data handling working correctly");
-      } else {
-        console.log("    Thread-local operations not available");
-      }
+      console.log("    Thread-local data handling working correctly");
     }),
   );
 
@@ -399,24 +388,25 @@ export function testMonoThreading(): TestResult {
       assertNotNull(threadManager, "Thread manager should be available");
 
       // Test thread handle caching
-      if (typeof threadManager.ensureAttached === "function") {
-        const handles = [];
+      const handles: NativePointer[] = [];
 
-        // Get thread handle multiple times
-        for (let i = 0; i < 5; i++) {
-          const handle = threadManager.ensureAttached();
-          handles.push(handle);
-        }
-
-        // All handles should be the same (cached)
-        for (let i = 1; i < handles.length; i++) {
-          assert(handles[0].equals(handles[i]), `Handle ${i} should match handle 0`);
-        }
-
-        console.log("    Thread handle caching verified");
-      } else {
-        console.log("    Thread handle caching test skipped");
+      // Get thread handle multiple times
+      for (let i = 0; i < 5; i++) {
+        const handle = threadManager.ensureAttached();
+        handles.push(handle);
       }
+
+      // All handles should be the same (cached)
+      for (let i = 1; i < handles.length; i++) {
+        assert(handles[0].equals(handles[i]), `Handle ${i} should match handle 0`);
+      }
+
+      // Check stats to verify caching is working
+      const stats = threadManager.getStats();
+      // Total attachments should not have increased by 5 (due to caching)
+      console.log(`    Total attachments: ${stats.totalAttachments}, Current attached: ${stats.currentAttachedCount}`);
+
+      console.log("    Thread handle caching verified");
     }),
   );
 
@@ -425,26 +415,25 @@ export function testMonoThreading(): TestResult {
   // ============================================================================
 
   suite.addResult(
-    createMonoDependentTest("Thread manager should provide cleanup operations", () => {
+    createMonoDependentTest("Thread manager should provide stats for resource tracking", () => {
       const api = Mono.api;
       const threadManager = api._threadManager;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
-      // Test cleanup method availability
-      if (typeof threadManager.detachAll === "function") {
-        console.log("    detachAll method available");
+      // Test getStats method for resource tracking
+      const stats = threadManager.getStats();
+      assertNotNull(stats, "getStats should return stats object");
+      assert(typeof stats.totalAttachments === "number", "Stats should have totalAttachments");
+      assert(typeof stats.currentAttachedCount === "number", "Stats should have currentAttachedCount");
+      assert(typeof stats.activeContextCount === "number", "Stats should have activeContextCount");
+      assert(Array.isArray(stats.attachedThreadIds), "Stats should have attachedThreadIds array");
 
-        // Test that cleanup doesn't throw errors
-        try {
-          threadManager.detachAll();
-          console.log("    Cleanup operation completed successfully");
-        } catch (error) {
-          console.log(`    Cleanup operation: ${error}`);
-        }
-      } else {
-        console.log("    detachAll method not available");
-      }
+      // Verify current thread is attached (we're inside Mono.perform)
+      assert(threadManager.isAttached() === true, "Current thread should be attached");
+
+      console.log(`    Stats: ${stats.currentAttachedCount} attached, ${stats.totalAttachments} total attachments`);
+      console.log("    Resource tracking verified");
     }),
   );
 
@@ -455,31 +444,29 @@ export function testMonoThreading(): TestResult {
 
       assertNotNull(threadManager, "Thread manager should be available");
 
-      // Test resource management during operations
-      const initialHandles = [];
+      // Get initial stats
+      const initialStats = threadManager.getStats();
+      const initialAttachCount = initialStats.currentAttachedCount;
 
-      // Create some thread attachments
-      for (let i = 0; i < 3; i++) {
-        try {
-          if (typeof threadManager.ensureAttached === "function") {
-            const handle = threadManager.ensureAttached();
-            initialHandles.push(handle);
-          }
-        } catch (error) {
-          console.log(`    Resource creation error: ${error}`);
-        }
-      }
+      // Ensure attachment and verify stats update
+      const handle = threadManager.ensureAttached();
+      assertNotNull(handle, "ensureAttached should return a handle");
+      assert(!handle.isNull(), "Thread handle should not be null");
 
-      // Test cleanup
-      if (typeof threadManager.detachAll === "function") {
-        try {
-          threadManager.detachAll();
-          console.log("    Resource cleanup completed");
-        } catch (error) {
-          console.log(`    Resource cleanup error: ${error}`);
-        }
-      }
+      // Verify isAttached works
+      const isAttached = threadManager.isAttached();
+      assert(isAttached === true, "Current thread should be attached");
 
+      // Multiple ensureAttached calls should return same handle (cached)
+      const handle2 = threadManager.ensureAttached();
+      assert(handle.equals(handle2), "Multiple ensureAttached should return cached handle");
+
+      // Get final stats
+      const finalStats = threadManager.getStats();
+      assert(finalStats.currentAttachedCount >= initialAttachCount, "Attached count should be maintained");
+
+      console.log(`    Handle: 0x${handle.toString(16)}, isAttached: ${isAttached}`);
+      console.log(`    Stats: ${finalStats.currentAttachedCount} attached threads`);
       console.log("    Resource management test completed");
     }),
   );
@@ -487,19 +474,39 @@ export function testMonoThreading(): TestResult {
   suite.addResult(
     createMonoDependentTest("Thread manager should handle disposal gracefully", () => {
       const api = Mono.api;
+      const threadManager = api._threadManager;
 
-      // Test that API disposal handles thread manager correctly
+      // Test that API is not disposed
       assert(!api.isDisposed, "API should not be disposed initially");
 
-      // Test operations before disposal
-      try {
-        const domain = api.getRootDomain();
-        assertNotNull(domain, "Operations should work before disposal");
-      } catch (error) {
-        console.log(`    Pre-disposal operation: ${error}`);
-      }
+      // Test runSafe method for error handling
+      const safeResult = threadManager.runSafe(() => {
+        return "safe execution";
+      });
+      assert(safeResult === "safe execution", "runSafe should return callback result");
 
-      // Note: We don't actually dispose the API here as it would affect other tests
+      // Test runSafe with error handler
+      const errorResult = threadManager.runSafe(
+        () => {
+          throw new Error("Test error");
+        },
+        error => {
+          return `handled: ${error.message}`;
+        },
+      );
+      assert(errorResult === "handled: Test error", "runSafe should invoke error handler on error");
+
+      // Test runSafe without error handler returns undefined on error
+      const noHandlerResult = threadManager.runSafe(() => {
+        throw new Error("Unhandled error");
+      });
+      assert(noHandlerResult === undefined, "runSafe without handler should return undefined on error");
+
+      // Test operations work normally
+      const domain = api.getRootDomain();
+      assertNotNull(domain, "Operations should work before disposal");
+
+      console.log("    runSafe error handling verified");
       console.log("    Disposal handling verified");
     }),
   );
@@ -515,30 +522,27 @@ export function testMonoThreading(): TestResult {
 
       assertNotNull(threadManager, "Thread manager should be available");
 
+      const statsBefore = threadManager.getStats();
       const iterations = 1000;
       const startTime = Date.now();
 
       // Test rapid thread operations
       for (let i = 0; i < iterations; i++) {
-        try {
-          if (typeof threadManager.ensureAttached === "function") {
-            threadManager.ensureAttached();
-          }
+        threadManager.ensureAttached();
 
-          if (i % 10 === 0 && typeof threadManager.run === "function") {
-            threadManager.run(() => `test_${i}`);
-          }
-        } catch (error) {
-          // Count errors but don't fail the test
+        if (i % 10 === 0) {
+          threadManager.run(() => `test_${i}`);
         }
       }
 
       const duration = Date.now() - startTime;
       const avgTime = duration / iterations;
+      const statsAfter = threadManager.getStats();
 
       console.log(
         `    ${iterations} thread operations took ${duration}ms (avg: ${avgTime.toFixed(2)}ms per operation)`,
       );
+      console.log(`    Total attachments: ${statsAfter.totalAttachments} (was ${statsBefore.totalAttachments})`);
       assert(duration < 5000, "Thread operations should complete quickly");
       assert(avgTime < 5, "Average time per operation should be reasonable");
     }),
@@ -551,26 +555,17 @@ export function testMonoThreading(): TestResult {
 
       assertNotNull(threadManager, "Thread manager should be available");
 
-      if (typeof threadManager.run !== "function") {
-        console.log("    (Skipped: run method not available)");
-        return;
-      }
-
-      const iterations = 50; // Reduced iterations to avoid issues
+      const iterations = 100;
       const startTime = Date.now();
       let successCount = 0;
 
-      // Test rapid context-aware operations with error handling
+      // Test rapid context-aware operations
       for (let i = 0; i < iterations; i++) {
-        try {
-          const result = threadManager.run(() => {
-            return `performance_test_${i}`;
-          });
-          if (result === `performance_test_${i}`) {
-            successCount++;
-          }
-        } catch (error) {
-          // Some operations may fail in certain thread states
+        const result = threadManager.run(() => {
+          return `performance_test_${i}`;
+        });
+        if (result === `performance_test_${i}`) {
+          successCount++;
         }
       }
 
@@ -578,8 +573,9 @@ export function testMonoThreading(): TestResult {
       const avgTime = duration / iterations;
 
       console.log(`    ${successCount}/${iterations} context-aware operations completed in ${duration}ms`);
-      // Relaxed assertion - as long as some operations work
-      assert(successCount > 0 || duration < 5000, "Some context-aware operations should work");
+      console.log(`    Average time per operation: ${avgTime.toFixed(2)}ms`);
+      assert(successCount === iterations, "All context-aware operations should succeed");
+      assert(avgTime < 10, "Average time per operation should be reasonable");
     }),
   );
 
@@ -590,39 +586,31 @@ export function testMonoThreading(): TestResult {
 
       assertNotNull(threadManager, "Thread manager should be available");
 
-      if (typeof threadManager.runBatch !== "function") {
-        console.log("    (Skipped: runBatch method not available)");
-        return;
-      }
-
-      const iterations = 10; // Reduced iterations
+      const iterations = 50;
       const startTime = Date.now();
       let successCount = 0;
 
-      // Test batch operations with error handling
+      // Test batch operations
       for (let i = 0; i < iterations; i++) {
-        try {
-          const results = threadManager.runBatch(
-            () => `batch1_${i}`,
-            () => `batch2_${i}`,
-            () => `batch3_${i}`,
-            () => `batch4_${i}`,
-            () => `batch5_${i}`,
-          );
+        const results = threadManager.runBatch(
+          () => `batch1_${i}`,
+          () => `batch2_${i}`,
+          () => `batch3_${i}`,
+          () => `batch4_${i}`,
+          () => `batch5_${i}`,
+        );
 
-          if (Array.isArray(results) && results.length === 5) {
-            successCount++;
-          }
-        } catch (error) {
-          // Some batch operations may fail in certain thread states
+        if (Array.isArray(results) && results.length === 5) {
+          successCount++;
         }
       }
 
       const duration = Date.now() - startTime;
+      const avgTime = duration / iterations;
 
       console.log(`    ${successCount}/${iterations} batch operations completed in ${duration}ms`);
-      // Relaxed assertion
-      assert(successCount >= 0, "Batch operations should complete without crash");
+      console.log(`    Average time per batch: ${avgTime.toFixed(2)}ms`);
+      assert(successCount === iterations, "All batch operations should succeed");
     }),
   );
 
@@ -637,28 +625,27 @@ export function testMonoThreading(): TestResult {
 
       assertNotNull(threadManager, "Thread manager should be available");
 
-      // Test operations with invalid parameters
+      // Test run with null callback - should throw or handle gracefully
+      let runNullThrew = false;
       try {
-        if (typeof threadManager.run === "function") {
-          const result = threadManager.run(null as any);
-          // Should handle gracefully or throw controlled error
-          console.log("    Invalid parameter handling: run method");
-        }
+        threadManager.run(null as any);
       } catch (error) {
-        console.log(`    Invalid parameter error handled: ${error}`);
+        runNullThrew = true;
+        console.log(`    run(null) threw: ${error}`);
       }
+      // Either throwing or returning undefined is acceptable
+      console.log(`    Invalid run parameter handling: ${runNullThrew ? "threw error" : "handled gracefully"}`);
 
-      try {
-        if (typeof threadManager.runBatch === "function") {
-          const result = threadManager.runBatch();
-          // Should handle empty batch gracefully
-          assert(Array.isArray(result), "Empty batch should return array");
-          assert(result.length === 0, "Empty batch should return empty array");
-          console.log("    Empty batch handling working");
-        }
-      } catch (error) {
-        console.log(`    Empty batch error handled: ${error}`);
-      }
+      // Test empty batch - should return empty array
+      const emptyResult = threadManager.runBatch();
+      assert(Array.isArray(emptyResult), "Empty batch should return array");
+      assert(emptyResult.length === 0, "Empty batch should return empty array");
+      console.log("    Empty batch handling working");
+
+      // Test runSafe with null - should return undefined without crashing
+      const safeNullResult = threadManager.runSafe(null as any);
+      assert(safeNullResult === undefined, "runSafe(null) should return undefined");
+      console.log("    runSafe(null) handled correctly");
     }),
   );
 
@@ -666,27 +653,33 @@ export function testMonoThreading(): TestResult {
     createErrorHandlingTest("Thread manager should handle attachment failures", () => {
       const api = Mono.api;
 
-      // Test attachment with invalid domain
+      // Test attachment with null domain pointer
+      let nullDomainHandled = false;
       try {
         const invalidThread = api.native.mono_thread_attach(ptr(0));
         if (invalidThread && !invalidThread.isNull()) {
-          // If it succeeds, try to detach
+          // If it succeeds with null domain, try to detach
           api.native.mono_thread_detach(invalidThread);
-          console.log("    Invalid domain attachment handled");
-        } else {
-          console.log("    Invalid domain attachment failed (expected)");
         }
+        nullDomainHandled = true;
+        console.log("    Null domain attachment handled without crash");
       } catch (error) {
-        console.log(`    Invalid domain attachment error handled: ${error}`);
+        nullDomainHandled = true;
+        console.log(`    Null domain attachment threw (expected): ${error}`);
       }
+      assert(nullDomainHandled, "Null domain case should be handled");
 
-      // Test detachment with invalid thread
+      // Test detachment with null thread pointer
+      let nullThreadHandled = false;
       try {
         api.native.mono_thread_detach(ptr(0));
-        console.log("    Invalid thread detachment handled");
+        nullThreadHandled = true;
+        console.log("    Null thread detachment handled without crash");
       } catch (error) {
-        console.log(`    Invalid thread detachment error handled: ${error}`);
+        nullThreadHandled = true;
+        console.log(`    Null thread detachment threw (expected): ${error}`);
       }
+      assert(nullThreadHandled, "Null thread case should be handled");
     }),
   );
 
@@ -702,22 +695,15 @@ export function testMonoThreading(): TestResult {
       assertNotNull(threadManager, "Thread manager should be available");
 
       // Test that API operations work through thread manager
-      if (typeof threadManager.run === "function") {
-        try {
-          const result = threadManager.run(() => {
-            const domain = api.getRootDomain();
-            assertNotNull(domain, "Domain should be accessible through thread manager");
-            return domain.toString(); // Return pointer as string instead of id
-          });
+      const result = threadManager.run(() => {
+        const domain = api.getRootDomain();
+        assertNotNull(domain, "Domain should be accessible through thread manager");
+        return domain.toString();
+      });
 
-          assert(typeof result === "string", "Should return domain pointer string");
-          console.log(`    API integration working: domain pointer ${result}`);
-        } catch (error) {
-          console.log(`    API integration test error (may be thread state issue): ${error}`);
-        }
-      } else {
-        console.log("    API integration test skipped (run method not available)");
-      }
+      assert(typeof result === "string", "Should return domain pointer string");
+      assert(result.startsWith("0x") || result === "0", "Should be a valid pointer string");
+      console.log(`    API integration working: domain pointer ${result}`);
     }),
   );
 
@@ -725,63 +711,197 @@ export function testMonoThreading(): TestResult {
     createIntegrationTest("Thread manager should integrate with Mono.perform", () => {
       // Test that Mono.perform uses thread manager correctly
       let performWorked = false;
+      let domainId: number | undefined;
 
-      try {
-        Mono.perform(() => {
-          performWorked = true;
+      Mono.perform(() => {
+        performWorked = true;
 
-          // Test that we can access Mono APIs
-          const domain = Mono.domain;
-          assertNotNull(domain, "Domain should be accessible in Mono.perform");
-        });
+        // Test that we can access Mono APIs
+        const domain = Mono.domain;
+        assertNotNull(domain, "Domain should be accessible in Mono.perform");
+        domainId = domain.id;
 
-        assert(performWorked, "Mono.perform should execute correctly");
-        console.log("    Mono.perform integration working correctly");
-      } catch (error) {
-        console.log(`    Mono.perform integration error: ${error}`);
-      }
+        // Test that thread manager is in correct state during Mono.perform
+        const api = Mono.api;
+        const threadManager = api._threadManager;
+        const isAttached = threadManager.isAttached();
+        assert(isAttached === true, "Thread should be attached during Mono.perform");
+      });
+
+      assert(performWorked, "Mono.perform should execute correctly");
+      assert(domainId !== undefined, "Domain ID should be captured");
+      console.log(`    Mono.perform integration working correctly, domain id: ${domainId}`);
     }),
   );
 
   suite.addResult(
     createIntegrationTest("Thread manager should integrate with domain operations", () => {
       // Test that domain operations work with thread management
-      try {
-        const domain = Mono.domain;
-        assertNotNull(domain, "Domain should be available");
+      const domain = Mono.domain;
+      assertNotNull(domain, "Domain should be available");
 
-        // Test domain operations that require thread attachment
-        const assemblies = domain.getAssemblies();
-        assert(Array.isArray(assemblies), "Domain operations should work with thread management");
+      // Test domain operations that require thread attachment
+      const assemblies = domain.getAssemblies();
+      assert(Array.isArray(assemblies), "Domain operations should work with thread management");
+      assert(assemblies.length > 0, "Should have at least one assembly");
 
-        console.log(`    Domain integration working: ${assemblies.length} assemblies accessible`);
-      } catch (error) {
-        console.log(`    Domain integration error: ${error}`);
-      }
+      // Verify first assembly is valid
+      const firstAssembly = assemblies[0];
+      assertNotNull(firstAssembly, "First assembly should not be null");
+      const assemblyName = firstAssembly.getName();
+      assert(typeof assemblyName === "string", "Assembly name should be a string");
+
+      console.log(`    Domain integration working: ${assemblies.length} assemblies accessible`);
+      console.log(`    First assembly: ${assemblyName}`);
     }),
   );
 
   suite.addResult(
     createIntegrationTest("Thread manager should integrate with string operations", () => {
       // Test that string operations work with thread management
-      try {
-        const api = Mono.api;
+      const api = Mono.api;
 
-        if (api.hasExport("mono_string_new")) {
-          const testString = api.stringNew("Thread Integration Test");
-          assertNotNull(testString, "String creation should work with thread management");
+      assert(api.hasExport("mono_string_new"), "mono_string_new should be available");
 
-          if (api.hasExport("mono_string_length")) {
-            const length = api.native.mono_string_length(testString);
-            assert(typeof length === "number", "String length should be accessible");
-            assert(length > 0, "String length should be positive");
+      const testString = api.stringNew("Thread Integration Test");
+      assertNotNull(testString, "String creation should work with thread management");
+      assert(!testString.isNull(), "String pointer should not be null");
 
-            console.log(`    String integration working: length ${length}`);
-          }
-        }
-      } catch (error) {
-        console.log(`    String integration error: ${error}`);
+      if (api.hasExport("mono_string_length")) {
+        const length = api.native.mono_string_length(testString);
+        assert(typeof length === "number", "String length should be accessible");
+        assert(length === 23, "String length should be 23 (Thread Integration Test)");
+
+        console.log(`    String integration working: length ${length}`);
+      } else {
+        console.log("    String length API not available, but string creation works");
       }
+    }),
+  );
+
+  // ============================================================================
+  // THREAD DETACHMENT API TESTS
+  // ============================================================================
+
+  suite.addResult(
+    createMonoDependentTest("Thread manager detach should return false for non-attached thread", () => {
+      const api = Mono.api;
+      const threadManager = api._threadManager;
+
+      assertNotNull(threadManager, "Thread manager should be available");
+
+      // Test detach on non-existent thread IDs - should return false
+      const result1 = threadManager.detach(999999999);
+      assert(result1 === false, "detach should return false for non-attached thread 999999999");
+
+      const result2 = threadManager.detach(12345);
+      assert(result2 === false, "detach should return false for non-attached thread 12345");
+
+      // Verify current thread is still attached
+      assert(threadManager.isAttached() === true, "Current thread should still be attached");
+
+      console.log("    detach() returns false for non-attached threads");
+    }),
+  );
+
+  suite.addResult(
+    createMonoDependentTest("Thread manager detachIfExiting should be safe to call", () => {
+      const api = Mono.api;
+      const threadManager = api._threadManager;
+
+      assertNotNull(threadManager, "Thread manager should be available");
+
+      // Verify detachIfExiting is a function
+      assert(typeof threadManager.detachIfExiting === "function", "detachIfExiting should be a function");
+
+      // Call detachIfExiting - should return false because thread is not exiting
+      const result = threadManager.detachIfExiting();
+      assert(result === false, "detachIfExiting should return false when thread is not exiting");
+
+      // Verify current thread is STILL attached (not detached because we're not exiting)
+      const isAttached = threadManager.isAttached();
+      assert(isAttached === true, "Current thread should still be attached after detachIfExiting");
+
+      // Operations should still work
+      const domain = api.getRootDomain();
+      assertNotNull(domain, "Domain should be accessible after detachIfExiting");
+
+      console.log(`    detachIfExiting returned: ${result}`);
+      console.log("    Thread still attached and operational after detachIfExiting");
+    }),
+  );
+
+  suite.addResult(
+    createMonoDependentTest("Thread manager detachAll should be available", () => {
+      const api = Mono.api;
+      const threadManager = api._threadManager;
+
+      assertNotNull(threadManager, "Thread manager should be available");
+
+      // Verify detachAll is a function
+      assert(typeof threadManager.detachAll === "function", "detachAll should be a function");
+      assert(threadManager.detachAll.length === 0, "detachAll should take no parameters");
+
+      // Get stats before - we have at least one attached thread
+      const stats = threadManager.getStats();
+      assert(stats.currentAttachedCount > 0, "Should have at least one attached thread");
+      console.log(`    Current attached threads: ${stats.currentAttachedCount}`);
+
+      // Note: We don't call detachAll() here because it would clear our internal
+      // state. The safe detachIfExiting is used for the current thread, which
+      // returns false because we're not exiting. detachAll is for cleanup.
+      console.log("    detachAll API verified (uses safe detachIfExiting for current thread)");
+    }),
+  );
+
+  suite.addResult(
+    createMonoDependentTest("Mono.detachIfExiting should be accessible from top-level API", () => {
+      // Verify top-level API is available
+      assert(typeof Mono.detachIfExiting === "function", "Mono.detachIfExiting should be a function");
+      assert(typeof Mono.detachAllThreads === "function", "Mono.detachAllThreads should be a function");
+
+      // Call detachIfExiting - should be safe and return false
+      const result = Mono.detachIfExiting();
+      assert(result === false, "Mono.detachIfExiting should return false when not exiting");
+
+      // Mono operations should still work
+      const domain = Mono.domain;
+      assertNotNull(domain, "Mono.domain should be accessible after detachIfExiting");
+
+      console.log("    Mono top-level detach APIs verified");
+    }),
+  );
+
+  // ============================================================================
+  // THREAD STATE VERIFICATION
+  // ============================================================================
+
+  suite.addResult(
+    createMonoDependentTest("Thread manager should track attachment state correctly", () => {
+      const api = Mono.api;
+      const threadManager = api._threadManager;
+
+      assertNotNull(threadManager, "Thread manager should be available");
+
+      // Get current thread ID
+      const currentThreadId = Process.getCurrentThreadId();
+
+      // Verify current thread is attached (we're inside Mono.perform)
+      const isCurrentAttached = threadManager.isAttached(currentThreadId);
+      assert(isCurrentAttached === true, "Current thread should be attached");
+
+      // Verify fake thread ID is not attached
+      const isFakeAttached = threadManager.isAttached(999999999);
+      assert(isFakeAttached === false, "Fake thread ID should not be attached");
+
+      // Check stats reflect reality
+      const stats = threadManager.getStats();
+      assert(stats.attachedThreadIds.includes(currentThreadId), "Stats should include current thread ID");
+      assert(!stats.attachedThreadIds.includes(999999999), "Stats should not include fake thread ID");
+
+      console.log(`    Thread ${currentThreadId} attached: ${isCurrentAttached}`);
+      console.log(`    Thread 999999999 attached: ${isFakeAttached}`);
+      console.log(`    Tracked thread IDs: ${stats.attachedThreadIds.join(", ")}`);
     }),
   );
 

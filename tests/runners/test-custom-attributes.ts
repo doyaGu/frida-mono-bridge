@@ -6,4 +6,28 @@
  * frida -p <PID> -l dist/test-custom-attributes.js
  */
 
-import "../test-custom-attributes";
+import { createCustomAttributeTests } from "../test-custom-attributes";
+import { runTestCategory, TestResult } from "../test-runner-base";
+
+function runCustomAttributesTests(): TestResult {
+  const results = createCustomAttributeTests();
+  const passed = results.filter(r => r.passed).length;
+  const failed = results.filter(r => r.failed).length;
+  const skipped = results.filter(r => r.skipped).length;
+
+  return {
+    name: "Custom Attributes Tests",
+    passed: failed === 0,
+    failed: failed > 0,
+    skipped: skipped > 0,
+    message: `${passed}/${results.length} Custom Attributes tests passed`,
+  };
+}
+
+// Auto-run test category
+runTestCategory("Custom Attributes Tests", runCustomAttributesTests, {
+  verbose: true,
+  stopOnFirstFailure: false,
+});
+
+export { createCustomAttributeTests };

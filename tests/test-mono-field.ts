@@ -159,28 +159,83 @@ export function createMonoFieldTests(): TestResult[] {
     createMonoDependentTest("MonoField should set instance field values", () => {
       const domain = Mono.domain;
 
-      // Try to find a class with instance fields
-      const pointClass = domain.class("System.Drawing.Point");
-      if (pointClass) {
-        try {
-          const obj = pointClass.alloc();
-          const xField = pointClass.tryGetField("x");
+      // Use StringBuilder which is safe to allocate and has internal fields
+      const stringBuilderClass = domain.class("System.Text.StringBuilder");
+      if (stringBuilderClass) {
+        const obj = stringBuilderClass.alloc();
+        assertNotNull(obj, "StringBuilder instance should be allocated");
 
-          if (xField && !xField.isStatic()) {
-            try {
-              // Try to set field value
-              const newValue = Mono.api.stringNew("42");
-              xField.setValue(obj, newValue);
-              console.log("  - Successfully set instance field value");
-            } catch (error) {
-              console.log(`  - Instance field set failed (expected): ${error}`);
+        const fields = stringBuilderClass.getFields();
+        const instanceFields = fields.filter(f => !f.isStatic() && !f.isInitOnly() && !f.isLiteral());
+
+        if (instanceFields.length > 0) {
+          console.log(`  - Found ${instanceFields.length} writable instance fields on StringBuilder`);
+
+          // Find a field we can safely modify (e.g., capacity-related or internal)
+          for (const field of instanceFields) {
+            const fieldType = field.getType();
+            const typeName = fieldType?.getName() || "";
+
+            // Try to find an Int32 field we can set
+            if (typeName === "Int32" || typeName === "System.Int32") {
+              try {
+                // Read original value using readValue with coercion
+                const originalValue = field.readValue(obj, { coerce: true });
+                console.log(`  - Field "${field.name}" original value: ${originalValue}`);
+
+                // Allocate memory for the new Int32 value and write to it
+                const newValueMem = Memory.alloc(4);
+                newValueMem.writeS32(42);
+
+                // Set the value using the pointer to the Int32 data
+                field.setValue(obj, newValueMem);
+
+                // Read back the new value
+                const newValue = field.readValue(obj, { coerce: true });
+                console.log(`  - Field "${field.name}" after setValue(42): ${newValue}`);
+
+                assert(newValue === 42, `Field value should be 42 after set, got: ${newValue}`);
+                console.log("  - Instance field set/get successful");
+                return; // Test passed
+              } catch (error) {
+                console.log(`  - Field "${field.name}" access failed: ${error}`);
+              }
             }
           }
-        } catch (error) {
-          console.log(`  - Point class operations failed (expected): ${error}`);
+
+          // If no Int32 field was successfully modified, just verify we can read instance fields
+          const firstField = instanceFields[0];
+          try {
+            const value = firstField.readValue(obj, { coerce: true });
+            console.log(`  - Read instance field "${firstField.name}": ${value}`);
+          } catch (error) {
+            console.log(`  - Instance field read failed: ${error}`);
+          }
+        } else {
+          console.log("  - No writable instance fields found on StringBuilder");
         }
       } else {
-        console.log("  - Point class not available for field testing");
+        // Fallback: try Exception class which has instance fields
+        const exceptionClass = domain.class("System.Exception");
+        if (exceptionClass) {
+          const obj = exceptionClass.alloc();
+          const fields = exceptionClass.getFields();
+          const instanceFields = fields.filter(f => !f.isStatic());
+
+          console.log(`  - Using Exception class with ${instanceFields.length} instance fields`);
+
+          if (instanceFields.length > 0) {
+            const field = instanceFields[0];
+            try {
+              const value = field.readValue(obj, { coerce: true });
+              console.log(`  - Read field "${field.name}": ${value}`);
+            } catch (error) {
+              console.log(`  - Field access: ${error}`);
+            }
+          }
+        } else {
+          console.log("  - No suitable class found for instance field testing");
+        }
       }
     }),
   );

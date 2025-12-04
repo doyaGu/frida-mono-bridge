@@ -309,7 +309,8 @@ export function createStandaloneTest(name: string, testFn: () => void, options?:
 }
 
 export function createMonoDependentTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
-  return createTest(name, testFn, {
+  // Wrap the test function in Mono.perform for proper thread attachment
+  return createTest(name, () => Mono.perform(testFn), {
     ...options,
     category: TestCategory.MONO_DEPENDENT,
     requiresMono: true,
@@ -317,7 +318,8 @@ export function createMonoDependentTest(name: string, testFn: () => void, option
 }
 
 export function createIntegrationTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
-  return createTest(name, testFn, {
+  // Wrap the test function in Mono.perform for proper thread attachment
+  return createTest(name, () => Mono.perform(testFn), {
     ...options,
     category: TestCategory.INTEGRATION,
     requiresMono: true,
@@ -325,7 +327,8 @@ export function createIntegrationTest(name: string, testFn: () => void, options?
 }
 
 export function createPerformanceTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
-  return createTest(name, testFn, {
+  // Wrap the test function in Mono.perform for proper thread attachment
+  return createTest(name, () => Mono.perform(testFn), {
     ...options,
     category: TestCategory.PERFORMANCE,
     requiresMono: true,
@@ -333,7 +336,8 @@ export function createPerformanceTest(name: string, testFn: () => void, options?
 }
 
 export function createErrorHandlingTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
-  return createTest(name, testFn, {
+  // Wrap the test function in Mono.perform for proper thread attachment
+  return createTest(name, () => Mono.perform(testFn), {
     ...options,
     category: TestCategory.ERROR_HANDLING,
     requiresMono: true,
@@ -341,8 +345,15 @@ export function createErrorHandlingTest(name: string, testFn: () => void, option
 }
 
 // Enhanced versions of existing functions with categorization
+// Note: createMonoDependentTest already wraps in Mono.perform, so no double-wrap needed
 export function createMonoTestEnhanced<T>(name: string, testFn: () => T, options?: TestOptions): TestResult {
-  return createMonoDependentTest(name, () => Mono.perform(testFn), options);
+  return createMonoDependentTest(
+    name,
+    () => {
+      testFn();
+    },
+    options,
+  );
 }
 
 export function createDomainTestEnhanced(
