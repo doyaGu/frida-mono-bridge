@@ -15,9 +15,8 @@
  * - Edge cases
  */
 
-import Mono from "../src";
-import { MonoArray } from "../src";
-import { TestResult, createMonoDependentTest, assert, assertNotNull } from "./test-framework";
+import Mono, { MonoArray } from "../src";
+import { TestResult, assert, assertNotNull, createMonoDependentTest } from "./test-framework";
 
 export function createMonoArrayTests(): TestResult[] {
   const results: TestResult[] = [];
@@ -820,21 +819,6 @@ export function createMonoArrayTests(): TestResult[] {
       assert(typeof description === "string", "describe() should return string");
       assert(description.includes("Int32"), "Description should include element type");
       assert(description.includes("10"), "Description should include length");
-    }),
-  );
-
-  results.push(
-    createMonoDependentTest("MonoArray - getArrayInfo()", () => {
-      const intClass = Mono.domain.class("System.Int32");
-      assertNotNull(intClass, "Int32 class should exist");
-
-      const arr = MonoArray.new(Mono.api, intClass, 10);
-      const info = arr.getArrayInfo();
-
-      assert(info.length === 10, `info.length should be 10, got ${info.length}`);
-      assert(info.elementSize === 4, `info.elementSize should be 4, got ${info.elementSize}`);
-      assert(info.totalSize === 40, `info.totalSize should be 40, got ${info.totalSize}`);
-      assert(info.elementClass.includes("Int32"), "info.elementClass should include Int32");
     }),
   );
 

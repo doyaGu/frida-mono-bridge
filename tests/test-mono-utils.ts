@@ -4,37 +4,27 @@
  */
 
 import {
+  TestCategory,
   TestResult,
   TestSuite,
-  TestCategory,
-  createStandaloneTest,
-  createPerformanceTest,
-  createErrorHandlingTest,
-  createIntegrationTest,
-  createMonoDependentTest,
   assert,
   assertNotNull,
   assertThrows,
+  createErrorHandlingTest,
+  createIntegrationTest,
+  createPerformanceTest,
+  createStandaloneTest,
 } from "./test-framework";
 
 // Import Mono for real API access
-import Mono from "../src";
 
-// Import all utility modules
-import * as FindUtils from "../src/utils/find";
-import * as TraceUtils from "../src/utils/trace";
-import * as TypesUtils from "../src/utils/types";
-import * as MemoryUtils from "../src/utils/memory";
-import * as ValidationUtils from "../src/utils/validation";
+// Import all utility modules (only existing ones)
 import * as CacheUtils from "../src/utils/cache";
-import * as BatchUtils from "../src/utils/batch";
-import * as RetryUtils from "../src/utils/retry";
-import * as SafeAccessUtils from "../src/utils/safe-access";
-import * as EnumerationUtils from "../src/utils/enumeration-utils";
-import * as StringOperations from "../src/utils/string";
-import * as TypeOperations from "../src/utils/type-operations";
 import * as ErrorUtils from "../src/utils/errors";
 import * as LogUtils from "../src/utils/log";
+import * as MemoryUtils from "../src/utils/memory";
+import * as StringOperations from "../src/utils/string";
+import * as TraceUtils from "../src/utils/trace";
 
 // Mock classes for testing pointer-like objects (not Mono API mocks)
 class MockMonoObject {
@@ -150,71 +140,6 @@ export function testMonoUtils(): TestResult {
   );
 
   // ============================================================================
-  // TYPES UTILITY TESTS
-  // ============================================================================
-
-  suite.addResult(
-    createStandaloneTest("Types utility - Mono object detection", () => {
-      // Test Mono object detection
-      // Note: isMonoObject uses instanceof MonoObject, so MockMonoObject won't pass
-      const mockObject = new MockMonoObject(ptr(0x12345678));
-
-      // MockMonoObject is not a real MonoObject, so it should not be detected
-      assert(!TypesUtils.isMonoObject(mockObject), "MockMonoObject is not a real MonoObject");
-      assert(!TypesUtils.isMonoObject({}), "Should not detect plain object as Mono object");
-      assert(!TypesUtils.isMonoObject(null), "Should not detect null as Mono object");
-      assert(!TypesUtils.isMonoObject("string"), "Should not detect string as Mono object");
-
-      // Verify the function can distinguish types correctly
-      assert(!TypesUtils.isMonoObject(undefined), "Should not detect undefined as Mono object");
-      assert(!TypesUtils.isMonoObject(123), "Should not detect number as Mono object");
-    }),
-  );
-
-  suite.addResult(
-    createMonoDependentTest("Types utility - TypeHelper class", () => {
-      // Test TypeHelper instantiation with real Mono API
-      Mono.perform(() => {
-        const typeHelper = TypesUtils.createTypeHelper(Mono.api);
-        assertNotNull(typeHelper, "Should create TypeHelper instance");
-        assert(typeof typeHelper.box === "function", "Should have box method");
-        assert(typeof typeHelper.unbox === "function", "Should have unbox method");
-        assert(typeof typeHelper.getTypeForPrimitive === "function", "Should have getTypeForPrimitive method");
-      });
-    }),
-  );
-
-  suite.addResult(
-    createMonoDependentTest("Types utility - primitive type detection", () => {
-      // Test primitive type detection with real Mono API
-      Mono.perform(() => {
-        const typeHelper = TypesUtils.createTypeHelper(Mono.api);
-
-        // Test invalid type always returns null
-        const invalidType = typeHelper.getTypeForPrimitive({});
-        assert(invalidType === null, "Should return null for invalid type");
-
-        // Test that the method exists and is callable
-        // Note: getTypeForPrimitive may fail if mono_domain_assembly_open is not available
-        try {
-          const boolResult = typeHelper.getTypeForPrimitive(true);
-          // May return null if type not found in mscorlib
-          assert(boolResult === null || typeof boolResult === "object", "Should return null or type for boolean");
-
-          const numResult = typeHelper.getTypeForPrimitive(42);
-          assert(numResult === null || typeof numResult === "object", "Should return null or type for number");
-
-          const strResult = typeHelper.getTypeForPrimitive("test");
-          assert(strResult === null || typeof strResult === "object", "Should return null or type for string");
-        } catch (e) {
-          // Expected if mono_domain_assembly_open is not available in this Mono version
-          console.log(`    (Skipped primitive type lookup: ${e})`);
-        }
-      });
-    }),
-  );
-
-  // ============================================================================
   // MEMORY UTILITY TESTS
   // ============================================================================
 
@@ -291,87 +216,158 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  // ============================================================================
-  // VALIDATION UTILITY TESTS
-  // ============================================================================
-
   suite.addResult(
-    createStandaloneTest("Validation utility - string validation", () => {
-      // Test non-empty string validation
-      ValidationUtils.validateNonEmptyString("test", "testParam");
-
-      assertThrows(() => ValidationUtils.validateNonEmptyString("", "testParam"), "Should throw for empty string");
-      assertThrows(
-        () => ValidationUtils.validateNonEmptyString("   ", "testParam"),
-        "Should throw for whitespace-only string",
-      );
-      assertThrows(() => ValidationUtils.validateNonEmptyString(null as any, "testParam"), "Should throw for null");
-      assertThrows(
-        () => ValidationUtils.validateNonEmptyString(undefined as any, "testParam"),
-        "Should throw for undefined",
-      );
+    createStandaloneTest("Memory utility - isNativePointer check", () => {
+      // Test isNativePointer
+      const testPtr = ptr(0x12345678);
+      assert(MemoryUtils.isNativePointer(testPtr), "Should detect NativePointer");
+      assert(!MemoryUtils.isNativePointer(null), "Should not detect null as NativePointer");
+      assert(!MemoryUtils.isNativePointer(undefined), "Should not detect undefined as NativePointer");
+      assert(!MemoryUtils.isNativePointer({}), "Should not detect object as NativePointer");
+      assert(!MemoryUtils.isNativePointer("string"), "Should not detect string as NativePointer");
     }),
   );
 
   suite.addResult(
-    createStandaloneTest("Validation utility - pointer validation", () => {
-      // Test non-null pointer validation
+    createStandaloneTest("Memory utility - allocPointerArray", () => {
+      // Test allocating empty array
+      const emptyResult = MemoryUtils.allocPointerArray([]);
+      assert(emptyResult.isNull(), "Should return NULL for empty array");
+
+      // Test allocating array with pointers
+      const ptr1 = ptr(0x1000);
+      const ptr2 = ptr(0x2000);
+      const ptr3 = ptr(0x3000);
+      const arrayBuffer = MemoryUtils.allocPointerArray([ptr1, ptr2, ptr3]);
+
+      assert(!arrayBuffer.isNull(), "Should return valid buffer");
+
+      // Read back pointers
+      const read1 = arrayBuffer.readPointer();
+      const read2 = arrayBuffer.add(Process.pointerSize).readPointer();
+      const read3 = arrayBuffer.add(Process.pointerSize * 2).readPointer();
+
+      assert(read1.equals(ptr1), "First pointer should match");
+      assert(read2.equals(ptr2), "Second pointer should match");
+      assert(read3.equals(ptr3), "Third pointer should match");
+    }),
+  );
+
+  suite.addResult(
+    createStandaloneTest("Memory utility - tryMakePointer", () => {
+      // Test with valid number
+      const fromNumber = MemoryUtils.tryMakePointer(0x12345678);
+      assertNotNull(fromNumber, "Should create pointer from number");
+      assert(fromNumber!.equals(ptr(0x12345678)), "Pointer value should match");
+
+      // Test with valid hex string
+      const fromHexString = MemoryUtils.tryMakePointer("0x12345678");
+      assertNotNull(fromHexString, "Should create pointer from hex string");
+      assert(fromHexString!.equals(ptr(0x12345678)), "Pointer value should match");
+
+      // Test with valid decimal string
+      const fromDecString = MemoryUtils.tryMakePointer("305419896");
+      assertNotNull(fromDecString, "Should create pointer from decimal string");
+      assert(fromDecString!.equals(ptr(0x12345678)), "Pointer value should match");
+
+      // Test with bigint
+      const fromBigint = MemoryUtils.tryMakePointer(BigInt("0x12345678"));
+      assertNotNull(fromBigint, "Should create pointer from bigint");
+      assert(fromBigint!.equals(ptr(0x12345678)), "Pointer value should match");
+
+      // Test with zero
+      const fromZero = MemoryUtils.tryMakePointer(0);
+      assertNotNull(fromZero, "Should create pointer from zero");
+      assert(fromZero!.isNull(), "Zero should create null pointer");
+    }),
+  );
+
+  suite.addResult(
+    createErrorHandlingTest("Memory utility - ensurePointer", () => {
+      // Test with valid pointer
       const validPtr = ptr(0x12345678);
-      ValidationUtils.validateNonNullPointer(validPtr, "testParam");
+      const result = MemoryUtils.ensurePointer(validPtr, "Test pointer");
+      assert(result.equals(validPtr), "Should return the same pointer");
 
-      assertThrows(() => ValidationUtils.validateNonNullPointer(ptr(0), "testParam"), "Should throw for null pointer");
-      assertThrows(() => ValidationUtils.validateNonNullPointer(null, "testParam"), "Should throw for null");
+      // Test with object that has handle property
+      const objWithHandle = { handle: validPtr };
+      const handleResult = MemoryUtils.ensurePointer(objWithHandle as any, "Object with handle");
+      assert(handleResult.equals(validPtr), "Should extract pointer from handle property");
+
+      // Test with null - should throw
+      assertThrows(() => MemoryUtils.ensurePointer(null, "Null test"), "Should throw for null");
+
+      // Test with undefined - should throw
+      assertThrows(() => MemoryUtils.ensurePointer(undefined, "Undefined test"), "Should throw for undefined");
+
+      // Test with null pointer - should throw
+      assertThrows(() => MemoryUtils.ensurePointer(ptr(0), "Null pointer test"), "Should throw for null pointer");
     }),
   );
 
   suite.addResult(
-    createMonoDependentTest("Validation utility - delegate argument preparation", () => {
-      // Test delegate argument preparation with real Mono API
-      Mono.perform(() => {
-        const stringArg = ValidationUtils.prepareDelegateArgument(Mono.api, "test");
-        assertNotNull(stringArg, "Should prepare string argument");
+    createStandaloneTest("Memory utility - enumerateMonoHandles pattern", () => {
+      // Test the enumeration pattern with a mock fetch function
+      let callCount = 0;
+      const mockPointers = [ptr(0x1000), ptr(0x2000), ptr(0x3000)];
 
-        const numberArg = ValidationUtils.prepareDelegateArgument(Mono.api, 42);
-        assertNotNull(numberArg, "Should prepare number argument");
+      // Create a mock fetch function that simulates Mono's iteration pattern
+      const mockFetch = (iter: NativePointer): NativePointer => {
+        const currentIndex = callCount;
+        callCount++;
 
-        const nullArg = ValidationUtils.prepareDelegateArgument(Mono.api, null);
-        assertNotNull(nullArg, "Should prepare null argument");
+        if (currentIndex >= mockPointers.length) {
+          return ptr(0); // End of iteration
+        }
 
-        const ptrArg = ValidationUtils.prepareDelegateArgument(Mono.api, ptr(0x12345678));
-        assertNotNull(ptrArg, "Should prepare pointer argument");
-      });
+        return mockPointers[currentIndex];
+      };
+
+      // Create a simple factory
+      const mockFactory = (ptrValue: NativePointer): string => {
+        return `Object at ${ptrValue.toString()}`;
+      };
+
+      const results = MemoryUtils.enumerateMonoHandles(mockFetch, mockFactory);
+
+      assert(results.length === 3, "Should return 3 items");
+      assert(results[0].includes("0x1000"), "First item should contain correct address");
+      assert(results[1].includes("0x2000"), "Second item should contain correct address");
+      assert(results[2].includes("0x3000"), "Third item should contain correct address");
     }),
   );
 
   suite.addResult(
-    createMonoDependentTest("Validation utility - parameter count verification", () => {
-      // Test parameter count verification with real Mono API
-      Mono.perform(() => {
-        // Get a real method from System.String
-        const domain = Mono.domain;
-        const stringClass = domain.class("System.String");
-        if (!stringClass) {
-          console.log("    (Skipped: System.String not found)");
-          return;
-        }
+    createStandaloneTest("Memory utility - enumerateMonoHandles empty", () => {
+      // Test enumeration with empty results
+      const mockFetch = (_iter: NativePointer): NativePointer => {
+        return ptr(0); // Return null immediately
+      };
 
-        // Find a method with known parameter count
-        const methods = stringClass.getMethods();
-        const concatMethod = methods.find((m: any) => m.getName() === "Concat" && m.getParameterCount() === 2);
-        if (!concatMethod) {
-          console.log("    (Skipped: Concat method with 2 params not found)");
-          return;
-        }
+      const mockFactory = (_ptrValue: NativePointer): number => 42;
 
-        // Should not throw for correct count
-        ValidationUtils.verifyParameterCount(Mono.api, concatMethod, 2, "test context");
+      const results = MemoryUtils.enumerateMonoHandles(mockFetch, mockFactory);
+      assert(results.length === 0, "Should return empty array for no results");
+    }),
+  );
 
-        // Should throw for incorrect count
-        assertThrows(
-          () => ValidationUtils.verifyParameterCount(Mono.api, concatMethod, 3, "test context"),
-          "Should throw for incorrect parameter count",
-        );
-      });
+  suite.addResult(
+    createStandaloneTest("Memory utility - pointerIsNull with bigint and string", () => {
+      // Test with bigint zero
+      assert(MemoryUtils.pointerIsNull(BigInt(0)), "Should detect bigint zero as null");
+
+      // Test with bigint non-zero
+      assert(!MemoryUtils.pointerIsNull(BigInt("0x12345678")), "Should not detect non-zero bigint as null");
+
+      // Test with hex string zero
+      assert(MemoryUtils.pointerIsNull("0x0"), "Should detect hex string zero as null");
+
+      // Test with hex string non-zero
+      assert(!MemoryUtils.pointerIsNull("0x12345678"), "Should not detect non-zero hex string as null");
+
+      // Test with object that has handle property
+      assert(MemoryUtils.pointerIsNull({ handle: ptr(0) }), "Should detect object with null handle as null");
+      assert(!MemoryUtils.pointerIsNull({ handle: ptr(0x1000) }), "Should not detect object with valid handle as null");
     }),
   );
 
@@ -518,220 +514,136 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  // ============================================================================
-  // BATCH UTILITY TESTS
-  // ============================================================================
-
   suite.addResult(
-    createStandaloneTest("Batch utility - basic operations", () => {
-      // Test batch operation basic functionality
-      const batch = new BatchUtils.BatchOperation();
+    createStandaloneTest("Cache utility - onEvict callback", () => {
+      // Test eviction callback
+      const evicted: Array<{ key: string; value: number }> = [];
 
-      assert(batch.size === 0, "Should start empty");
-
-      // Add operations
-      batch.add(() => 1);
-      batch.add(() => 2);
-      batch.add(() => 3);
-
-      assert(batch.size === 3, "Should track operation count");
-
-      // Execute all operations
-      const results = batch.executeAll("test context");
-      assert(results.length === 3, "Should return results for all operations");
-      assert(results[0] === 1, "Should return correct result");
-      assert(results[1] === 2, "Should return correct result");
-      assert(results[2] === 3, "Should return correct result");
-    }),
-  );
-
-  suite.addResult(
-    createStandaloneTest("Batch utility - error handling", () => {
-      // Test batch operation error handling (silent mode to avoid noise)
-      const batch = new BatchUtils.BatchOperation({ silent: true });
-
-      batch.add(() => 1);
-      batch.add(() => {
-        throw new Error("Test error");
+      const cache = new CacheUtils.LruCache<string, number>({
+        capacity: 2,
+        onEvict: (key, value) => {
+          evicted.push({ key, value });
+        },
       });
-      batch.add(() => 3);
 
-      const results = batch.executeAll("test context");
-      assert(results.length === 3, "Should return results for all operations");
-      assert(results[0] === 1, "Should return successful result");
-      assert(results[1] === null, "Should return null for failed operation");
-      assert(results[2] === 3, "Should continue after error");
+      cache.set("key1", 1);
+      cache.set("key2", 2);
+      assert(evicted.length === 0, "Should not evict yet");
+
+      cache.set("key3", 3); // Should evict key1
+      assert(evicted.length === 1, "Should have evicted one item");
+      assert(evicted[0].key === "key1", "Should evict key1");
+      assert(evicted[0].value === 1, "Should evict with correct value");
+
+      // Test delete triggers onEvict
+      cache.delete("key2");
+      assert(evicted.length === 2, "Delete should trigger onEvict");
+      assert(evicted[1].key === "key2", "Should evict deleted key");
+
+      // Test clear triggers onEvict for remaining items
+      cache.set("key4", 4);
+      cache.clear();
+      assert(evicted.length === 4, "Clear should trigger onEvict for all items");
     }),
   );
 
   suite.addResult(
-    createStandaloneTest("Batch utility - successful only", () => {
-      // Test executeSuccessfulOnly method (silent mode to avoid noise)
-      const batch = new BatchUtils.BatchOperation({ silent: true });
+    createStandaloneTest("Cache utility - iterator methods", () => {
+      const cache = new CacheUtils.LruCache<string, number>(5);
 
-      batch.add(() => 1);
-      batch.add(() => {
-        throw new Error("Test error");
+      cache.set("a", 1);
+      cache.set("b", 2);
+      cache.set("c", 3);
+
+      // Test keys()
+      const keys = Array.from(cache.keys());
+      assert(keys.length === 3, "Should return 3 keys");
+      assert(keys.includes("a") && keys.includes("b") && keys.includes("c"), "Should contain all keys");
+
+      // Test values()
+      const values = Array.from(cache.values());
+      assert(values.length === 3, "Should return 3 values");
+      assert(values.includes(1) && values.includes(2) && values.includes(3), "Should contain all values");
+
+      // Test entries()
+      const entries = Array.from(cache.entries());
+      assert(entries.length === 3, "Should return 3 entries");
+      const entryMap = new Map(entries);
+      assert(entryMap.get("a") === 1, "Entry a should have value 1");
+      assert(entryMap.get("b") === 2, "Entry b should have value 2");
+      assert(entryMap.get("c") === 3, "Entry c should have value 3");
+    }),
+  );
+
+  suite.addResult(
+    createStandaloneTest("Cache utility - forEach method", () => {
+      const cache = new CacheUtils.LruCache<string, number>(5);
+
+      cache.set("x", 10);
+      cache.set("y", 20);
+      cache.set("z", 30);
+
+      const collected: Array<{ key: string; value: number }> = [];
+      cache.forEach((value, key, c) => {
+        collected.push({ key, value });
+        assert(c === cache, "Should pass cache instance to callback");
       });
-      batch.add(() => 3);
 
-      const results = batch.executeSuccessfulOnly<number>("test context");
-      assert(results.length === 2, "Should return only successful results");
-      assert(results[0] === 1, "Should include first result");
-      assert(results[1] === 3, "Should include third result");
+      assert(collected.length === 3, "Should iterate all items");
+      assert(
+        collected.some(item => item.key === "x" && item.value === 10),
+        "Should include x=10",
+      );
+      assert(
+        collected.some(item => item.key === "y" && item.value === 20),
+        "Should include y=20",
+      );
+      assert(
+        collected.some(item => item.key === "z" && item.value === 30),
+        "Should include z=30",
+      );
     }),
   );
 
   suite.addResult(
-    createStandaloneTest("Batch utility - clear operations", () => {
-      // Test clear functionality
-      const batch = new BatchUtils.BatchOperation();
+    createStandaloneTest("Cache utility - clear method", () => {
+      const cache = new CacheUtils.LruCache<string, number>(5);
 
-      batch.add(() => 1);
-      batch.add(() => 2);
-      assert(batch.size === 2, "Should have operations");
+      cache.set("a", 1);
+      cache.set("b", 2);
+      cache.set("c", 3);
 
-      batch.clear();
-      assert(batch.size === 0, "Should clear all operations");
-    }),
-  );
+      assert(cache.size === 3, "Should have 3 items before clear");
 
-  // ============================================================================
-  // RETRY UTILITY TESTS
-  // ============================================================================
+      cache.clear();
 
-  suite.addResult(
-    createStandaloneTest("Retry utility - basic functionality", () => {
-      // Test retry operation basic functionality
-      const retry = new RetryUtils.RetryOperation(3, 10);
-
-      let attemptCount = 0;
-      const operation = () => {
-        attemptCount++;
-        if (attemptCount < 3) {
-          throw new Error("Temporary failure");
-        }
-        return "success";
-      };
-
-      // Note: This test would need to be async in real scenario
-      // For now, just test the constructor
-      assert(retry !== null, "Should create retry operation");
+      assert(cache.size === 0, "Should have 0 items after clear");
+      assert(cache.get("a") === undefined, "Should not have key a");
+      assert(cache.get("b") === undefined, "Should not have key b");
+      assert(cache.get("c") === undefined, "Should not have key c");
     }),
   );
 
   suite.addResult(
-    createStandaloneTest("Retry utility - factory function", () => {
-      // Test retry factory function
-      const retry = RetryUtils.withRetry(5, 50);
-      assertNotNull(retry, "Should create retry operation with factory");
-    }),
-  );
+    createStandaloneTest("Cache utility - LruCache with options object", () => {
+      // Test constructor with options object
+      const evicted: string[] = [];
 
-  // ============================================================================
-  // SAFE ACCESS UTILITY TESTS
-  // ============================================================================
-
-  suite.addResult(
-    createStandaloneTest("SafeAccess utility - property access", () => {
-      // Test safe property access
-      const testObj = {
-        property1: "value1",
-        property2: 42,
-        method1: () => "method result",
-      };
-
-      const safeAccess = SafeAccessUtils.safeAccess(testObj);
-
-      assert(safeAccess.get("property1") === "value1", "Should get property value");
-      assert(safeAccess.get("property2") === 42, "Should get property value");
-      // Non-existent properties return undefined (standard JS behavior)
-      assert(safeAccess.get("nonexistent") === undefined, "Should return undefined for nonexistent property");
-    }),
-  );
-
-  suite.addResult(
-    createStandaloneTest("SafeAccess utility - method invocation", () => {
-      // Test safe method invocation (silent mode to avoid noise)
-      const testObj = {
-        method1: () => "method result",
-        method2: (a: number, b: number) => a + b,
-        property1: "not a method",
-      };
-
-      const safeAccess = SafeAccessUtils.safeAccess(testObj, { silent: true });
-
-      assert(safeAccess.call("method1") === "method result", "Should call method without args");
-      assert(safeAccess.call("method2", 2, 3) === 5, "Should call method with args");
-      assert(safeAccess.call("nonexistent") === null, "Should return null for nonexistent method");
-      assert(safeAccess.call("property1") === null, "Should return null for non-method property");
-    }),
-  );
-
-  suite.addResult(
-    createStandaloneTest("SafeAccess utility - error handling", () => {
-      // Test error handling in safe access (silent mode to avoid noise)
-      const testObj = {
-        get errorProperty() {
-          throw new Error("Property access error");
+      const cache = new CacheUtils.LruCache<string, string>({
+        capacity: 2,
+        onEvict: (key, _value) => {
+          evicted.push(key);
         },
-        errorMethod: () => {
-          throw new Error("Method invocation error");
-        },
-      };
+      });
 
-      const safeAccess = SafeAccessUtils.safeAccess(testObj, { silent: true });
+      assert(cache.maxSize === 2, "Should have correct capacity from options");
 
-      // These should not throw, but return null on errors
-      assert(safeAccess.get("errorProperty") === null, "Should handle property access errors");
-      assert(safeAccess.call("errorMethod") === null, "Should handle method invocation errors");
-    }),
-  );
+      cache.set("a", "A");
+      cache.set("b", "B");
+      cache.set("c", "C"); // Should evict "a"
 
-  // ============================================================================
-  // ENUMERATION UTILS TESTS
-  // ============================================================================
-
-  suite.addResult(
-    createStandaloneTest("EnumerationUtils - handle enumeration", () => {
-      // Test handle enumeration pattern
-      let callCount = 0;
-      const mockHandles = [ptr(0x1), ptr(0x2), ptr(0x3)];
-
-      const fetch = (iter: NativePointer) => {
-        const index = callCount;
-        callCount++;
-        return index < mockHandles.length ? mockHandles[index] : ptr(0);
-      };
-
-      const factory = (ptr: NativePointer) => ({ handle: ptr, id: callCount });
-
-      const results = EnumerationUtils.enumerateHandles(fetch, factory);
-      assert(results.length === 3, "Should enumerate all handles");
-      assert(results[0].handle.equals(ptr(0x1)), "Should create correct objects");
-    }),
-  );
-
-  suite.addResult(
-    createStandaloneTest("EnumerationUtils - assembly enumeration", () => {
-      // Test assembly enumeration
-      let callCount = 0;
-      const mockAssemblies = [ptr(0x1), ptr(0x2)];
-
-      const mockApi = {
-        native: {
-          mono_domain_assembly_open: () => {
-            const result = callCount < mockAssemblies.length ? mockAssemblies[callCount] : ptr(0);
-            callCount++;
-            return result;
-          },
-        },
-      } as any;
-
-      const factory = (ptr: NativePointer) => ({ pointer: ptr });
-
-      const results = EnumerationUtils.enumerateAssemblies(mockApi, ptr(0x12345678), factory);
-      assert(results.length >= 0, "Should handle enumeration gracefully");
+      assert(evicted.length === 1, "Should trigger onEvict from options");
+      assert(evicted[0] === "a", "Should evict correct key");
     }),
   );
 
@@ -742,8 +654,6 @@ export function testMonoUtils(): TestResult {
   suite.addResult(
     createStandaloneTest("StringOperations - UTF-8 string reading", () => {
       // Test UTF-8 string reading
-      const testPtr = ptr(0x12345678);
-
       // Test with null pointer
       assert(StringOperations.readUtf8String(null) === "", "Should return empty string for null");
       assert(StringOperations.readUtf8String(ptr(0)) === "", "Should return empty string for null pointer");
@@ -828,147 +738,33 @@ export function testMonoUtils(): TestResult {
   );
 
   // ============================================================================
-  // TYPE OPERATIONS TESTS
-  // ============================================================================
-
-  suite.addResult(
-    createStandaloneTest("TypeOperations - pointer-like detection", () => {
-      // Test pointer-like type detection
-      assert(TypeOperations.isPointerLike(0x1), "Should detect OBJECT type");
-      assert(TypeOperations.isPointerLike(0x2), "Should detect SZARRAY type");
-      assert(TypeOperations.isPointerLike(0x3), "Should detect STRING type");
-      assert(TypeOperations.isPointerLike(0x4), "Should detect CLASS type");
-      assert(TypeOperations.isPointerLike(0x6), "Should detect GENERICINST type");
-      assert(TypeOperations.isPointerLike(0x8), "Should detect ARRAY type");
-      assert(TypeOperations.isPointerLike(0x1c), "Should detect PTR type");
-      assert(!TypeOperations.isPointerLike(0x5), "Should not detect non-pointer type");
-    }),
-  );
-
-  suite.addResult(
-    createStandaloneTest("TypeOperations - type guards", () => {
-      // Test type guard functions
-      assert(TypeOperations.isString("test"), "Should detect string");
-      assert(!TypeOperations.isString(123), "Should not detect number as string");
-
-      assert(TypeOperations.isNumber(123), "Should detect number");
-      assert(!TypeOperations.isNumber("123"), "Should not detect string as number");
-
-      assert(TypeOperations.isBoolean(true), "Should detect boolean");
-      assert(!TypeOperations.isBoolean(1), "Should not detect number as boolean");
-
-      assert(
-        TypeOperations.isFunction(() => {}),
-        "Should detect function",
-      );
-      assert(!TypeOperations.isFunction({}), "Should not detect object as function");
-
-      assert(TypeOperations.isObject({}), "Should detect object");
-      assert(!TypeOperations.isObject([]), "Should not detect array as object");
-      assert(!TypeOperations.isObject(null), "Should not detect null as object");
-
-      assert(TypeOperations.isArray([]), "Should detect array");
-      assert(!TypeOperations.isArray({}), "Should not detect object as array");
-    }),
-  );
-
-  suite.addResult(
-    createStandaloneTest("TypeOperations - Mono type guards", () => {
-      // Test Mono-specific type guards
-      const mockClass = {
-        name: "TestClass",
-        methods: [],
-        fields: [],
-      };
-
-      const mockMethod = {
-        name: "TestMethod",
-        isStatic: () => false,
-        invoke: () => {},
-      };
-
-      const mockField = {
-        name: "TestField",
-        type: "string",
-        isStatic: () => false,
-      };
-
-      assert(TypeOperations.isMonoClass(mockClass), "Should detect Mono class");
-      assert(TypeOperations.isMonoMethod(mockMethod), "Should detect Mono method");
-      assert(TypeOperations.isMonoField(mockField), "Should detect Mono field");
-
-      assert(!TypeOperations.isMonoClass({}), "Should not detect plain object as Mono class");
-      assert(!TypeOperations.isMonoMethod({}), "Should not detect plain object as Mono method");
-      assert(!TypeOperations.isMonoField({}), "Should not detect plain object as Mono field");
-    }),
-  );
-
-  suite.addResult(
-    createStandaloneTest("TypeOperations - validation functions", () => {
-      // Test validation functions
-      assert(TypeOperations.validateRequired("test", "param") === "test", "Should validate required value");
-
-      assertThrows(() => TypeOperations.validateRequired(null, "param"), "Should throw for null");
-      assertThrows(() => TypeOperations.validateRequired(undefined, "param"), "Should throw for undefined");
-
-      // Test string validation
-      assert(TypeOperations.validateString("test", "param") === "test", "Should validate string");
-
-      assertThrows(() => TypeOperations.validateString("", "param", { minLength: 1 }), "Should throw for too short");
-      assertThrows(
-        () => TypeOperations.validateString("toolong", "param", { maxLength: 3 }),
-        "Should throw for too long",
-      );
-      assertThrows(
-        () => TypeOperations.validateString("abc", "param", { pattern: /^\d+$/ }),
-        "Should throw for pattern mismatch",
-      );
-    }),
-  );
-
-  suite.addResult(
-    createStandaloneTest("TypeOperations - method signature validation", () => {
-      // Test method signature validation
-      assert(TypeOperations.isValidMethodSignature("Class:Method(Type,Type)"), "Should validate correct signature");
-      assert(TypeOperations.isValidMethodSignature("Namespace.Class:Method()"), "Should validate simple signature");
-      assert(!TypeOperations.isValidMethodSignature("invalid"), "Should reject invalid signature");
-      assert(!TypeOperations.isValidMethodSignature(""), "Should reject empty signature");
-      assert(!TypeOperations.isValidMethodSignature(null as any), "Should reject null");
-      assert(!TypeOperations.isValidMethodSignature(undefined as any), "Should reject undefined");
-    }),
-  );
-
-  // ============================================================================
   // LOGGER TESTS
   // ============================================================================
 
   suite.addResult(
     createStandaloneTest("Logger - basic functionality", () => {
-      // Test logger creation and basic functionality
-      const logger = new LogUtils.Logger();
+      // Test logger creation
+      const logger = new LogUtils.Logger({ tag: "Test", level: "debug" });
       assertNotNull(logger, "Should create logger");
 
-      const taggedLogger = LogUtils.Logger.withTag("TestTag");
-      assertNotNull(taggedLogger, "Should create tagged logger");
-
-      const levelLogger = LogUtils.Logger.withLevel("debug");
-      assertNotNull(levelLogger, "Should create logger with level");
-
-      const customLogger = LogUtils.Logger.create({ tag: "Custom", level: "warn" });
-      assertNotNull(customLogger, "Should create custom logger");
+      // Test methods exist
+      assert(typeof logger.debug === "function", "Should have debug method");
+      assert(typeof logger.info === "function", "Should have info method");
+      assert(typeof logger.warn === "function", "Should have warn method");
+      assert(typeof logger.error === "function", "Should have error method");
     }),
   );
 
   suite.addResult(
     createStandaloneTest("Logger - static methods", () => {
-      // Test static convenience methods exist and are callable
-      assert(typeof LogUtils.Logger.debug === "function", "Should have debug method");
-      assert(typeof LogUtils.Logger.info === "function", "Should have info method");
-      assert(typeof LogUtils.Logger.warn === "function", "Should have warn method");
-      assert(typeof LogUtils.Logger.error === "function", "Should have error method");
-
-      // Note: Not calling the methods here to avoid noise in test output
-      // The methods themselves are tested by other logging tests
+      // Test static methods exist
+      assert(typeof LogUtils.Logger.debug === "function", "Should have static debug method");
+      assert(typeof LogUtils.Logger.info === "function", "Should have static info method");
+      assert(typeof LogUtils.Logger.warn === "function", "Should have static warn method");
+      assert(typeof LogUtils.Logger.error === "function", "Should have static error method");
+      assert(typeof LogUtils.Logger.withTag === "function", "Should have static withTag method");
+      assert(typeof LogUtils.Logger.withLevel === "function", "Should have static withLevel method");
+      assert(typeof LogUtils.Logger.create === "function", "Should have static create method");
     }),
   );
 
@@ -982,8 +778,39 @@ export function testMonoUtils(): TestResult {
       assert(typeof logger.info === "function", "Should have info method");
       assert(typeof logger.warn === "function", "Should have warn method");
       assert(typeof logger.error === "function", "Should have error method");
+    }),
+  );
 
-      // Note: Not calling the methods here to avoid noise in test output
+  suite.addResult(
+    createStandaloneTest("Logger - factory methods", () => {
+      // Test withTag factory
+      const taggedLogger = LogUtils.Logger.withTag("CustomTag");
+      assertNotNull(taggedLogger, "Should create tagged logger");
+      assert(typeof taggedLogger.info === "function", "Tagged logger should have info method");
+
+      // Test withLevel factory
+      const levelLogger = LogUtils.Logger.withLevel("debug");
+      assertNotNull(levelLogger, "Should create logger with custom level");
+      assert(typeof levelLogger.debug === "function", "Level logger should have debug method");
+
+      // Test create factory with options
+      const customLogger = LogUtils.Logger.create({ tag: "Custom", level: "warn" });
+      assertNotNull(customLogger, "Should create logger with options");
+      assert(typeof customLogger.warn === "function", "Custom logger should have warn method");
+    }),
+  );
+
+  suite.addResult(
+    createStandaloneTest("Logger - default values", () => {
+      // Test default tag and level
+      const defaultLogger = new LogUtils.Logger();
+      assertNotNull(defaultLogger, "Should create logger with defaults");
+
+      // Should have all methods
+      assert(typeof defaultLogger.debug === "function", "Should have debug method");
+      assert(typeof defaultLogger.info === "function", "Should have info method");
+      assert(typeof defaultLogger.warn === "function", "Should have warn method");
+      assert(typeof defaultLogger.error === "function", "Should have error method");
     }),
   );
 
@@ -1023,24 +850,6 @@ export function testMonoUtils(): TestResult {
   );
 
   suite.addResult(
-    createPerformanceTest("Type operations - validation performance", () => {
-      // Test validation performance
-      const testValues = ["test", 123, true, {}, [], () => {}];
-
-      for (let i = 0; i < 10000; i++) {
-        for (const value of testValues) {
-          TypeOperations.isString(value);
-          TypeOperations.isNumber(value);
-          TypeOperations.isBoolean(value);
-          TypeOperations.isFunction(value);
-          TypeOperations.isObject(value);
-          TypeOperations.isArray(value);
-        }
-      }
-    }),
-  );
-
-  suite.addResult(
     createPerformanceTest("Memory operations - pointer resolution performance", () => {
       // Test pointer resolution performance
       const testPtr = ptr(0x12345678);
@@ -1065,96 +874,18 @@ export function testMonoUtils(): TestResult {
   // ============================================================================
 
   suite.addResult(
-    createIntegrationTest("Utilities integration - cache with validation", () => {
-      // Test integration between cache and validation utilities
-      const cache = new CacheUtils.LruCache<string, any>(10);
+    createIntegrationTest("Utilities integration - cache with memory", () => {
+      // Test integration between cache and memory utilities
+      const cache = new CacheUtils.LruCache<string, NativePointer>(10);
 
-      // Cache validated objects
-      const validatedString = TypeOperations.validateString("test", "param");
-      cache.set("string", validatedString);
-
-      const validatedNumber = TypeOperations.validateRequired(42, "param");
-      cache.set("number", validatedNumber);
-
-      assert(cache.get("string") === "test", "Should retrieve validated string");
-      assert(cache.get("number") === 42, "Should retrieve validated number");
-    }),
-  );
-
-  suite.addResult(
-    createIntegrationTest("Utilities integration - batch with retry", () => {
-      // Test integration between batch and retry utilities
-      const batch = new BatchUtils.BatchOperation();
-      const retry = RetryUtils.withRetry(3, 10);
-
-      // Add operations to batch
-      batch.add(() => "operation1");
-      batch.add(() => "operation2");
-      batch.add(() => "operation3");
-
-      // Execute batch (in real scenario, would use retry for each operation)
-      const results = batch.executeAll("integration test");
-      assert(results.length === 3, "Should execute all operations");
-      assert(
-        results.every(r => r !== null),
-        "All operations should succeed",
-      );
-    }),
-  );
-
-  suite.addResult(
-    createIntegrationTest("Utilities integration - safe access with logging", () => {
-      // Test integration between safe access and logging (silent mode for error test)
-      const testObj = {
-        property: "value",
-        method: () => "result",
-      };
-
-      // Create an object with a throwing getter using defineProperty
-      const errorObj: any = {};
-      Object.defineProperty(errorObj, "errorProp", {
-        get: () => {
-          throw new Error("Access error");
-        },
-        enumerable: true,
-        configurable: true,
-      });
-
-      const safeAccess = SafeAccessUtils.safeAccess(testObj);
-      const errorAccess = SafeAccessUtils.safeAccess(errorObj, { silent: true });
-      const logger = LogUtils.Logger.withTag("SafeAccessTest");
-
-      // These should work without throwing
-      const propValue = safeAccess.get("property");
-      const methodResult = safeAccess.call("method");
-      const errorResult = errorAccess.get("errorProp");
-
-      assert(propValue === "value", "Should get property safely");
-      assert(methodResult === "result", "Should call method safely");
-      assert(errorResult === null, "Should handle errors gracefully");
-
-      logger.info("Safe access integration test completed");
-    }),
-  );
-
-  suite.addResult(
-    createIntegrationTest("Utilities integration - type operations with memory", () => {
-      // Test integration between type operations and memory utilities
-      const testPtr = ptr(0x12345678);
-      const mockObj = new MockMonoObject(testPtr);
-
-      // Test type validation with memory operations
-      if (TypeOperations.isObject(mockObj)) {
-        const resolvedPtr = MemoryUtils.resolveNativePointer(mockObj);
-        assert(MemoryUtils.isValidPointer(resolvedPtr), "Should resolve and validate pointer");
+      // Cache validated pointers
+      const validPtr = ptr(0x12345678);
+      if (MemoryUtils.isValidPointer(validPtr)) {
+        cache.set("pointer", validPtr);
       }
 
-      // Test pointer validation
-      ValidationUtils.validateNonNullPointer(testPtr, "testPointer");
-
-      // Test safe unwrapping
-      const unwrapped = MemoryUtils.unwrapInstance(mockObj);
-      assert(unwrapped.equals(testPtr), "Should unwrap instance correctly");
+      const cachedPtr = cache.get("pointer");
+      assert(cachedPtr !== undefined && cachedPtr.equals(validPtr), "Should retrieve cached pointer");
     }),
   );
 
@@ -1162,25 +893,21 @@ export function testMonoUtils(): TestResult {
     createIntegrationTest("Utilities integration - comprehensive workflow", () => {
       // Test comprehensive workflow using multiple utilities
       const cache = new CacheUtils.LruCache<string, any>(5);
-      const batch = new BatchUtils.BatchOperation();
       const logger = LogUtils.Logger.withTag("WorkflowTest");
 
-      // Step 1: Validate and cache data
-      const validatedData = TypeOperations.validateString("workflow test", "data", { minLength: 5 });
-      cache.set("validatedData", validatedData);
+      // Step 1: Cache data
+      cache.set("testData", "workflow test");
 
-      // Step 2: Add operations to batch
-      batch.add(() => cache.get("validatedData"));
-      batch.add(() => StringOperations.safeStringify({ data: validatedData }));
-      batch.add(() => StringOperations.createTimer().elapsedMs());
+      // Step 2: Process with string operations
+      const stringified = StringOperations.safeStringify({ data: cache.get("testData") });
 
-      // Step 3: Execute batch with error handling
-      const results = batch.executeAll("workflow test");
+      // Step 3: Create timer
+      const timer = StringOperations.createTimer();
 
       // Step 4: Validate results
-      assert(results[0] === "workflow test", "Should get cached data");
-      assert(results[1].includes("workflow test"), "Should stringify data");
-      assert(typeof results[2] === "number", "Should get elapsed time");
+      assert(cache.get("testData") === "workflow test", "Should get cached data");
+      assert(stringified.includes("workflow"), "Should stringify data");
+      assert(typeof timer.elapsedMs() === "number", "Should get elapsed time");
 
       logger.info("Comprehensive workflow test completed successfully");
     }),

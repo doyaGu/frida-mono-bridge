@@ -4,36 +4,29 @@
  */
 
 import Mono from "../src";
+import { MonoManagedExceptionError } from "../src/runtime/api";
+import { MonoValidationError } from "../src/utils/errors";
+import { ensurePointer, pointerIsNull, unwrapInstance, unwrapInstanceRequired } from "../src/utils/memory";
+import { readUtf16String, readUtf8String, safeStringify } from "../src/utils/string";
 import {
-  TestResult,
-  TestSuite,
-  createMonoDependentTest,
-  createStandaloneTest,
-  createDomainTest,
-  createSmokeTest,
-  createIntegrationTest,
-  createErrorHandlingTest,
-  createNestedPerformTest,
   assert,
-  assertNotNull,
-  assertPerformWorks,
   assertApiAvailable,
   assertDomainAvailable,
-  assertDomainCached,
+  assertPerformWorks,
+  createDomainTest,
+  createErrorHandlingTest,
+  createIntegrationTest,
+  createMonoDependentTest,
+  createNestedPerformTest,
+  createSmokeTest,
+  createStandaloneTest,
   TestCategory,
+  TestResult,
+  TestSuite,
 } from "./test-framework";
-import { pointerIsNull } from "../src/utils/memory";
-import { readUtf8String, readUtf16String, safeStringify } from "../src/utils/string";
-import { MonoManagedExceptionError } from "../src/runtime/api";
-import { ensurePointer, unwrapInstance, unwrapInstanceRequired } from "../src/utils/memory";
-import { MonoValidationError } from "../src/utils/errors";
 
 // Import consolidated utilities directly for testing
-import { isValidPointer, safeAlloc } from "../src/utils/memory";
-
-import { isPointerLike, isNativePointer, validateRequired } from "../src/utils/type-operations";
-
-import { validateNonEmptyString, prepareDelegateArgument } from "../src/utils/validation";
+import { isNativePointer, isValidPointer, safeAlloc } from "../src/utils/memory";
 
 import { LruCache } from "../src/utils/cache";
 
@@ -266,7 +259,7 @@ export function testIntegration(): TestResult {
       const allocated = safeAlloc(16);
       assert(isValidPointer(allocated), "Should allocate memory safely");
 
-      console.log("✅ Memory utilities test passed");
+      console.log("[PASS] Memory utilities test passed");
     }),
   );
 
@@ -306,7 +299,7 @@ export function testIntegration(): TestResult {
           console.log("    String utilities working (different pointer serialization format)");
         }
 
-        console.log("✅ String utilities test passed");
+        console.log("[PASS] String utilities test passed");
       } catch (error) {
         if (error instanceof Error && error.message.includes("access violation")) {
           console.log(
@@ -320,37 +313,12 @@ export function testIntegration(): TestResult {
   );
 
   suite.addResult(
-    createMonoDependentTest("Type operations should work correctly", () => {
-      // Test isPointerLike function
-      assert(isPointerLike(0x1) === true, "Should detect OBJECT type as pointer-like");
-      assert(isPointerLike(0x2) === true, "Should detect SZARRAY type as pointer-like");
-
-      // Test validateRequired function
-      const validValue = "test";
-      const result = validateRequired(validValue, "testValue");
-      assert(result === "test", "Should validate required value correctly");
-
+    createMonoDependentTest("isNativePointer should work correctly", () => {
       // Test isNativePointer function
       const pointer = Mono.api.getRootDomain();
       assert(isNativePointer(pointer), "Should detect NativePointer correctly");
 
-      console.log("✅ Type operations test passed");
-    }),
-  );
-
-  suite.addResult(
-    createMonoDependentTest("Validation utilities should work correctly", () => {
-      // Test validateNonEmptyString function
-      validateNonEmptyString("test", "testString");
-
-      // Test prepareDelegateArgument function
-      const preparedNull = prepareDelegateArgument(Mono.api, null);
-      assert(pointerIsNull(preparedNull), "Should prepare null argument correctly");
-
-      const preparedString = prepareDelegateArgument(Mono.api, "test");
-      assert(isValidPointer(preparedString), "Should prepare string argument correctly");
-
-      console.log("✅ Validation utilities test passed");
+      console.log("[PASS] isNativePointer test passed");
     }),
   );
 
@@ -392,7 +360,7 @@ export function testIntegration(): TestResult {
           }
         }
 
-        console.log("✅ Cache utilities test passed");
+        console.log("[PASS] Cache utilities test passed");
       } catch (error) {
         console.log(`    Cache utilities test encountered issue: ${error instanceof Error ? error.message : error}`);
         // Don't fail the entire test suite for cache implementation differences
@@ -410,15 +378,7 @@ export function testIntegration(): TestResult {
       assert(isValid === true, "String integration should work - valid pointer created");
       assert(isValid === true, "Memory integration should work");
 
-      // Test that type operations work with validation
-      try {
-        validateNonEmptyString("Integration Test", "integrationString");
-        // Should not throw
-      } catch (error) {
-        assert(false, "Validation should pass for non-empty string");
-      }
-
-      console.log("✅ Integration test passed");
+      console.log("[PASS] Integration test passed");
     }),
   );
 
@@ -500,13 +460,6 @@ export function testIntegration(): TestResult {
       const trace = Mono.trace;
       assert(trace !== null, "Trace utilities should be accessible");
       assert(typeof trace.method === "function", "Trace should have method method");
-    }),
-  );
-
-  suite.addResult(
-    createMonoDependentTest("Mono.types utilities should work", () => {
-      const types = Mono.types;
-      assert(types !== null, "Type utilities should be accessible");
     }),
   );
 
@@ -896,7 +849,6 @@ export function testIntegration(): TestResult {
         const module = Mono.module;
 
         // Consolidated utilities
-        validateRequired("test", "testValue");
         isNativePointer(Mono.api.getRootDomain());
       }
 

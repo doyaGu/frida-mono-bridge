@@ -8,11 +8,11 @@ import Mono from "../src";
 import { MonoManagedExceptionError } from "../src/runtime/api";
 import {
   TestResult,
-  createMonoDependentTest,
-  createErrorHandlingTest,
   assert,
   assertNotNull,
   assertThrows,
+  createErrorHandlingTest,
+  createMonoDependentTest,
 } from "./test-framework";
 
 export function createRuntimeApiTests(): TestResult[] {

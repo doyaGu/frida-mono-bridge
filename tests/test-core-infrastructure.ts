@@ -6,15 +6,15 @@
 
 import Mono from "../src";
 import {
-  TestResult,
-  TestSuite,
-  createTest,
-  createMonoTest,
-  createMonoDependentTest,
-  createSmokeTest,
   assert,
   assertNotNull,
+  createMonoDependentTest,
+  createMonoTest,
+  createSmokeTest,
+  createTest,
   TestCategory,
+  TestResult,
+  TestSuite,
 } from "./test-framework";
 
 export function testCoreInfrastructure(): TestResult {
@@ -165,7 +165,6 @@ export function testCoreInfrastructure(): TestResult {
       assertNotNull(Mono.gc, "Mono.gc utilities should be available");
       assertNotNull(Mono.find, "Mono.find utilities should be available");
       assertNotNull(Mono.trace, "Mono.trace utilities should be available");
-      assertNotNull(Mono.types, "Mono.types utilities should be available");
       console.log("    All modern API features available");
     }),
   );

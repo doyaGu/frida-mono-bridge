@@ -9,7 +9,7 @@
  * - MonoProperty
  */
 
-import { Mono, MonoClass, CustomAttribute } from "../src";
+import { CustomAttribute, Mono } from "../src";
 
 // ===== TEST UTILITIES =====
 
@@ -63,7 +63,7 @@ function printResults(): void {
   const failed = results.filter(r => !r.passed).length;
 
   for (const result of results) {
-    const status = result.passed ? "✓" : "✗";
+    const status = result.passed ? "[PASS]" : "[FAIL]";
     console.log(`${status} ${result.name}: ${result.message}`);
     if (!result.passed && result.details) {
       console.log(`  Details: ${result.details}`);

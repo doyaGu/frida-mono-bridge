@@ -16,7 +16,7 @@
  */
 
 import Mono from "../src";
-import { TestResult, createMonoDependentTest, assert, assertNotNull } from "./test-framework";
+import { TestResult, assert, assertNotNull, createMonoDependentTest } from "./test-framework";
 
 export function createFindToolTests(): TestResult[] {
   const results: TestResult[] = [];
@@ -648,6 +648,130 @@ export function createFindToolTests(): TestResult[] {
         assertNotNull(parent, "Parent should not be null");
         // At least getter or setter should exist
         assert(getter !== null || setter !== null, "Property should have getter or setter");
+      }
+    }),
+  );
+
+  // =====================================================
+  // Section 14: caseInsensitive Option Tests
+  // =====================================================
+  results.push(
+    createMonoDependentTest("Find.classes - caseInsensitive option (default true)", () => {
+      // Search with lowercase pattern - should match uppercase class names by default
+      const classesLower = Mono.find.classes(Mono.api, "*string*", { limit: 10 });
+      assert(classesLower.length > 0, "Should find classes with case-insensitive match (default)");
+
+      // Verify at least some matches have different case
+      const names = classesLower.map(c => c.getName());
+      console.log(
+        `[INFO] Found ${classesLower.length} classes matching '*string*' (case-insensitive): ${names.slice(0, 5).join(", ")}`,
+      );
+    }),
+  );
+
+  results.push(
+    createMonoDependentTest("Find.classes - caseInsensitive option set to false", () => {
+      // Search with exact case matching
+      const classesExact = Mono.find.classes(Mono.api, "*String*", { caseInsensitive: false, limit: 20 });
+      const classesLower = Mono.find.classes(Mono.api, "*string*", { caseInsensitive: false, limit: 20 });
+
+      // When case-sensitive, searching for lowercase 'string' should find fewer or no results
+      // compared to searching for 'String' which is the actual casing
+      console.log(`[INFO] Case-sensitive '*String*': ${classesExact.length}, '*string*': ${classesLower.length}`);
+
+      // Verify case-sensitive search for String finds results
+      assert(classesExact.length > 0, "Should find classes with exact case 'String'");
+    }),
+  );
+
+  results.push(
+    createMonoDependentTest("Find.methods - caseInsensitive option", () => {
+      // Test case-insensitive method search
+      const methodsLower = Mono.find.methods(Mono.api, "*tostring*", { limit: 20 });
+      assert(methodsLower.length > 0, "Should find ToString methods with lowercase pattern");
+
+      for (const method of methodsLower.slice(0, 5)) {
+        const name = method.getName().toLowerCase();
+        assert(name.includes("tostring"), `Method ${method.getName()} should match pattern`);
+      }
+      console.log(`[INFO] Found ${methodsLower.length} methods matching '*tostring*'`);
+    }),
+  );
+
+  // =====================================================
+  // Section 15: searchNamespace Option Tests
+  // =====================================================
+  results.push(
+    createMonoDependentTest("Find.classes - searchNamespace true (default)", () => {
+      // Search with namespace included - should find System.String
+      const classes = Mono.find.classes(Mono.api, "System.String", { searchNamespace: true });
+      assert(classes.length >= 1, "Should find System.String when searching namespace");
+
+      const found = classes.find(c => c.getFullName() === "System.String");
+      assert(found !== undefined, "Should find exact System.String class");
+      console.log(`[INFO] Found ${classes.length} classes matching 'System.String'`);
+    }),
+  );
+
+  results.push(
+    createMonoDependentTest("Find.classes - searchNamespace false", () => {
+      // Search without namespace - should match class name only
+      const classes = Mono.find.classes(Mono.api, "String", { searchNamespace: false, limit: 20 });
+      assert(classes.length > 0, "Should find classes named 'String'");
+
+      for (const klass of classes) {
+        const name = klass.getName();
+        assert(name === "String", `Class name should be 'String', got '${name}'`);
+      }
+      console.log(`[INFO] Found ${classes.length} classes named 'String' (without namespace search)`);
+    }),
+  );
+
+  results.push(
+    createMonoDependentTest("Find.classes - searchNamespace with wildcard", () => {
+      // Search with wildcard in namespace
+      const classes = Mono.find.classes(Mono.api, "System.Collections.*", { searchNamespace: true, limit: 20 });
+      assert(classes.length > 0, "Should find classes in System.Collections namespace");
+
+      for (const klass of classes.slice(0, 5)) {
+        const fullName = klass.getFullName();
+        assert(fullName.startsWith("System.Collections"), `Class ${fullName} should be in System.Collections`);
+      }
+      console.log(`[INFO] Found ${classes.length} classes in System.Collections.*`);
+    }),
+  );
+
+  // =====================================================
+  // Section 16: classExact Function Tests
+  // =====================================================
+  results.push(
+    createMonoDependentTest("Find.classExact - find exact class by full name", () => {
+      const stringClass = Mono.find.classExact(Mono.api, "System.String");
+      assertNotNull(stringClass, "Should find System.String class");
+
+      if (stringClass) {
+        assert(stringClass.getName() === "String", "Class name should be String");
+        assert(stringClass.getNamespace() === "System", "Namespace should be System");
+        assert(stringClass.getFullName() === "System.String", "Full name should be System.String");
+      }
+    }),
+  );
+
+  results.push(
+    createMonoDependentTest("Find.classExact - return null for non-existent class", () => {
+      const nonExistent = Mono.find.classExact(Mono.api, "NonExistent.FakeClass.DoesNotExist");
+      assert(nonExistent === null, "Should return null for non-existent class");
+    }),
+  );
+
+  results.push(
+    createMonoDependentTest("Find.classExact - find class without namespace", () => {
+      // Some classes might not have namespace
+      const intClass = Mono.find.classExact(Mono.api, "System.Int32");
+      assertNotNull(intClass, "Should find System.Int32 class");
+
+      if (intClass) {
+        assert(intClass.getName() === "Int32", "Class name should be Int32");
       }
     }),
   );

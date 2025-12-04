@@ -16,9 +16,8 @@
  * - Edge cases
  */
 
-import Mono from "../src";
-import { MonoString } from "../src";
-import { TestResult, createMonoDependentTest, assert, assertNotNull } from "./test-framework";
+import Mono, { MonoString } from "../src";
+import { TestResult, assert, assertNotNull, createMonoDependentTest } from "./test-framework";
 
 export function createMonoStringTests(): TestResult[] {
   const results: TestResult[] = [];
