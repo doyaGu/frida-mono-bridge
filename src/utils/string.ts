@@ -38,12 +38,12 @@ export function readMonoString(monoStringOrPointer: any): string {
   }
 
   // If it's a MonoString object, get its handle
-  if (typeof monoStringOrPointer === 'object' && monoStringOrPointer.handle) {
+  if (typeof monoStringOrPointer === "object" && monoStringOrPointer.handle) {
     return readUtf8String(monoStringOrPointer.handle);
   }
 
   // If it's a MonoString object with toPointer method
-  if (typeof monoStringOrPointer === 'object' && typeof monoStringOrPointer.toPointer === 'function') {
+  if (typeof monoStringOrPointer === "object" && typeof monoStringOrPointer.toPointer === "function") {
     return readUtf8String(monoStringOrPointer.toPointer());
   }
 
@@ -82,8 +82,8 @@ export function safeStringify(value: any): string {
       if (val instanceof NativePointer) {
         return `NativePointer(${val})`;
       }
-      if (typeof val === 'function') {
-        return `Function(${val.name || 'anonymous'})`;
+      if (typeof val === "function") {
+        return `Function(${val.name || "anonymous"})`;
       }
       return val;
     });
@@ -97,9 +97,7 @@ export function safeStringify(value: any): string {
  */
 export function createError(message: string, context?: any, cause?: Error): MonoError {
   const hasContext = Boolean(context);
-  const formattedMessage = hasContext
-    ? `${message} (Context: ${safeStringify(context)})`
-    : message;
+  const formattedMessage = hasContext ? `${message} (Context: ${safeStringify(context)})` : message;
   const contextLabel = typeof context === "string" ? context : undefined;
   return new MonoError(formattedMessage, contextLabel, cause);
 }

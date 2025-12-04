@@ -354,7 +354,7 @@ export const MonoEnums = Object.freeze({
 } as const);
 
 export type MonoEnumName = keyof typeof MonoEnums;
-export type MonoEnumValues<Name extends MonoEnumName> = typeof MonoEnums[Name];
+export type MonoEnumValues<Name extends MonoEnumName> = (typeof MonoEnums)[Name];
 
 export const MonoDefines = Object.freeze({
   ASSEMBLY_HASH_MD5: 0x8003,
@@ -446,7 +446,8 @@ export const MonoDefines = Object.freeze({
   MONO_DEBUG_VAR_ADDRESS_MODE_REGOFFSET_INDIR: 0x40000000,
   MONO_DEBUG_VAR_ADDRESS_MODE_TWO_REGISTERS: 0x20000000,
   MONO_DEBUG_VAR_ADDRESS_MODE_VTADDR: 0x60000000,
-  MONO_DEBUGGER_MAGIC: 0x7aff65af4253d427,
+  // Use string representation for 64-bit value to avoid precision loss
+  MONO_DEBUGGER_MAGIC: "0x7aff65af4253d427",
   MONO_DEBUGGER_MAJOR_VERSION: 81,
   MONO_DEBUGGER_MINOR_VERSION: 6,
   MONO_DECLSEC_ACTION_MAX: 0x12,

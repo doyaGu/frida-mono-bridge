@@ -9,5 +9,5 @@ import { runTestCategory } from "../test-runner-base";
 // Auto-run the test category
 runTestCategory("Core Infrastructure Tests", testCoreInfrastructure, {
   verbose: true,
-  stopOnFirstFailure: false
+  stopOnFirstFailure: false,
 });

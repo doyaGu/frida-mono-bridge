@@ -12,7 +12,7 @@ function runMonoFieldTests(): TestResult {
   const passed = results.filter(r => r.passed).length;
   const failed = results.filter(r => r.failed).length;
   const skipped = results.filter(r => r.skipped).length;
-  
+
   return {
     name: "Mono Field Tests",
     passed: failed === 0,
@@ -25,5 +25,5 @@ function runMonoFieldTests(): TestResult {
 // Auto-run test category
 runTestCategory("Mono Field Tests", runMonoFieldTests, {
   verbose: true,
-  stopOnFirstFailure: false
+  stopOnFirstFailure: false,
 });

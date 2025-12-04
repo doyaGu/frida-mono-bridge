@@ -59,12 +59,12 @@ export function prepareDelegateArgument(api: MonoApi, arg: any): NativePointer {
   }
 
   // For simple values, allocate and write them
-  if (typeof arg === 'string') {
+  if (typeof arg === "string") {
     const monoString = api.stringNew(arg);
     return monoString;
   }
 
-  if (typeof arg === 'number') {
+  if (typeof arg === "number") {
     const pointer = safeAlloc(8);
     pointer.writeS64(arg);
     return pointer;

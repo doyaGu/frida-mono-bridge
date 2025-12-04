@@ -15,7 +15,10 @@ export type MonoNativeBindings = {
 };
 
 export class MonoFunctionResolutionError extends Error {
-  constructor(public readonly exportName: string, message: string) {
+  constructor(
+    public readonly exportName: string,
+    message: string,
+  ) {
     super(message);
     this.name = "MonoFunctionResolutionError";
   }
@@ -68,7 +71,7 @@ export class MonoApi {
    */
   private exceptionSlot: NativePointer | null = null;
   private rootDomain: NativePointer | null = null;
-  
+
   /**
    * Track allocated resources for proper cleanup
    */
@@ -171,15 +174,19 @@ export class MonoApi {
           return { type, message };
         }
       }
-      
+
       // Fallback: Try to invoke ToString() method directly
       try {
-        const toStringMethod = this.native.mono_class_get_method_from_name(klass, Memory.allocUtf8String("ToString"), 0);
+        const toStringMethod = this.native.mono_class_get_method_from_name(
+          klass,
+          Memory.allocUtf8String("ToString"),
+          0,
+        );
         if (!pointerIsNull(toStringMethod)) {
           const excSlot = Memory.alloc(Process.pointerSize);
           excSlot.writePointer(NULL);
           const strPtr = this.native.mono_runtime_invoke(toStringMethod, exception, NULL, excSlot);
-          
+
           if (!pointerIsNull(strPtr) && pointerIsNull(excSlot.readPointer())) {
             const message = this.monoStringToJs(strPtr);
             return { type, message };
@@ -209,7 +216,7 @@ export class MonoApi {
         return result || "";
       }
     }
-    
+
     // Fallback: Try mono_string_to_utf16
     if (this.hasExport("mono_string_to_utf16")) {
       const utf16Ptr = this.native.mono_string_to_utf16(strPtr);
@@ -217,20 +224,20 @@ export class MonoApi {
         return readUtf16String(utf16Ptr);
       }
     }
-    
+
     // Last resort: Try mono_string_chars + mono_string_length
     if (this.hasExport("mono_string_chars") && this.hasExport("mono_string_length")) {
       const chars = this.native.mono_string_chars(strPtr);
       const length = this.native.mono_string_length(strPtr) as number;
       return readUtf16String(chars, length);
     }
-    
+
     return "";
   }
 
   getDelegateThunk(delegateClass: NativePointer): DelegateThunkInfo {
     this.ensureNotDisposed();
-    
+
     const key = delegateClass.toString();
     return this.delegateThunkCache.getOrCreate(key, () => {
       const invoke = this.native.mono_get_delegate_invoke(delegateClass);
@@ -239,7 +246,9 @@ export class MonoApi {
       }
       const thunk = this.native.mono_method_get_unmanaged_thunk(invoke);
       if (pointerIsNull(thunk)) {
-        throw new Error("mono_method_get_unmanaged_thunk returned NULL. This Mono build may not support unmanaged thunks");
+        throw new Error(
+          "mono_method_get_unmanaged_thunk returned NULL. This Mono build may not support unmanaged thunks",
+        );
       }
       return { invoke, thunk };
     });
@@ -298,7 +307,7 @@ export class MonoApi {
     this.exceptionSlot = null;
     this.rootDomain = null;
     this.moduleHandle = null;
-    
+
     this.disposed = true;
   }
 
@@ -359,11 +368,7 @@ export class MonoApi {
     return this.functionCache.getOrCreate(name, () => {
       const signature = getSignature(name);
       const address = this.resolveAddress(name, true, signature);
-      return new NativeFunction(
-        address,
-        signature.retType as any,
-        signature.argTypes as any[],
-      ) as AnyNativeFunction;
+      return new NativeFunction(address, signature.retType as any, signature.argTypes as any[]) as AnyNativeFunction;
     });
   }
 
@@ -376,24 +381,24 @@ export class MonoApi {
         enumerable: true,
         get: () => {
           const nativeFn = this.getNativeFunction(name);
-              const wrapper = (...args: MonoArg[]) => {
-                const invoke = () => nativeFn(...args.map(normalizeArg));
-                const manager = (this as any)._threadManager;
+          const wrapper = (...args: MonoArg[]) => {
+            const invoke = () => nativeFn(...args.map(normalizeArg));
+            const manager = (this as any)._threadManager;
 
-                if (manager) {
-                  if (typeof manager.isInAttachedContext === "function" && manager.isInAttachedContext()) {
-                    return invoke();
-                  }
-                  if (typeof manager.run === "function") {
-                    return manager.run(invoke);
-                  }
-                  if (typeof manager.withAttachedThread === "function") {
-                    return manager.withAttachedThread(invoke);
-                  }
-                }
-
+            if (manager) {
+              if (typeof manager.isInAttachedContext === "function" && manager.isInAttachedContext()) {
                 return invoke();
-              };
+              }
+              if (typeof manager.run === "function") {
+                return manager.run(invoke);
+              }
+              if (typeof manager.withAttachedThread === "function") {
+                return manager.withAttachedThread(invoke);
+              }
+            }
+
+            return invoke();
+          };
           Object.defineProperty(target, name, {
             configurable: false,
             enumerable: true,
@@ -409,7 +414,7 @@ export class MonoApi {
 
   private getExceptionSlot(): NativePointer {
     this.ensureNotDisposed();
-    
+
     if (this.exceptionSlot && !pointerIsNull(this.exceptionSlot)) {
       return this.exceptionSlot;
     }
@@ -423,7 +428,7 @@ export class MonoApi {
     signature: MonoExportSignature = getSignature(name),
   ): NativePointer {
     this.ensureNotDisposed();
-    
+
     const cached = this.addressCache.get(name);
     if (cached) {
       return cached;
@@ -478,4 +483,3 @@ function normalizeArg(arg: MonoArg): any {
 export function createMonoApi(module: MonoModuleInfo): MonoApi {
   return new MonoApi(module);
 }
-

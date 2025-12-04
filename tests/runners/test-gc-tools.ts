@@ -1,10 +1,10 @@
 /**
  * GC Tools Test Runner
- * 
+ *
  * Runs GC tools tests independently
  */
 
-import { createGCToolsTests } from '../test-gc-tools';
+import { createGCToolsTests } from "../test-gc-tools";
 
 const results = createGCToolsTests();
 

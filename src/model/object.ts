@@ -146,10 +146,10 @@ export class MonoObject extends MonoHandle {
    * @param name Method name
    * @param args Arguments to pass
    * @returns Raw NativePointer result
-   * 
+   *
    * Note: For value types (structs), this automatically uses the unboxed
    * pointer as the 'this' argument.
-   * 
+   *
    * @deprecated Use call() instead for automatic unboxing
    */
   invoke(name: string, args: any[] = []): NativePointer {
@@ -164,18 +164,18 @@ export class MonoObject extends MonoHandle {
   /**
    * Call a method on this object with automatic unboxing.
    * This is the preferred way to call methods.
-   * 
+   *
    * @param name Method name
    * @param args Arguments to pass (will be auto-boxed)
    * @returns Unboxed return value with proper TypeScript type
-   * 
+   *
    * @example
    * // Call a method that returns int
    * const count = obj.call<number>("GetCount");
-   * 
+   *
    * // Call a method that returns string
    * const name = obj.call<string>("get_name");
-   * 
+   *
    * // Call a method with arguments
    * const result = obj.call<boolean>("SetValue", [42, "test"]);
    */
@@ -189,7 +189,7 @@ export class MonoObject extends MonoHandle {
 
   /**
    * Safely call a method, returning undefined if the method doesn't exist.
-   * 
+   *
    * @param name Method name
    * @param args Arguments to pass
    * @returns Unboxed return value, or undefined if method not found
@@ -205,10 +205,10 @@ export class MonoObject extends MonoHandle {
   /**
    * Get a property value using the getter method.
    * Automatically handles get_PropertyName convention.
-   * 
+   *
    * @param name Property name (without "get_" prefix)
    * @returns Property value (automatically unboxed)
-   * 
+   *
    * @example
    * const name = obj.get<string>("name");
    * const count = obj.get<number>("Count");
@@ -221,7 +221,7 @@ export class MonoObject extends MonoHandle {
 
   /**
    * Try to get a property value, returning undefined if not found.
-   * 
+   *
    * @param name Property name
    * @returns Property value or undefined
    */
@@ -233,10 +233,10 @@ export class MonoObject extends MonoHandle {
   /**
    * Set a property value using the setter method.
    * Automatically handles set_PropertyName convention.
-   * 
+   *
    * @param name Property name (without "set_" prefix)
    * @param value Value to set
-   * 
+   *
    * @example
    * obj.set("name", "NewName");
    * obj.set("Count", 42);
@@ -248,7 +248,7 @@ export class MonoObject extends MonoHandle {
 
   /**
    * Check if this object has a method with the given name.
-   * 
+   *
    * @param name Method name
    * @param paramCount Parameter count (-1 for any)
    * @returns True if method exists
@@ -267,37 +267,32 @@ export class MonoObject extends MonoHandle {
         const excSlot = Memory.alloc(Process.pointerSize);
         excSlot.writePointer(NULL);
         const strPtr = this.native.mono_object_to_string(this.pointer, excSlot);
-        
+
         // Check if ToString threw an exception
         if (!pointerIsNull(excSlot.readPointer())) {
           return `[${this.getClass().fullName}]`;
         }
-        
+
         if (!pointerIsNull(strPtr)) {
           return this.monoStringToJs(strPtr);
         }
       }
-      
+
       // Fallback: Call ToString() method directly via mono_runtime_invoke
       const klass = this.getClass();
       const toStringMethod = klass.getMethod("ToString", 0);
       if (toStringMethod) {
         const excSlot = Memory.alloc(Process.pointerSize);
         excSlot.writePointer(NULL);
-        
+
         // For value types, we need to use the unboxed pointer
         const instancePtr = this.getInstancePointer();
-        const strPtr = this.native.mono_runtime_invoke(
-          toStringMethod.pointer,
-          instancePtr,
-          NULL,
-          excSlot
-        );
-        
+        const strPtr = this.native.mono_runtime_invoke(toStringMethod.pointer, instancePtr, NULL, excSlot);
+
         if (!pointerIsNull(excSlot.readPointer())) {
           return `[${klass.fullName}]`;
         }
-        
+
         if (!pointerIsNull(strPtr)) {
           return this.monoStringToJs(strPtr);
         }
@@ -305,7 +300,7 @@ export class MonoObject extends MonoHandle {
     } catch (e) {
       // Silently fall back to class name
     }
-    
+
     return `[${this.getClass().fullName}]`;
   }
 
@@ -322,7 +317,7 @@ export class MonoObject extends MonoHandle {
         return result || "";
       }
     }
-    
+
     // Fallback: Try mono_string_to_utf16
     if (this.api.hasExport("mono_string_to_utf16")) {
       const utf16Ptr = this.native.mono_string_to_utf16(strPtr);
@@ -330,14 +325,14 @@ export class MonoObject extends MonoHandle {
         return readUtf16String(utf16Ptr);
       }
     }
-    
+
     // Last resort: Try mono_string_chars + mono_string_length
     if (this.api.hasExport("mono_string_chars") && this.api.hasExport("mono_string_length")) {
       const chars = this.native.mono_string_chars(strPtr);
       const length = this.native.mono_string_length(strPtr) as number;
       return readUtf16String(chars, length);
     }
-    
+
     return "";
   }
 
@@ -379,25 +374,25 @@ export class MonoObject extends MonoHandle {
    */
   getMember(name: string): any {
     const klass = this.getClass();
-    
+
     // Try field first
     const field = klass.field(name);
     if (field) {
       return field.getValue(this.pointer);
     }
-    
+
     // Try property
     const prop = klass.getProperty(name);
     if (prop) {
       return prop.getValue(this);
     }
-    
+
     // Try method with no parameters (getter-like)
     const method = klass.method(name, 0);
     if (method) {
       return method.invoke(this.getInstancePointer(), []);
     }
-    
+
     throw new Error(`Member '${name}' not found on ${klass.fullName}`);
   }
 
@@ -421,7 +416,7 @@ export class MonoObject extends MonoHandle {
   toObject(): Record<string, any> {
     const result: Record<string, any> = {};
     const klass = this.getClass();
-    
+
     for (const field of klass.getFields()) {
       try {
         result[field.getName()] = field.getValue(this.pointer);
@@ -429,7 +424,7 @@ export class MonoObject extends MonoHandle {
         result[field.getName()] = undefined;
       }
     }
-    
+
     return result;
   }
 
@@ -462,7 +457,7 @@ export class MonoObject extends MonoHandle {
       className: klass.getFullName(),
       size: this.getSize(),
       pointer: this.pointer,
-      isValueType: klass.isValueType()
+      isValueType: klass.isValueType(),
     };
   }
 
@@ -475,14 +470,14 @@ export class MonoObject extends MonoHandle {
     try {
       // Check if pointer is null
       if (pointerIsNull(this.pointer)) {
-        errors.push('Object pointer is null');
+        errors.push("Object pointer is null");
         return { isValid: false, errors };
       }
 
       // Check if we can get the class
       const klass = this.getClass();
       if (!klass) {
-        errors.push('Unable to determine object class');
+        errors.push("Unable to determine object class");
       }
 
       // Check if size is reasonable
@@ -490,14 +485,13 @@ export class MonoObject extends MonoHandle {
       if (size < 0) {
         errors.push(`Invalid object size: ${size}`);
       }
-
     } catch (error) {
       errors.push(`Object validation failed: ${error}`);
     }
 
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
     };
   }
 
@@ -506,24 +500,24 @@ export class MonoObject extends MonoHandle {
   /**
    * Clone this object (shallow copy).
    * Creates a new instance and copies all field values.
-   * 
+   *
    * For reference type fields, only the reference is copied (shallow).
    * For value type fields, the value is copied.
-   * 
+   *
    * Note: This does not invoke constructors or ICloneable.Clone().
    * For proper deep cloning, implement ICloneable or use serialization.
-   * 
+   *
    * @returns A new MonoObject with copied field values
-   * 
+   *
    * @example
    * const player = domain.class('Game.Player').newObject();
    * const playerClone = player.clone();
    */
   clone(): MonoObject {
     const klass = this.getClass();
-    
+
     // For value types (structs), we can use mono_object_clone if available
-    if (this.api.hasExport('mono_object_clone')) {
+    if (this.api.hasExport("mono_object_clone")) {
       try {
         const clonedPtr = this.native.mono_object_clone(this.pointer);
         if (!pointerIsNull(clonedPtr)) {
@@ -533,10 +527,10 @@ export class MonoObject extends MonoHandle {
         // Fall through to manual clone
       }
     }
-    
+
     // Manual clone: create new object and copy fields
     const newObj = klass.newObject(false); // Don't initialize (no constructor call)
-    
+
     // Copy all instance fields
     for (const field of klass.getFields()) {
       if (!field.isStatic()) {
@@ -548,20 +542,20 @@ export class MonoObject extends MonoHandle {
         }
       }
     }
-    
+
     return newObj;
   }
 
   /**
    * Clone this object with deep copying of reference types.
-   * 
+   *
    * Warning: This is a best-effort deep clone that may not work for all types.
    * Complex objects with circular references, native resources, or special
    * runtime state may not clone correctly.
-   * 
+   *
    * @param maxDepth Maximum recursion depth for deep cloning (default: 10)
    * @returns A new MonoObject with recursively cloned field values
-   * 
+   *
    * @example
    * const player = domain.class('Game.Player').newObject();
    * const deepClone = player.deepClone();
@@ -573,40 +567,37 @@ export class MonoObject extends MonoHandle {
   /**
    * Internal deep clone implementation with cycle detection
    */
-  private deepCloneInternal(
-    maxDepth: number,
-    visited: Map<string, MonoObject>
-  ): MonoObject {
+  private deepCloneInternal(maxDepth: number, visited: Map<string, MonoObject>): MonoObject {
     // Check for cycles
     const ptrKey = this.pointer.toString();
     if (visited.has(ptrKey)) {
       return visited.get(ptrKey)!;
     }
-    
+
     // Depth limit reached, do shallow clone
     if (maxDepth <= 0) {
       return this.clone();
     }
-    
+
     const klass = this.getClass();
-    
+
     // Create new object without initialization
     const newObj = klass.newObject(false);
     visited.set(ptrKey, newObj);
-    
+
     // Copy all instance fields
     for (const field of klass.getFields()) {
       if (field.isStatic()) continue;
-      
+
       try {
         const fieldType = field.getType();
         const value = field.getValue(this.pointer);
-        
+
         // Check if this is a reference type that needs deep cloning
         if (fieldType.isReferenceType() && !pointerIsNull(value)) {
           // Don't deep clone strings (immutable) or null
           const typeName = fieldType.getName();
-          if (typeName !== 'String' && typeName !== 'System.String') {
+          if (typeName !== "String" && typeName !== "System.String") {
             try {
               const refObj = new MonoObject(this.api, value);
               const clonedRef = refObj.deepCloneInternal(maxDepth - 1, visited);
@@ -617,14 +608,14 @@ export class MonoObject extends MonoHandle {
             }
           }
         }
-        
+
         // Shallow copy for value types, strings, and failed deep clones
         field.setValue(newObj.pointer, value);
       } catch {
         // Skip fields that fail to copy
       }
     }
-    
+
     return newObj;
   }
 }

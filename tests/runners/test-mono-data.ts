@@ -12,7 +12,7 @@ function runMonoDataTests(): TestResult {
   const passed = results.filter(r => r.passed).length;
   const failed = results.filter(r => r.failed).length;
   const skipped = results.filter(r => r.skipped).length;
-  
+
   return {
     name: "Mono Data Tests",
     passed: failed === 0,
@@ -25,5 +25,5 @@ function runMonoDataTests(): TestResult {
 // Auto-run test category
 runTestCategory("Mono Data Tests", runMonoDataTests, {
   verbose: true,
-  stopOnFirstFailure: false
+  stopOnFirstFailure: false,
 });

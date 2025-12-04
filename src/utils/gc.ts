@@ -93,7 +93,7 @@ export class GCUtilities {
 
   /**
    * Get current memory usage statistics
-   * 
+   *
    * Note: Some statistics may not be available depending on the Mono runtime
    * configuration and version.
    */
@@ -158,7 +158,7 @@ export class GCUtilities {
 
   /**
    * Check if a weak handle's target has been collected
-   * 
+   *
    * @param handle The weak GC handle to check
    * @returns true if the target has been collected, false otherwise
    */
@@ -175,23 +175,23 @@ export class GCUtilities {
     const lines: string[] = [];
 
     lines.push("=== GC Memory Summary ===");
-    
+
     if (stats.heapSize !== null) {
       lines.push(`Heap Size: ${formatBytes(stats.heapSize)}`);
     }
-    
+
     if (stats.usedHeapSize !== null) {
       lines.push(`Used Heap: ${formatBytes(stats.usedHeapSize)}`);
-      
+
       if (stats.heapSize !== null && stats.heapSize > 0) {
         const usagePercent = ((stats.usedHeapSize / stats.heapSize) * 100).toFixed(1);
         lines.push(`Usage: ${usagePercent}%`);
       }
     }
-    
+
     lines.push(`Active Handles: ${stats.activeHandles}`);
     lines.push(`Max Generation: ${this.maxGeneration}`);
-    
+
     if (!stats.detailedStatsAvailable) {
       lines.push("(Detailed stats not available on this runtime)");
     }
@@ -205,25 +205,25 @@ export class GCUtilities {
    */
   collectAndReport(): { before: MemoryStats; after: MemoryStats; delta: number | null } {
     const before = this.getMemoryStats();
-    
+
     // Perform full GC
     this.collect(-1);
-    
+
     // Small delay to let GC complete (in real usage, may need adjustment)
     const after = this.getMemoryStats();
-    
+
     let delta: number | null = null;
     if (before.usedHeapSize !== null && after.usedHeapSize !== null) {
       delta = before.usedHeapSize - after.usedHeapSize;
     }
-    
+
     return { before, after, delta };
   }
 
   /**
    * Check the finalization queue status
    * Note: This functionality is limited in standard Mono API
-   * 
+   *
    * @returns Information about finalization queue if available
    */
   getFinalizationQueueInfo(): { available: boolean; pendingCount: number | null; message: string } {
@@ -232,7 +232,7 @@ export class GCUtilities {
       // Standard Mono doesn't expose finalization queue details directly
       // We can only trigger finalization and check GC state
       const hasFinalizationApi = this.api.hasExport("mono_gc_finalize_notify");
-      
+
       if (hasFinalizationApi) {
         return {
           available: true,
@@ -240,7 +240,7 @@ export class GCUtilities {
           message: "Finalization notification available. Use requestFinalization() to trigger.",
         };
       }
-      
+
       return {
         available: false,
         pendingCount: null,
@@ -274,7 +274,7 @@ export class GCUtilities {
 
   /**
    * Wait for pending finalizers (if supported)
-   * 
+   *
    * @param timeout Maximum time to wait in milliseconds (0 = no wait, -1 = infinite)
    * @returns true if waiting was supported and completed
    */
@@ -293,7 +293,7 @@ export class GCUtilities {
   /**
    * Suppress finalization for an object (if supported)
    * Useful for deterministic cleanup when you know the object won't need finalization
-   * 
+   *
    * @param objectPtr Pointer to the managed object
    * @returns true if suppression was supported
    */
@@ -311,7 +311,7 @@ export class GCUtilities {
 
   /**
    * Re-register an object for finalization (if supported)
-   * 
+   *
    * @param objectPtr Pointer to the managed object
    * @returns true if re-registration was supported
    */
@@ -327,12 +327,12 @@ export class GCUtilities {
  */
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
-  
+
   const units = ["B", "KB", "MB", "GB"];
   const k = 1024;
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   const value = bytes / Math.pow(k, i);
-  
+
   return `${value.toFixed(2)} ${units[i]}`;
 }
 

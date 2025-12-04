@@ -12,7 +12,7 @@ export interface MonoParameterInfo {
 
 export const MonoCallConvention = MonoEnums.MonoCallConvention;
 
-export type MonoCallConvention = typeof MonoEnums.MonoCallConvention[keyof typeof MonoEnums.MonoCallConvention];
+export type MonoCallConvention = (typeof MonoEnums.MonoCallConvention)[keyof typeof MonoEnums.MonoCallConvention];
 
 export const MonoCallConventionModifiers = Object.freeze({
   Generic: 0x10,
@@ -20,7 +20,7 @@ export const MonoCallConventionModifiers = Object.freeze({
   ExplicitThis: 0x40,
 } as const);
 
-export type MonoCallConventionModifier = typeof MonoCallConventionModifiers[keyof typeof MonoCallConventionModifiers];
+export type MonoCallConventionModifier = (typeof MonoCallConventionModifiers)[keyof typeof MonoCallConventionModifiers];
 
 export class MonoMethodSignature extends MonoHandle {
   getParameterCount(): number {

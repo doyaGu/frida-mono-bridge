@@ -44,7 +44,7 @@ export interface PropertyAccessCallbacks {
 export interface AccessTraceInfo {
   className: string;
   memberName: string;
-  memberType: 'field' | 'property';
+  memberType: "field" | "property";
   isStatic: boolean;
   timestamp: number;
 }
@@ -136,7 +136,7 @@ export function methodExtended(monoMethod: MonoMethod, callbacks: MethodCallback
  */
 export function replaceReturnValue(
   monoMethod: MonoMethod,
-  replacement: (originalRetval: NativePointer, thisPtr: NativePointer, args: NativePointer[]) => NativePointer | void
+  replacement: (originalRetval: NativePointer, thisPtr: NativePointer, args: NativePointer[]) => NativePointer | void,
 ): () => void {
   const impl = monoMethod.api.native.mono_compile_method(monoMethod.pointer);
 
@@ -155,7 +155,7 @@ export function replaceReturnValue(
       if (result !== undefined) {
         retval.replace(result);
       }
-    }
+    },
   });
 
   return () => listener.detach();
@@ -273,15 +273,15 @@ export function classesByPattern(api: MonoApi, pattern: string, callbacks: Metho
 /**
  * Trace field access by hooking getter/setter methods if available,
  * or by monitoring memory access patterns.
- * 
+ *
  * Note: Direct field access cannot be intercepted at the instruction level
  * without advanced techniques. This function traces property-style access
  * patterns when the field has associated accessor methods.
- * 
+ *
  * @param field The field to trace
  * @param callbacks Callbacks for read/write access
  * @returns Detach function, or null if tracing is not possible
- * 
+ *
  * @example
  * const playerHealth = playerClass.field('health');
  * Mono.trace.field(playerHealth, {
@@ -292,15 +292,16 @@ export function classesByPattern(api: MonoApi, pattern: string, callbacks: Metho
 export function field(monoField: MonoField, callbacks: FieldAccessCallbacks): (() => void) | null {
   // Direct field access at the memory level is hard to intercept
   // We can try to find associated property accessors or use memory watches
-  
+
   const klass = monoField.getParent();
   const fieldName = monoField.getName();
-  
+
   // Try to find a property with the same name (common C# pattern)
-  const property = klass.tryGetProperty(fieldName) || 
-                   klass.tryGetProperty(capitalize(fieldName)) ||
-                   klass.tryGetProperty(`_${fieldName}`);
-  
+  const property =
+    klass.tryGetProperty(fieldName) ||
+    klass.tryGetProperty(capitalize(fieldName)) ||
+    klass.tryGetProperty(`_${fieldName}`);
+
   if (property) {
     console.log(`[Trace] Using property accessors for field ${fieldName}`);
     return propertyTrace(property, {
@@ -308,12 +309,12 @@ export function field(monoField: MonoField, callbacks: FieldAccessCallbacks): ((
       onSet: callbacks.onWrite,
     });
   }
-  
+
   // For static fields, we can potentially use memory watches
   if (monoField.isStatic()) {
     return traceStaticField(monoField, callbacks);
   }
-  
+
   console.warn(`[Trace] Cannot trace field ${klass.getName()}.${fieldName} - no accessor methods found`);
   console.warn(`[Trace] Consider using a memory watch or hooking methods that access this field`);
   return null;
@@ -322,39 +323,35 @@ export function field(monoField: MonoField, callbacks: FieldAccessCallbacks): ((
 /**
  * Trace a static field using memory access monitoring
  */
-function traceStaticField(monoField: MonoField, callbacks: FieldAccessCallbacks): (() => void) | null {
+function traceStaticField(monoField: MonoField, _callbacks: FieldAccessCallbacks): (() => void) | null {
   const klass = monoField.getParent();
   const vtable = klass.getVTable();
-  
+
   if (!vtable || vtable.isNull()) {
     console.warn(`[Trace] Cannot get VTable for ${klass.getName()}`);
     return null;
   }
-  
+
   // Static fields are stored in the VTable's static data area
   // This is a complex operation that requires understanding mono's internal structures
   console.warn(`[Trace] Static field tracing via memory watch is experimental`);
-  
+
   // Log the field info for manual debugging
   const offset = monoField.getOffset();
   console.log(`[Trace] Static field ${monoField.getName()} offset: ${offset}`);
-  
+
   return null;
 }
 
 /**
  * Trace multiple fields matching a pattern
- * 
+ *
  * @param api Mono API instance
  * @param pattern Wildcard pattern for field names
  * @param callbacks Callbacks for read/write access
  * @returns Detach function
  */
-export function fieldsByPattern(
-  api: MonoApi, 
-  pattern: string, 
-  callbacks: FieldAccessCallbacks
-): () => void {
+export function fieldsByPattern(api: MonoApi, pattern: string, callbacks: FieldAccessCallbacks): () => void {
   const fields = Find.fields(api, pattern);
   const detachers: Array<() => void> = [];
   let tracedCount = 0;
@@ -384,11 +381,11 @@ export function fieldsByPattern(
 
 /**
  * Trace property access by hooking the getter and setter methods
- * 
+ *
  * @param property The property to trace
  * @param callbacks Callbacks for get/set access
  * @returns Detach function
- * 
+ *
  * @example
  * const nameProperty = playerClass.property('Name');
  * Mono.trace.property(nameProperty, {
@@ -455,17 +452,13 @@ export function propertyTrace(monoProperty: MonoProperty, callbacks: PropertyAcc
 
 /**
  * Trace multiple properties matching a pattern
- * 
+ *
  * @param api Mono API instance
  * @param pattern Wildcard pattern for property names
  * @param callbacks Callbacks for get/set access
  * @returns Detach function
  */
-export function propertiesByPattern(
-  api: MonoApi,
-  pattern: string,
-  callbacks: PropertyAccessCallbacks
-): () => void {
+export function propertiesByPattern(api: MonoApi, pattern: string, callbacks: PropertyAccessCallbacks): () => void {
   const properties = Find.properties(api, pattern);
   const detachers: Array<() => void> = [];
 
@@ -516,13 +509,13 @@ export class PerformanceTracker {
 
   /**
    * Track a method's performance
-   * 
+   *
    * @param method Method to track
    * @returns Detach function
    */
   track(monoMethod: MonoMethod): () => void {
     const methodName = monoMethod.getFullName();
-    
+
     if (!this.stats.has(methodName)) {
       this.stats.set(methodName, {
         callCount: 0,
@@ -535,7 +528,7 @@ export class PerformanceTracker {
     }
 
     const stats = this.stats.get(methodName)!;
-    
+
     const detach = methodExtended(monoMethod, {
       onEnter() {
         (this as any).startTime = Date.now();
@@ -573,11 +566,10 @@ export class PerformanceTracker {
    * Get formatted performance report
    */
   getReport(): string {
-    const lines: string[] = ['=== Performance Report ==='];
-    
-    const entries = Array.from(this.stats.entries())
-      .sort((a, b) => b[1].totalTime - a[1].totalTime);
-    
+    const lines: string[] = ["=== Performance Report ==="];
+
+    const entries = Array.from(this.stats.entries()).sort((a, b) => b[1].totalTime - a[1].totalTime);
+
     for (const [name, s] of entries) {
       lines.push(`${name}:`);
       lines.push(`  Calls: ${s.callCount}`);
@@ -586,8 +578,8 @@ export class PerformanceTracker {
       lines.push(`  Min: ${s.minTime === Infinity ? 0 : s.minTime}ms`);
       lines.push(`  Max: ${s.maxTime}ms`);
     }
-    
-    return lines.join('\n');
+
+    return lines.join("\n");
   }
 
   /**
@@ -609,15 +601,12 @@ export class PerformanceTracker {
 
 /**
  * Hook a method with call stack capture
- * 
+ *
  * @param monoMethod Method to hook
  * @param callbacks Callbacks with call stack info
  * @returns Detach function
  */
-export function methodWithCallStack(
-  monoMethod: MonoMethod,
-  callbacks: MethodCallbacksTimed
-): () => void {
+export function methodWithCallStack(monoMethod: MonoMethod, callbacks: MethodCallbacksTimed): () => void {
   const impl = monoMethod.api.native.mono_compile_method(monoMethod.pointer);
 
   if (impl.isNull()) {
@@ -632,16 +621,16 @@ export function methodWithCallStack(
         const symbol = DebugSymbol.fromAddress(addr);
         return symbol ? `${symbol.moduleName}!${symbol.name}` : addr.toString();
       });
-      
+
       (this as any).startTime = Date.now();
-      
+
       if (callbacks.onEnter) {
         callbacks.onEnter(extractMethodArgs(monoMethod, args), callStack);
       }
     },
     onLeave(retval) {
       const duration = Date.now() - ((this as any).startTime || 0);
-      
+
       if (callbacks.onLeave) {
         callbacks.onLeave(retval, duration);
       }

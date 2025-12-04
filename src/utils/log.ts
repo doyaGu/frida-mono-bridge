@@ -42,13 +42,12 @@ export class Logger {
       return;
     }
     const time = new Date().toISOString();
-    const formattedMessage = args.length > 0
-      ? `${message} ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ')}`
-      : message;
+    const formattedMessage =
+      args.length > 0
+        ? `${message} ${args.map(arg => (typeof arg === "object" ? JSON.stringify(arg) : String(arg))).join(" ")}`
+        : message;
 
-    const logMethod = level === 'error' ? console.error :
-                      level === 'warn' ? console.warn :
-                      console.log;
+    const logMethod = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
 
     logMethod(`[${time}] [${this.tag}] [${level.toUpperCase()}] ${formattedMessage}`);
   }

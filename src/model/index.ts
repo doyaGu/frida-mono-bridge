@@ -8,13 +8,7 @@ export {
   MonoClass as MonoKlass,
   MonoClassSummary as MonoKlassSummary,
 } from "./class";
-export {
-  MonoMethod,
-  MonoMethod as Method,
-  InvokeOptions,
-  MethodAccessibility,
-  MonoMethodSummary,
-} from "./method";
+export { MonoMethod, MonoMethod as Method, InvokeOptions, MethodAccessibility, MonoMethodSummary } from "./method";
 export {
   MonoMethodSignature,
   MonoMethodSignature as MethodSignature,

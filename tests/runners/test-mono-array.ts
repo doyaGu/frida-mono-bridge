@@ -1,10 +1,10 @@
 /**
  * MonoArray Test Runner
- * 
+ *
  * Standalone runner for MonoArray tests
  */
 
-import { createMonoArrayTests } from '../test-mono-array';
+import { createMonoArrayTests } from "../test-mono-array";
 
 const results = createMonoArrayTests();
 

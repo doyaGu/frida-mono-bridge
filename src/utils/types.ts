@@ -122,10 +122,14 @@ export class TypeHelper {
    * Get the Mono type for a primitive
    */
   getTypeForPrimitive(value: any): MonoType | null {
-    const typeName = typeof value === "boolean" ? "Boolean" :
-                     typeof value === "number" ? "Single" :
-                     typeof value === "string" ? "String" :
-                     null;
+    const typeName =
+      typeof value === "boolean"
+        ? "Boolean"
+        : typeof value === "number"
+          ? "Single"
+          : typeof value === "string"
+            ? "String"
+            : null;
 
     if (!typeName) {
       return null;
@@ -150,7 +154,7 @@ export class TypeHelper {
         const klassPtr = this.api.native.mono_class_from_name(
           image,
           Memory.allocUtf8String("System"),
-          Memory.allocUtf8String(typeName)
+          Memory.allocUtf8String(typeName),
         );
 
         if (!klassPtr.isNull()) {

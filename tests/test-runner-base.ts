@@ -16,14 +16,14 @@ export interface TestRunnerConfig {
 export function runTestCategory(
   categoryName: string,
   testFunction: () => TestResult,
-  config: TestRunnerConfig = {}
+  config: TestRunnerConfig = {},
 ): void {
   console.log("=".repeat(Math.max(categoryName.length + 8, 48)));
   console.log(`== ${categoryName} ==`);
   console.log("=".repeat(Math.max(categoryName.length + 8, 48)));
 
   const startTime = Date.now();
-  
+
   try {
     const result = testFunction();
     const duration = Date.now() - startTime;
@@ -40,11 +40,11 @@ export function runTestCategory(
     console.log(`Category: ${categoryName}`);
     console.log(`Status: ${result.passed ? "PASSED" : "FAILED"}`);
     console.log(`Duration: ${duration}ms`);
-    
+
     if (result.failed) {
       console.log(`Error: ${result.error?.message || "Unknown error"}`);
     }
-    
+
     if (result.skipped) {
       console.log(`Skipped: ${result.message || "No reason provided"}`);
     }
@@ -69,7 +69,7 @@ export function runTestCategory(
     console.log(`Duration: ${duration}ms`);
     console.log(`Error: ${error instanceof Error ? error.message : String(error)}`);
     console.log("-".repeat(48));
-    
+
     if (config.stopOnFirstFailure) {
       throw error;
     }
@@ -78,7 +78,7 @@ export function runTestCategory(
 
 export function runMultipleTestCategories(
   categories: Array<{ name: string; testFunction: () => TestResult }>,
-  config: TestRunnerConfig = {}
+  config: TestRunnerConfig = {},
 ): void {
   console.log("=".repeat(60));
   console.log("== FRIDA MONO BRIDGE - INDIVIDUAL TEST RUNNER ==");
@@ -93,7 +93,7 @@ export function runMultipleTestCategories(
     try {
       const result = category.testFunction();
       results.push({ name: category.name, result });
-      
+
       if (result.passed) {
         totalPassed++;
       } else if (result.failed) {
@@ -108,7 +108,7 @@ export function runMultipleTestCategories(
     } catch (error) {
       console.error(`Error running test category "${category.name}":`, error);
       totalFailed++;
-      
+
       if (config.stopOnFirstFailure) {
         break;
       }
@@ -123,7 +123,7 @@ export function runMultipleTestCategories(
   console.log(`Passed: ${totalPassed}`);
   console.log(`Failed: ${totalFailed}`);
   console.log(`Skipped: ${totalSkipped}`);
-  
+
   if (totalFailed > 0) {
     console.log("\nFAILED CATEGORIES:");
     results

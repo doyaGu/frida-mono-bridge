@@ -5,7 +5,6 @@
 import { MonoMemoryError, MonoValidationError } from "./errors";
 import { isNativePointer } from "./type-operations";
 
-declare const NativePointer: any;
 declare const Memory: any;
 declare const ptr: any;
 
@@ -56,7 +55,14 @@ export function tryMakePointer(value: string | number | bigint): NativePointer |
  * Handles NativePointer, numbers, strings, bigints, and objects with handle/pointer
  */
 export function pointerIsNull(
-  value: NativePointer | number | string | bigint | null | undefined | { handle?: NativePointer; pointer?: NativePointer },
+  value:
+    | NativePointer
+    | number
+    | string
+    | bigint
+    | null
+    | undefined
+    | { handle?: NativePointer; pointer?: NativePointer },
 ): boolean {
   if (value === null || value === undefined) {
     return true;
@@ -94,10 +100,7 @@ export function ensurePointer(value: NativePointer | null | undefined, message: 
  * Require a valid pointer or throw an error with context
  * This is an alias for ensurePointer with more explicit naming
  */
-export function requireValidPointer(
-  pointer: NativePointer | null | undefined,
-  errorMessage: string
-): NativePointer {
+export function requireValidPointer(pointer: NativePointer | null | undefined, errorMessage: string): NativePointer {
   return ensurePointer(pointer, errorMessage);
 }
 
@@ -146,17 +149,13 @@ export function unwrapInstance(instance: any): NativePointer {
  */
 export function unwrapInstanceRequired(
   instance: any,
-  context: string | { getFullName?: () => string; getName?: () => string; toString?: () => string }
+  context: string | { getFullName?: () => string; getName?: () => string; toString?: () => string },
 ): NativePointer {
   const pointer = unwrapInstance(instance);
 
   if (!isValidPointer(pointer)) {
     const description = describeContext(context);
-    throw new MonoValidationError(
-      `Invalid instance${description ? ` in ${description}` : ""}`,
-      "instance",
-      instance
-    );
+    throw new MonoValidationError(`Invalid instance${description ? ` in ${description}` : ""}`, "instance", instance);
   }
 
   return pointer;
@@ -167,7 +166,7 @@ export function unwrapInstanceRequired(
  * Tries getFullName(), getName(), and toString() in order
  */
 function describeContext(
-  context: string | { getFullName?: () => string; getName?: () => string; toString?: () => string }
+  context: string | { getFullName?: () => string; getName?: () => string; toString?: () => string },
 ): string {
   if (typeof context === "string") {
     return context;
@@ -224,10 +223,7 @@ export function safeAlloc(size: number): NativePointer {
   try {
     return Memory.alloc(size);
   } catch (error) {
-    throw new MonoMemoryError(
-      `Failed to allocate ${size} bytes`,
-      error instanceof Error ? error : undefined
-    );
+    throw new MonoMemoryError(`Failed to allocate ${size} bytes`, error instanceof Error ? error : undefined);
   }
 }
 
@@ -242,9 +238,6 @@ export function safeWriteMemory(pointer: NativePointer, data: ArrayBuffer | numb
   try {
     pointer.writeByteArray(data);
   } catch (error) {
-    throw new MonoMemoryError(
-      `Failed to write memory at ${pointer}`,
-      error instanceof Error ? error : undefined
-    );
+    throw new MonoMemoryError(`Failed to write memory at ${pointer}`, error instanceof Error ? error : undefined);
   }
 }

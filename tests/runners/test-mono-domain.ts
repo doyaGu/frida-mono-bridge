@@ -9,5 +9,5 @@ import { runTestCategory } from "../test-runner-base";
 // Auto-run test category
 runTestCategory("Mono Domain Tests", testMonoDomain, {
   verbose: true,
-  stopOnFirstFailure: false
+  stopOnFirstFailure: false,
 });

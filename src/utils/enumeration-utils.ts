@@ -27,7 +27,7 @@ declare const ptr: any;
  */
 export function enumerateHandles<T>(
   fetch: (iter: NativePointer) => NativePointer,
-  factory: (ptr: NativePointer) => T
+  factory: (ptr: NativePointer) => T,
 ): T[] {
   const iterator = Memory.alloc(Process.pointerSize);
   iterator.writePointer(ptr(0));
@@ -59,7 +59,7 @@ export function enumerateHandles<T>(
 export function enumerateAssemblies(
   api: MonoApi,
   domainPtr: NativePointer,
-  factory: (ptr: NativePointer) => any
+  factory: (ptr: NativePointer) => any,
 ): any[] {
   const iterator = Memory.alloc(Process.pointerSize);
   iterator.writePointer(ptr(0));

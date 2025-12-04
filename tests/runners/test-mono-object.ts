@@ -1,10 +1,10 @@
 /**
  * MonoObject Test Runner
- * 
+ *
  * Standalone runner for MonoObject tests
  */
 
-import { createMonoObjectTests } from '../test-mono-object';
+import { createMonoObjectTests } from "../test-mono-object";
 
 const results = createMonoObjectTests();
 

@@ -36,17 +36,27 @@ export interface InvokeResult<T = any> {
 /**
  * Type mapping from Mono types to TypeScript types
  */
-export type UnboxedType<Kind extends MonoTypeKind> = 
-  Kind extends typeof MonoTypeKind.Boolean ? boolean :
-  Kind extends typeof MonoTypeKind.Char ? number :
-  Kind extends typeof MonoTypeKind.I1 | typeof MonoTypeKind.U1 | 
-            typeof MonoTypeKind.I2 | typeof MonoTypeKind.U2 |
-            typeof MonoTypeKind.I4 | typeof MonoTypeKind.U4 |
-            typeof MonoTypeKind.R4 | typeof MonoTypeKind.R8 ? number :
-  Kind extends typeof MonoTypeKind.I8 | typeof MonoTypeKind.U8 ? bigint :
-  Kind extends typeof MonoTypeKind.String ? string :
-  Kind extends typeof MonoTypeKind.Void ? void :
-  any;
+export type UnboxedType<Kind extends MonoTypeKind> = Kind extends typeof MonoTypeKind.Boolean
+  ? boolean
+  : Kind extends typeof MonoTypeKind.Char
+    ? number
+    : Kind extends
+          | typeof MonoTypeKind.I1
+          | typeof MonoTypeKind.U1
+          | typeof MonoTypeKind.I2
+          | typeof MonoTypeKind.U2
+          | typeof MonoTypeKind.I4
+          | typeof MonoTypeKind.U4
+          | typeof MonoTypeKind.R4
+          | typeof MonoTypeKind.R8
+      ? number
+      : Kind extends typeof MonoTypeKind.I8 | typeof MonoTypeKind.U8
+        ? bigint
+        : Kind extends typeof MonoTypeKind.String
+          ? string
+          : Kind extends typeof MonoTypeKind.Void
+            ? void
+            : any;
 
 export type MethodAccessibility = MemberAccessibility;
 
@@ -235,7 +245,7 @@ export class MonoMethod extends MonoHandle {
    * @returns Array of CustomAttribute objects with attribute type information
    */
   getCustomAttributes(): CustomAttribute[] {
-    if (!this.api.hasExport('mono_custom_attrs_from_method')) {
+    if (!this.api.hasExport("mono_custom_attrs_from_method")) {
       return [];
     }
 
@@ -244,8 +254,8 @@ export class MonoMethod extends MonoHandle {
       return parseCustomAttributes(
         this.api,
         customAttrInfoPtr,
-        (ptr) => new MonoClass(this.api, ptr).getName(),
-        (ptr) => new MonoClass(this.api, ptr).getFullName()
+        ptr => new MonoClass(this.api, ptr).getName(),
+        ptr => new MonoClass(this.api, ptr).getFullName(),
       );
     } catch {
       return [];
@@ -266,7 +276,7 @@ export class MonoMethod extends MonoHandle {
 
   describe(): MonoMethodSummary {
     const flagValues = this.getFlagValues();
-    const parameters = this.getParameters().map((param) => ({
+    const parameters = this.getParameters().map(param => ({
       index: param.index,
       isOut: param.isOut,
       type: param.type.getSummary(),
@@ -300,13 +310,13 @@ export class MonoMethod extends MonoHandle {
   /**
    * Check if this method is a generic method (has generic type parameters).
    * For example, `void Swap<T>(ref T a, ref T b)` is a generic method.
-   * 
+   *
    * This uses the Unity API if available, otherwise falls back to checking
    * the method name for the generic arity marker (backtick notation).
    */
   isGenericMethod(): boolean {
     // Try Unity API first
-    if (this.api.hasExport('mono_unity_method_is_generic')) {
+    if (this.api.hasExport("mono_unity_method_is_generic")) {
       try {
         const result = this.native.mono_unity_method_is_generic(this.pointer);
         return Number(result) !== 0;
@@ -319,7 +329,7 @@ export class MonoMethod extends MonoHandle {
     // Generic methods in mono are marked with backtick notation in their full name
     const fullName = this.getFullName(true);
     // Generic methods will have <T> or similar in their signature
-    return fullName.includes('<') && fullName.includes('>');
+    return fullName.includes("<") && fullName.includes(">");
   }
 
   /**
@@ -339,26 +349,28 @@ export class MonoMethod extends MonoHandle {
     const fullName = this.getFullName(true);
     // Generic method definitions typically have unbound parameters like <T, U>
     // while instantiated methods have concrete types like <System.String>
-    const hasUnboundParams = /\[[A-Z][a-zA-Z0-9_,\s]*\]/.test(fullName) ||
-                             /<[A-Z][a-zA-Z0-9_,\s]*>/.test(fullName);
+    const hasUnboundParams = /\[[A-Z][a-zA-Z0-9_,\s]*\]/.test(fullName) || /<[A-Z][a-zA-Z0-9_,\s]*>/.test(fullName);
     return hasUnboundParams;
   }
 
   /**
    * Get the number of generic type parameters for this method.
    * Returns 0 for non-generic methods.
-   * 
+   *
    * Note: This parses the method name to determine the count since
    * `mono_unity_method_get_generic_argument_count` does NOT exist in any known Mono version.
    */
   getGenericArgumentCount(): number {
     // Parse from method name - generic methods are marked like MethodName`2 or in full name <T, U>
     const fullName = this.getFullName(true);
-    
+
     // Count type parameters in angle brackets
     const match = fullName.match(/<([^>]+)>/);
     if (match) {
-      const params = match[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+      const params = match[1]
+        .split(",")
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
       return params.length;
     }
 
@@ -375,7 +387,7 @@ export class MonoMethod extends MonoHandle {
    * Get the generic type arguments for this method.
    * For a generic method definition, returns the type parameter classes.
    * For an instantiated generic method, returns the actual type arguments.
-   * 
+   *
    * Note: Full implementation requires APIs that don't exist in known Mono versions.
    * `mono_unity_method_get_generic_argument_at` does NOT exist.
    * Returns an empty array for now - future implementations could use reflection
@@ -385,21 +397,21 @@ export class MonoMethod extends MonoHandle {
     // APIs for getting generic method arguments don't exist in known Mono versions:
     // - mono_unity_method_get_generic_argument_at: NOT exported
     // - mono_unity_method_get_generic_argument_count: NOT exported
-    // 
+    //
     // Future implementation could use reflection via MethodInfo.GetGenericArguments()
     return [];
   }
 
   /**
    * Create an instantiated generic method from this generic method definition.
-   * 
+   *
    * Uses available Mono APIs to instantiate the generic method with concrete type arguments.
    * Tries multiple approaches: Unity-specific API, reflection-based instantiation, or
    * direct context-based inflation.
-   * 
+   *
    * @param typeArguments Array of MonoClass to use as type arguments
    * @returns Instantiated generic method, or null if instantiation failed
-   * 
+   *
    * @example
    * // Get a generic method like T Max<T>(T a, T b)
    * const maxMethod = mathClass.method('Max`1');
@@ -416,12 +428,12 @@ export class MonoMethod extends MonoHandle {
     if (typeArguments.length !== expectedCount) {
       throw new Error(
         `Generic method ${this.getName()} expects ${expectedCount} type arguments, ` +
-        `but ${typeArguments.length} were provided`
+          `but ${typeArguments.length} were provided`,
       );
     }
 
     // Try mono_class_inflate_generic_method with constructed context
-    if (this.api.hasExport('mono_class_inflate_generic_method')) {
+    if (this.api.hasExport("mono_class_inflate_generic_method")) {
       const result = this.makeGenericMethodViaInflation(typeArguments);
       if (result) {
         return result;
@@ -435,20 +447,22 @@ export class MonoMethod extends MonoHandle {
     }
 
     // Log warning if all approaches fail
-    console.log(`[WARN] makeGenericMethod: Cannot instantiate ${this.getFullName()} with ` +
-                `[${typeArguments.map(t => t.getFullName()).join(', ')}]. ` +
-                `No suitable API available.`);
+    console.log(
+      `[WARN] makeGenericMethod: Cannot instantiate ${this.getFullName()} with ` +
+        `[${typeArguments.map(t => t.getFullName()).join(", ")}]. ` +
+        `No suitable API available.`,
+    );
     return null;
   }
 
   /**
    * Create generic method using mono_class_inflate_generic_method.
    * This builds a MonoGenericContext structure and inflates the method.
-   * 
+   *
    * MonoGenericContext structure:
    * - class_inst: MonoGenericInst* (for class type arguments, null for method-only)
    * - method_inst: MonoGenericInst* (for method type arguments)
-   * 
+   *
    * MonoGenericInst structure:
    * - id: int32 (debug, only in non-small config)
    * - type_argc: uint (22 bits)
@@ -460,12 +474,11 @@ export class MonoMethod extends MonoHandle {
       // Build MonoGenericInst-like structure for method_inst
       // Structure: type_argc (4 bytes) + is_open flag (packed) + type_argv pointers
       // In practice, we need to look at the actual Mono internals
-      
+
       // First, check if we can get the generic container for this method
       // The generic container has context.method_inst that we can use as a template
-      let templateInst: NativePointer | null = null;
-      
-      if (this.api.hasExport('mono_method_get_generic_container')) {
+
+      if (this.api.hasExport("mono_method_get_generic_container")) {
         const container = this.native.mono_method_get_generic_container(this.pointer);
         if (!pointerIsNull(container)) {
           // MonoGenericContainer has a context field with method_inst
@@ -473,23 +486,24 @@ export class MonoMethod extends MonoHandle {
           // context is at offset 0 in the container
           // context.class_inst is at offset 0
           // context.method_inst is at offset sizeof(pointer)
-          templateInst = container.add(Process.pointerSize).readPointer();
+          // Note: This information could be used for template instantiation in future versions
+          // const templateInst = container.add(Process.pointerSize).readPointer();
         }
       }
-      
+
       // Build type_argv array from type arguments (MonoType* for each class)
       const typeCount = typeArguments.length;
       const typeArgv = Memory.alloc(Process.pointerSize * typeCount);
-      
+
       for (let i = 0; i < typeCount; i++) {
         const monoType = typeArguments[i].getType().pointer;
         typeArgv.add(i * Process.pointerSize).writePointer(monoType);
       }
-      
+
       // We need to construct a valid MonoGenericInst
       // The problem is mono_metadata_get_generic_inst is not always exported
       // We'll try to build the structure manually
-      
+
       // MonoGenericInst layout (simplified, depends on MONO_SMALL_CONFIG):
       // - uint type_argc (22 bits) + is_open (1 bit) + padding in first 4 bytes
       // - MonoType* type_argv[type_argc]
@@ -501,24 +515,24 @@ export class MonoMethod extends MonoHandle {
       //   guint is_open : 1;
       //   MonoType *type_argv [MONO_ZERO_LEN_ARRAY];
       // }
-      
+
       // Calculate size: header + type_argv array
       // Header is either 4 bytes (SMALL_CONFIG) or 8 bytes (with id)
       // Let's try with 4-byte header first (more common in Unity)
       const headerSize = 4; // Just the packed type_argc + is_open
       const instSize = headerSize + Process.pointerSize * typeCount;
       const methodInst = Memory.alloc(instSize);
-      
+
       // Write type_argc (22 bits) + is_open (1 bit) = not open (0)
       // type_argc in lower 22 bits
-      methodInst.writeU32(typeCount & 0x3FFFFF);
-      
+      methodInst.writeU32(typeCount & 0x3fffff);
+
       // Write type_argv pointers
       for (let i = 0; i < typeCount; i++) {
         const monoType = typeArguments[i].getType().pointer;
         methodInst.add(headerSize + i * Process.pointerSize).writePointer(monoType);
       }
-      
+
       // Build MonoGenericContext
       // struct _MonoGenericContext {
       //   MonoGenericInst *class_inst;
@@ -526,19 +540,19 @@ export class MonoMethod extends MonoHandle {
       // }
       const contextSize = Process.pointerSize * 2;
       const context = Memory.alloc(contextSize);
-      
+
       // class_inst = NULL (method-level generic only)
       context.writePointer(NULL);
       // method_inst = our constructed inst
       context.add(Process.pointerSize).writePointer(methodInst);
-      
+
       // Call mono_class_inflate_generic_method
       const inflatedMethod = this.native.mono_class_inflate_generic_method(this.pointer, context);
-      
+
       if (pointerIsNull(inflatedMethod)) {
         return null;
       }
-      
+
       return new MonoMethod(this.api, inflatedMethod);
     } catch (e) {
       // Silently fail - this approach may not work on all Mono versions
@@ -556,13 +570,12 @@ export class MonoMethod extends MonoHandle {
   private makeGenericMethodViaReflection(typeArguments: MonoClass[]): MonoMethod | null {
     try {
       // Check for mono_method_get_object and required reflection APIs
-      if (!this.api.hasExport('mono_method_get_object') ||
-          !this.api.hasExport('mono_reflection_type_get_type')) {
+      if (!this.api.hasExport("mono_method_get_object") || !this.api.hasExport("mono_reflection_type_get_type")) {
         return null;
       }
 
       const domain = this.api.getRootDomain();
-      
+
       // Get System.Type[] for the type arguments
       const typeArray = this.createTypeArray(typeArguments, domain);
       if (pointerIsNull(typeArray)) {
@@ -581,13 +594,9 @@ export class MonoMethod extends MonoHandle {
         return null;
       }
 
-      const makeGenericMethodName = Memory.allocUtf8String('MakeGenericMethod');
-      const makeGenericMethod = this.native.mono_class_get_method_from_name(
-        methodInfoClass, 
-        makeGenericMethodName, 
-        1
-      );
-      
+      const makeGenericMethodName = Memory.allocUtf8String("MakeGenericMethod");
+      const makeGenericMethod = this.native.mono_class_get_method_from_name(methodInfoClass, makeGenericMethodName, 1);
+
       if (pointerIsNull(makeGenericMethod)) {
         return null;
       }
@@ -595,17 +604,12 @@ export class MonoMethod extends MonoHandle {
       // Invoke MakeGenericMethod(Type[] typeArguments)
       const argsArray = Memory.alloc(Process.pointerSize);
       argsArray.writePointer(typeArray);
-      
+
       const excSlot = Memory.alloc(Process.pointerSize);
       excSlot.writePointer(NULL);
-      
-      const resultMethodInfo = this.native.mono_runtime_invoke(
-        makeGenericMethod,
-        methodInfo,
-        argsArray,
-        excSlot
-      );
-      
+
+      const resultMethodInfo = this.native.mono_runtime_invoke(makeGenericMethod, methodInfo, argsArray, excSlot);
+
       if (pointerIsNull(resultMethodInfo) || !pointerIsNull(excSlot.readPointer())) {
         return null;
       }
@@ -627,23 +631,22 @@ export class MonoMethod extends MonoHandle {
    */
   private createTypeArray(typeArguments: MonoClass[], domain: NativePointer): NativePointer {
     try {
-      if (!this.api.hasExport('mono_type_get_object') ||
-          !this.api.hasExport('mono_array_new')) {
+      if (!this.api.hasExport("mono_type_get_object") || !this.api.hasExport("mono_array_new")) {
         return NULL;
       }
 
       // Get System.Type class
-      const mscorlibImage = this.api.native.mono_image_loaded(Memory.allocUtf8String('mscorlib'));
+      const mscorlibImage = this.api.native.mono_image_loaded(Memory.allocUtf8String("mscorlib"));
       if (pointerIsNull(mscorlibImage)) {
         return NULL;
       }
 
       const typeClass = this.api.native.mono_class_from_name(
         mscorlibImage,
-        Memory.allocUtf8String('System'),
-        Memory.allocUtf8String('Type')
+        Memory.allocUtf8String("System"),
+        Memory.allocUtf8String("Type"),
       );
-      
+
       if (pointerIsNull(typeClass)) {
         return NULL;
       }
@@ -658,11 +661,11 @@ export class MonoMethod extends MonoHandle {
       for (let i = 0; i < typeArguments.length; i++) {
         const monoType = typeArguments[i].getType().pointer;
         const typeObj = this.native.mono_type_get_object(domain, monoType);
-        
+
         if (pointerIsNull(typeObj)) {
           return NULL;
         }
-        
+
         // mono_array_set for reference types
         this.native.mono_array_setref(typeArray, i, typeObj);
       }
@@ -679,7 +682,7 @@ export class MonoMethod extends MonoHandle {
   private getMethodHandleFromMethodInfo(methodInfo: NativePointer): NativePointer | null {
     try {
       // Try Unity-specific API first (common in Unity runtime)
-      if (this.api.hasExport('unity_mono_reflection_method_get_method')) {
+      if (this.api.hasExport("unity_mono_reflection_method_get_method")) {
         const method = this.native.unity_mono_reflection_method_get_method(methodInfo);
         if (!pointerIsNull(method)) {
           return method;
@@ -687,7 +690,7 @@ export class MonoMethod extends MonoHandle {
       }
 
       // Try mono_reflection_get_method if available
-      if (this.api.hasExport('mono_reflection_get_method')) {
+      if (this.api.hasExport("mono_reflection_get_method")) {
         const method = this.native.mono_reflection_get_method(methodInfo);
         if (!pointerIsNull(method)) {
           return method;
@@ -702,9 +705,9 @@ export class MonoMethod extends MonoHandle {
       }
 
       // Try to get the "mhandle" field (internal method pointer)
-      const mhandleFieldName = Memory.allocUtf8String('mhandle');
+      const mhandleFieldName = Memory.allocUtf8String("mhandle");
       const mhandleField = this.native.mono_class_get_field_from_name(klass, mhandleFieldName);
-      
+
       if (!pointerIsNull(mhandleField)) {
         const valuePtr = Memory.alloc(Process.pointerSize);
         this.native.mono_field_get_value(methodInfo, mhandleField, valuePtr);
@@ -720,9 +723,13 @@ export class MonoMethod extends MonoHandle {
     }
   }
 
-  invoke(instance: MonoObject | NativePointer | null, args: MethodArgument[] = [], options: InvokeOptions = {}): NativePointer {
+  invoke(
+    instance: MonoObject | NativePointer | null,
+    args: MethodArgument[] = [],
+    options: InvokeOptions = {},
+  ): NativePointer {
     const autoBox = options.autoBoxPrimitives !== false;
-    const prepared = autoBox ? this.prepareArguments(args) : args.map((arg) => prepareArgumentRaw(this.api, arg));
+    const prepared = autoBox ? this.prepareArguments(args) : args.map(arg => prepareArgumentRaw(this.api, arg));
     try {
       const result = this.api.runtimeInvoke(this.pointer, unwrapInstance(instance), prepared);
       return result;
@@ -737,25 +744,29 @@ export class MonoMethod extends MonoHandle {
   /**
    * Call method with automatic unboxing of return value.
    * This is the preferred way to invoke methods as it handles boxing/unboxing automatically.
-   * 
+   *
    * @param instance The object instance (null for static methods)
    * @param args Method arguments (automatically boxed if needed)
    * @returns Unboxed return value with proper TypeScript type
-   * 
+   *
    * @example
    * // Calling an instance method that returns int
    * const count = method.call<number>(obj, []);
-   * 
+   *
    * // Calling a static method that returns string
    * const name = method.call<string>(null, ["arg1", 42]);
-   * 
+   *
    * // Calling a method that returns a struct/object
    * const result = method.call<MonoObject>(obj, []);
-   * 
+   *
    * // Calling a method that returns Int64 with BigInt option
    * const bigValue = method.call<bigint>(null, [], { returnBigInt: true });
    */
-  call<T = any>(instance: MonoObject | NativePointer | null, args: MethodArgument[] = [], options: InvokeOptions = {}): T {
+  call<T = any>(
+    instance: MonoObject | NativePointer | null,
+    args: MethodArgument[] = [],
+    options: InvokeOptions = {},
+  ): T {
     const rawResult = this.invoke(instance, args, options);
     return this.unboxResult<T>(rawResult, options);
   }
@@ -763,16 +774,20 @@ export class MonoMethod extends MonoHandle {
   /**
    * Call method and get full result information including raw pointer and type.
    * Useful when you need access to both the raw result and the unboxed value.
-   * 
+   *
    * @param instance The object instance (null for static methods)
    * @param args Method arguments
    * @returns InvokeResult with raw pointer, unboxed value, and type information
    */
-  callWithInfo<T = any>(instance: MonoObject | NativePointer | null, args: MethodArgument[] = [], options: InvokeOptions = {}): InvokeResult<T> {
+  callWithInfo<T = any>(
+    instance: MonoObject | NativePointer | null,
+    args: MethodArgument[] = [],
+    options: InvokeOptions = {},
+  ): InvokeResult<T> {
     const rawResult = this.invoke(instance, args, options);
     const returnType = this.getReturnType();
     const isNull = pointerIsNull(rawResult);
-    
+
     return {
       raw: rawResult,
       isNull,
@@ -819,7 +834,7 @@ export class MonoMethod extends MonoHandle {
    */
   private unboxValue(boxedPtr: NativePointer, kind: MonoTypeKind, options: InvokeOptions = {}): any {
     const unboxed = this.api.native.mono_object_unbox(boxedPtr);
-    
+
     switch (kind) {
       case MonoTypeKind.Boolean:
         return unboxed.readU8() !== 0;
@@ -876,7 +891,7 @@ export class MonoMethod extends MonoHandle {
    */
   private readMonoString(strPtr: NativePointer): string {
     if (pointerIsNull(strPtr)) return "";
-    
+
     // Try mono_string_to_utf8 first (most common)
     if (this.api.hasExport("mono_string_to_utf8")) {
       const utf8Ptr = this.native.mono_string_to_utf8(strPtr);
@@ -886,7 +901,7 @@ export class MonoMethod extends MonoHandle {
         return result;
       }
     }
-    
+
     return "";
   }
 
@@ -914,7 +929,9 @@ export class MonoMethod extends MonoHandle {
     }
     if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
       if (type.isByRef() || this.isPointerLike(type)) {
-        throw new Error(`Parameter ${index} on ${this.getFullName()} expects a pointer or reference; received primitive value.`);
+        throw new Error(
+          `Parameter ${index} on ${this.getFullName()} expects a pointer or reference; received primitive value.`,
+        );
       }
       // Use allocPrimitiveArg which returns raw value pointer, NOT boxed object
       return this.allocPrimitiveArg(type, value);
@@ -924,10 +941,10 @@ export class MonoMethod extends MonoHandle {
 
   /**
    * Allocate and write a primitive value to memory for use as a method argument.
-   * 
+   *
    * IMPORTANT: mono_runtime_invoke expects a pointer to the raw value for value types,
    * NOT a boxed MonoObject*. This method returns the raw storage pointer.
-   * 
+   *
    * @param type The MonoType of the parameter
    * @param value The primitive value to write
    * @returns Pointer to the allocated memory containing the raw value
@@ -993,7 +1010,9 @@ export class MonoMethod extends MonoHandle {
         }
         break;
       default:
-        throw new Error(`Primitive argument allocation is not supported for parameter type ${effectiveType.getFullName()} on ${this.getFullName()}`);
+        throw new Error(
+          `Primitive argument allocation is not supported for parameter type ${effectiveType.getFullName()} on ${this.getFullName()}`,
+        );
     }
 
     // Return the raw storage pointer, NOT a boxed object
@@ -1005,7 +1024,7 @@ export class MonoMethod extends MonoHandle {
    * Box a primitive value into a MonoObject.
    * Use this when you need an actual boxed object (e.g., for storing in collections).
    * Do NOT use this for method invocation arguments.
-   * 
+   *
    * @param type The MonoType of the value
    * @param value The primitive value to box
    * @returns Pointer to the boxed MonoObject
@@ -1013,7 +1032,7 @@ export class MonoMethod extends MonoHandle {
   boxPrimitive(type: MonoType, value: number | boolean | bigint): NativePointer {
     const effectiveType = this.resolveUnderlyingPrimitive(type);
     const storage = this.allocPrimitiveArg(type, value);
-    
+
     let klass = effectiveType.getClass();
     if (!klass) {
       const klassPtr = this.api.native.mono_class_from_mono_type(effectiveType.pointer);
@@ -1022,7 +1041,9 @@ export class MonoMethod extends MonoHandle {
       }
     }
     if (!klass) {
-      throw new Error(`Unable to resolve class for parameter type ${effectiveType.getFullName()} on ${this.getFullName()}`);
+      throw new Error(
+        `Unable to resolve class for parameter type ${effectiveType.getFullName()} on ${this.getFullName()}`,
+      );
     }
     klass.ensureInitialized();
     const domain = this.api.getRootDomain();
@@ -1089,15 +1110,15 @@ export class MonoMethod extends MonoHandle {
     const methodName = this.getName();
     const parameters = this.getParameters()
       .map(param => `${param.type.getName()} param${param.index}`)
-      .join(', ');
+      .join(", ");
 
     const modifiers = [];
-    if (this.isStatic()) modifiers.push('static');
-    if (this.isVirtual()) modifiers.push('virtual');
-    if (this.isAbstract()) modifiers.push('abstract');
-    if (this.isConstructor()) modifiers.push('constructor');
+    if (this.isStatic()) modifiers.push("static");
+    if (this.isVirtual()) modifiers.push("virtual");
+    if (this.isAbstract()) modifiers.push("abstract");
+    if (this.isConstructor()) modifiers.push("constructor");
 
-    const modifierStr = modifiers.length > 0 ? `${modifiers.join(' ')} ` : '';
+    const modifierStr = modifiers.length > 0 ? `${modifiers.join(" ")} ` : "";
     return `${modifierStr}${returnType} ${methodName}(${parameters})`;
   }
 
@@ -1142,7 +1163,9 @@ export class MonoMethod extends MonoHandle {
       if (!expectedType.isValueType() && actualValue instanceof MonoObject) {
         const actualClass = actualValue.getClass();
         if (!this.isTypeCompatible(expectedType, actualClass)) {
-          errors.push(`Argument ${i} type mismatch: expected ${expectedType.getName()}, got ${actualClass.getFullName()}`);
+          errors.push(
+            `Argument ${i} type mismatch: expected ${expectedType.getName()}, got ${actualClass.getFullName()}`,
+          );
         }
       }
 
@@ -1156,14 +1179,17 @@ export class MonoMethod extends MonoHandle {
 
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
     };
   }
 
   /**
    * Validate method accessibility in current context
    */
-  validateAccessibility(context?: { isStatic?: boolean; instanceType?: MonoClass }): { isValid: boolean; errors: string[] } {
+  validateAccessibility(context?: { isStatic?: boolean; instanceType?: MonoClass }): {
+    isValid: boolean;
+    errors: string[];
+  } {
     const errors: string[] = [];
 
     // Check if method is static but being called on instance
@@ -1185,13 +1211,15 @@ export class MonoMethod extends MonoHandle {
     if (!this.isStatic() && context?.instanceType) {
       const declaringClass = this.getDeclaringClass();
       if (!declaringClass.isAssignableFrom(context.instanceType)) {
-        errors.push(`Method ${this.getName()} cannot be called on instance of type ${context.instanceType.getFullName()}`);
+        errors.push(
+          `Method ${this.getName()} cannot be called on instance of type ${context.instanceType.getFullName()}`,
+        );
       }
     }
 
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
     };
   }
 
@@ -1204,44 +1232,45 @@ export class MonoMethod extends MonoHandle {
 
     try {
       // Check if method has a valid name
-      if (!this.getName() || this.getName().trim() === '') {
-        errors.push('Method has invalid name');
+      if (!this.getName() || this.getName().trim() === "") {
+        errors.push("Method has invalid name");
       }
 
       // Check if declaring class is accessible
       const declaringClass = this.getDeclaringClass();
       if (!declaringClass) {
-        errors.push('Unable to determine declaring class');
+        errors.push("Unable to determine declaring class");
       }
 
       // Check signature validity
       const signature = this.getSignature();
       if (!signature) {
-        errors.push('Unable to get method signature');
+        errors.push("Unable to get method signature");
       }
 
       // Check return type
       const returnType = this.getReturnType();
       if (!returnType) {
-        errors.push('Unable to determine return type');
+        errors.push("Unable to determine return type");
       }
 
       // Warnings for unusual patterns
       if (this.isStatic() && this.isVirtual()) {
-        warnings.push('Method is both static and virtual (unusual pattern)');
+        warnings.push("Method is both static and virtual (unusual pattern)");
       }
 
       if (this.isAbstract() && this.isStatic()) {
-        warnings.push('Method is both abstract and static (unusual pattern)');
+        warnings.push("Method is both abstract and static (unusual pattern)");
       }
 
       // Check parameter count consistency
       const paramCount = this.getParameterCount();
       const paramTypes = this.getParameterTypes();
       if (paramCount !== paramTypes.length) {
-        errors.push(`Parameter count mismatch: getParameterCount()=${paramCount}, getParameterTypes().length=${paramTypes.length}`);
+        errors.push(
+          `Parameter count mismatch: getParameterCount()=${paramCount}, getParameterTypes().length=${paramTypes.length}`,
+        );
       }
-
     } catch (error) {
       errors.push(`Validation failed with error: ${error}`);
     }
@@ -1249,7 +1278,7 @@ export class MonoMethod extends MonoHandle {
     return {
       isValid: errors.length === 0,
       errors,
-      warnings
+      warnings,
     };
   }
 
@@ -1262,12 +1291,12 @@ export class MonoMethod extends MonoHandle {
     const typeName = monoType.getName().toLowerCase();
 
     switch (jsType) {
-      case 'number':
-        return ['int32', 'int64', 'uint32', 'uint64', 'single', 'double', 'float'].some(t => typeName.includes(t));
-      case 'boolean':
-        return typeName.includes('bool');
-      case 'string':
-        return typeName.includes('string') || typeName.includes('char');
+      case "number":
+        return ["int32", "int64", "uint32", "uint64", "single", "double", "float"].some(t => typeName.includes(t));
+      case "boolean":
+        return typeName.includes("bool");
+      case "string":
+        return typeName.includes("string") || typeName.includes("char");
       default:
         return false;
     }
@@ -1312,7 +1341,7 @@ export class MethodInvocation {
     private method: MonoMethod,
     private instance: MonoObject | NativePointer | null,
     private args: MethodArgument[] = [],
-    private options: InvokeOptions = {}
+    private options: InvokeOptions = {},
   ) {}
 
   /**
@@ -1354,9 +1383,9 @@ export class MethodInvocation {
    */
   getMethodInfo(): string {
     try {
-      return `${this.method.getFullName?.() || 'Unknown method'}(${this.args.length} args)`;
+      return `${this.method.getFullName?.() || "Unknown method"}(${this.args.length} args)`;
     } catch {
-      return 'Unknown method';
+      return "Unknown method";
     }
   }
 
@@ -1366,7 +1395,7 @@ export class MethodInvocation {
   private getContextDescription(): string {
     const methodName = this.method.getName();
     const className = this.method.getDeclaringClass().getName();
-    const instanceDesc = this.instance ? `on instance` : 'static';
+    const instanceDesc = this.instance ? `on instance` : "static";
     return `${className}.${methodName} ${instanceDesc}`;
   }
 
@@ -1377,7 +1406,7 @@ export class MethodInvocation {
     method: MonoMethod,
     instance: MonoObject | NativePointer | null = null,
     args: MethodArgument[] = [],
-    options: InvokeOptions = {}
+    options: InvokeOptions = {},
   ): MethodInvocation {
     return new MethodInvocation(method, instance, args, options);
   }
@@ -1390,7 +1419,7 @@ export function createMethodInvocation(
   method: MonoMethod,
   instance?: MonoObject | NativePointer | null,
   args?: MethodArgument[],
-  options?: InvokeOptions
+  options?: InvokeOptions,
 ): MethodInvocation {
   return MethodInvocation.create(method, instance, args, options);
 }

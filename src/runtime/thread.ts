@@ -10,7 +10,7 @@ export interface ThreadRunOptions {
    * Only use this for operations that are already guaranteed to be in an attached context.
    */
   attachIfNeeded?: boolean;
-  
+
   /**
    * Timeout in milliseconds for the operation.
    * If exceeded, the operation will be interrupted if possible.
@@ -166,7 +166,7 @@ export class ThreadManager {
     if (!handle || isNull(handle)) {
       return false;
     }
-    
+
     try {
       this.api.detachThread(handle);
       this.attachedThreads.delete(threadId);

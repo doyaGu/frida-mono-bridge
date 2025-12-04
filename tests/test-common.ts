@@ -4,15 +4,15 @@
  * This file consolidates functionality from multiple helper files for consistency
  */
 
-import { 
-  TestResult, 
-  TestCategory, 
-  createTest, 
-  createMonoTest, 
+import {
+  TestResult,
+  TestCategory,
+  createTest,
+  createMonoTest,
   createDomainTest,
   assertNotNull,
   assert,
-  fail
+  fail,
 } from "./test-framework";
 import Mono, { MonoDomain } from "../src";
 
@@ -67,7 +67,7 @@ export const COMMON_TEST_DATA = {
     SIMPLE: "test",
     UNICODE: "测试🧪",
     LONG: "a".repeat(1000),
-    SPECIAL_CHARS: "!@#$%^&*()_+-=[]{}|;':\",./<>?"
+    SPECIAL_CHARS: "!@#$%^&*()_+-=[]{}|;':\",./<>?",
   },
   NUMBERS: {
     ZERO: 0,
@@ -75,19 +75,19 @@ export const COMMON_TEST_DATA = {
     NEGATIVE: -42,
     FLOAT: 3.14159,
     LARGE: Number.MAX_SAFE_INTEGER,
-    SMALL: Number.MIN_SAFE_INTEGER
+    SMALL: Number.MIN_SAFE_INTEGER,
   },
   ASSEMBLIES: {
     MSCORLIB: "mscorlib",
     SYSTEM: "System",
-    UNITY_ENGINE: "UnityEngine"
+    UNITY_ENGINE: "UnityEngine",
   },
   TYPES: {
     OBJECT: "System.Object",
     STRING: "System.String",
     INT32: "System.Int32",
-    BOOLEAN: "System.Boolean"
-  }
+    BOOLEAN: "System.Boolean",
+  },
 };
 
 /**
@@ -192,7 +192,7 @@ export const UNITY_TEST_DATA = {
     RIGIDBODY_ANGULAR_VELOCITY: "angularVelocity",
     RIGIDBODY_USE_GRAVITY: "useGravity",
     RIGIDBODY_IS_KINEMATIC: "isKinematic",
-  }
+  },
 };
 
 /**
@@ -205,7 +205,7 @@ export const DEFAULT_PERFORMANCE_OPTIONS: PerformanceTestOptions = {
   memoryThreshold: 50 * 1024 * 1024, // 50MB
   minOpsPerSecond: 1000,
   maxAverageTime: 10, // 10ms
-  collectGarbage: true
+  collectGarbage: true,
 };
 
 /**
@@ -216,7 +216,7 @@ export const PERFORMANCE_PRESETS = {
   MEDIUM: { iterations: 1000, warmupIterations: 100, maxAverageTime: 10 },
   HEAVY: { iterations: 10000, warmupIterations: 1000, maxAverageTime: 100 },
   MEMORY_INTENSIVE: { iterations: 100, memoryThreshold: 100 * 1024 * 1024 },
-  CPU_INTENSIVE: { iterations: 1000, minOpsPerSecond: 10000 }
+  CPU_INTENSIVE: { iterations: 1000, minOpsPerSecond: 10000 },
 };
 
 // ===== COMMON SETUP FUNCTIONS =====
@@ -226,7 +226,7 @@ export const PERFORMANCE_PRESETS = {
  */
 export function setupCommonTestEnvironment(): CommonTestSetup {
   const setup: CommonTestSetup = {};
-  
+
   try {
     setup.domain = Mono.perform(() => Mono.domain);
     setup.api = Mono.perform(() => Mono.api);
@@ -234,7 +234,7 @@ export function setupCommonTestEnvironment(): CommonTestSetup {
     // Some tests might not have Mono available
     console.warn(`Warning: Could not setup Mono environment: ${error}`);
   }
-  
+
   return setup;
 }
 
@@ -243,13 +243,13 @@ export function setupCommonTestEnvironment(): CommonTestSetup {
  */
 export function setupUnityTestEnvironment(): CommonTestSetup {
   const setup: CommonTestSetup = {};
-  
+
   try {
     // Get basic Mono environment
     const basicSetup = setupCommonTestEnvironment();
     setup.domain = basicSetup.domain;
     setup.api = basicSetup.api;
-    
+
     // Get Unity-specific assemblies
     if (setup.domain) {
       setup.testAssembly = setup.domain.getAssembly(UNITY_TEST_DATA.ASSEMBLIES.UNITY_ENGINE);
@@ -258,7 +258,7 @@ export function setupUnityTestEnvironment(): CommonTestSetup {
   } catch (error) {
     console.warn(`Warning: Could not setup Unity test environment: ${error}`);
   }
-  
+
   return setup;
 }
 
@@ -280,24 +280,26 @@ export function createBasicMonoTest(testName: string, testFn: (setup: CommonTest
  * Creates a test that verifies a specific Mono API function exists and is callable
  */
 export function createApiFunctionTest(
-  functionName: string, 
+  functionName: string,
   expectedSignature?: string,
-  testFn?: (api: any, func: any) => void
+  testFn?: (api: any, func: any) => void,
 ): TestResult {
   return createMonoTest(`API function ${functionName} should be available`, () => {
     const setup = setupCommonTestEnvironment();
     assertNotNull(setup.api, "Mono API should be available");
-    
+
     const func = setup.api[functionName];
     assertNotNull(func, `API function ${functionName} should exist`);
-    assert(typeof func === 'function', `${functionName} should be a function`);
-    
+    assert(typeof func === "function", `${functionName} should be a function`);
+
     if (expectedSignature) {
       const funcStr = func.toString();
-      assert(funcStr.includes(expectedSignature), 
-        `${functionName} should have expected signature containing ${expectedSignature}`);
+      assert(
+        funcStr.includes(expectedSignature),
+        `${functionName} should have expected signature containing ${expectedSignature}`,
+      );
     }
-    
+
     if (testFn) {
       testFn(setup.api, func);
     }
@@ -308,26 +310,26 @@ export function createApiFunctionTest(
  * Creates a test that verifies a specific Mono type can be accessed
  */
 export function createMonoTypeTest(
-  typeName: string, 
+  typeName: string,
   expectedProperties?: string[],
-  testFn?: (type: any) => void
+  testFn?: (type: any) => void,
 ): TestResult {
   return createMonoTest(`Mono type ${typeName} should be accessible`, () => {
     const setup = setupCommonTestEnvironment();
     assertNotNull(setup.domain, "Mono domain should be available");
-    
+
     // Try to get the type - this is a simplified version
     // Real implementation would depend on the actual Mono API
     try {
       const type = setup.domain.class(typeName);
       assertNotNull(type, `Type ${typeName} should be accessible`);
-      
+
       if (expectedProperties) {
         for (const prop of expectedProperties) {
           assert(prop in type, `Type ${typeName} should have property ${prop}`);
         }
       }
-      
+
       if (testFn) {
         testFn(type);
       }
@@ -343,28 +345,33 @@ export function createMonoTypeTest(
 export function createErrorHandlingTest(
   testName: string,
   errorCondition: () => void,
-  expectedErrorPattern?: string | RegExp
+  expectedErrorPattern?: string | RegExp,
 ): TestResult {
-  return createTest(testName, () => {
-    try {
-      errorCondition();
-      fail("Expected function to throw an error, but it didn't");
-    } catch (error) {
-      const errorStr = error instanceof Error ? error.message : String(error);
-      
-      if (expectedErrorPattern) {
-        const pattern = expectedErrorPattern instanceof RegExp ? 
-          expectedErrorPattern : 
-          new RegExp(expectedErrorPattern);
-        assert(pattern.test(errorStr), 
-          `Error message should match pattern ${expectedErrorPattern}, got: ${errorStr}`);
+  return createTest(
+    testName,
+    () => {
+      try {
+        errorCondition();
+        fail("Expected function to throw an error, but it didn't");
+      } catch (error) {
+        const errorStr = error instanceof Error ? error.message : String(error);
+
+        if (expectedErrorPattern) {
+          const pattern =
+            expectedErrorPattern instanceof RegExp ? expectedErrorPattern : new RegExp(expectedErrorPattern);
+          assert(
+            pattern.test(errorStr),
+            `Error message should match pattern ${expectedErrorPattern}, got: ${errorStr}`,
+          );
+        }
+        // If no pattern specified, just verify an error was thrown
       }
-      // If no pattern specified, just verify an error was thrown
-    }
-  }, {
-    category: TestCategory.ERROR_HANDLING,
-    requiresMono: true
-  });
+    },
+    {
+      category: TestCategory.ERROR_HANDLING,
+      requiresMono: true,
+    },
+  );
 }
 
 /**
@@ -374,26 +381,30 @@ export function createBoundaryValueTest<T>(
   testName: string,
   testFn: (value: T) => void,
   testValues: T[],
-  options?: { shouldPass?: boolean }
+  options?: { shouldPass?: boolean },
 ): TestResult {
-  return createTest(testName, () => {
-    for (const value of testValues) {
-      try {
-        testFn(value);
-        if (options?.shouldPass === false) {
-          fail(`Expected test to fail for value ${value}, but it passed`);
+  return createTest(
+    testName,
+    () => {
+      for (const value of testValues) {
+        try {
+          testFn(value);
+          if (options?.shouldPass === false) {
+            fail(`Expected test to fail for value ${value}, but it passed`);
+          }
+        } catch (error) {
+          if (options?.shouldPass !== false) {
+            fail(`Test failed for value ${value}: ${error}`);
+          }
+          // If we expect failure, this is expected behavior
         }
-      } catch (error) {
-        if (options?.shouldPass !== false) {
-          fail(`Test failed for value ${value}: ${error}`);
-        }
-        // If we expect failure, this is expected behavior
       }
-    }
-  }, {
-    category: TestCategory.ERROR_HANDLING,
-    requiresMono: true
-  });
+    },
+    {
+      category: TestCategory.ERROR_HANDLING,
+      requiresMono: true,
+    },
+  );
 }
 
 /**
@@ -402,27 +413,33 @@ export function createBoundaryValueTest<T>(
 export function createNullSafetyTest(
   testName: string,
   testFn: (value: any) => void,
-  nullValues: any[] = [null, undefined, false, 0, ""]
+  nullValues: any[] = [null, undefined, false, 0, ""],
 ): TestResult {
-  return createTest(testName, () => {
-    for (const nullValue of nullValues) {
-      try {
-        testFn(nullValue);
-        // If we get here, the test passed for this null value
-      } catch (error) {
-        // Check if the error is expected for this null value
-        const errorStr = error instanceof Error ? error.message : String(error);
-        if (!errorStr.toLowerCase().includes("null") && 
+  return createTest(
+    testName,
+    () => {
+      for (const nullValue of nullValues) {
+        try {
+          testFn(nullValue);
+          // If we get here, the test passed for this null value
+        } catch (error) {
+          // Check if the error is expected for this null value
+          const errorStr = error instanceof Error ? error.message : String(error);
+          if (
+            !errorStr.toLowerCase().includes("null") &&
             !errorStr.toLowerCase().includes("undefined") &&
-            !errorStr.toLowerCase().includes("invalid")) {
-          fail(`Unexpected error for null value ${nullValue}: ${errorStr}`);
+            !errorStr.toLowerCase().includes("invalid")
+          ) {
+            fail(`Unexpected error for null value ${nullValue}: ${errorStr}`);
+          }
         }
       }
-    }
-  }, {
-    category: TestCategory.ERROR_HANDLING,
-    requiresMono: true
-  });
+    },
+    {
+      category: TestCategory.ERROR_HANDLING,
+      requiresMono: true,
+    },
+  );
 }
 
 /**
@@ -432,15 +449,19 @@ export function createParameterizedTest<T>(
   baseTestName: string,
   testFn: (value: T, index: number) => void,
   testValues: T[],
-  options?: { category?: TestCategory; requiresMono?: boolean }
+  options?: { category?: TestCategory; requiresMono?: boolean },
 ): TestResult[] {
   return testValues.map((value, index) => {
-    return createTest(`${baseTestName} (case ${index + 1}: ${value})`, () => {
-      testFn(value, index);
-    }, {
-      category: options?.category ?? TestCategory.MONO_DEPENDENT,
-      requiresMono: options?.requiresMono ?? true
-    });
+    return createTest(
+      `${baseTestName} (case ${index + 1}: ${value})`,
+      () => {
+        testFn(value, index);
+      },
+      {
+        category: options?.category ?? TestCategory.MONO_DEPENDENT,
+        requiresMono: options?.requiresMono ?? true,
+      },
+    );
   });
 }
 
@@ -450,18 +471,24 @@ export function createParameterizedTest<T>(
 export function createStringOperationTest(
   testName: string,
   operation: (input: string) => string | number | boolean,
-  testCases: Array<{ input: string; expected: any; description?: string }>
+  testCases: Array<{ input: string; expected: any; description?: string }>,
 ): TestResult {
-  return createTest(testName, () => {
-    for (const testCase of testCases) {
-      const result = operation(testCase.input);
-      assert(result === testCase.expected, 
-        `String operation failed for input "${testCase.input}": expected ${testCase.expected}, got ${result}`);
-    }
-  }, {
-    category: TestCategory.MONO_DEPENDENT,
-    requiresMono: true
-  });
+  return createTest(
+    testName,
+    () => {
+      for (const testCase of testCases) {
+        const result = operation(testCase.input);
+        assert(
+          result === testCase.expected,
+          `String operation failed for input "${testCase.input}": expected ${testCase.expected}, got ${result}`,
+        );
+      }
+    },
+    {
+      category: TestCategory.MONO_DEPENDENT,
+      requiresMono: true,
+    },
+  );
 }
 
 /**
@@ -470,50 +497,55 @@ export function createStringOperationTest(
 export function createMemoryTest(
   testName: string,
   testFn: () => void,
-  options?: { expectMemoryLeak?: boolean }
+  options?: { expectMemoryLeak?: boolean },
 ): TestResult {
-  return createTest(testName, () => {
-    // Measure memory before test (Frida doesn't have process.memoryUsage)
-    let initialHeapUsed = 0;
-    try {
-      if (typeof process !== 'undefined' && process.memoryUsage) {
-        initialHeapUsed = process.memoryUsage().heapUsed;
+  return createTest(
+    testName,
+    () => {
+      // Measure memory before test (Frida doesn't have process.memoryUsage)
+      let initialHeapUsed = 0;
+      try {
+        if (typeof process !== "undefined" && process.memoryUsage) {
+          initialHeapUsed = process.memoryUsage().heapUsed;
+        }
+      } catch (_e) {
+        // Ignore in Frida environment
       }
-    } catch (_e) {
-      // Ignore in Frida environment
-    }
-    
-    // Run the test
-    testFn();
-    
-    // Force garbage collection if available
-    try {
-      if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
-        (globalThis as any).gc();
+
+      // Run the test
+      testFn();
+
+      // Force garbage collection if available
+      try {
+        if (typeof globalThis !== "undefined" && (globalThis as any).gc) {
+          (globalThis as any).gc();
+        }
+      } catch (_e) {
+        // Ignore in Frida environment
       }
-    } catch (_e) {
-      // Ignore in Frida environment
-    }
-    
-    // Measure memory after test
-    let finalHeapUsed = 0;
-    try {
-      if (typeof process !== 'undefined' && process.memoryUsage) {
-        finalHeapUsed = process.memoryUsage().heapUsed;
+
+      // Measure memory after test
+      let finalHeapUsed = 0;
+      try {
+        if (typeof process !== "undefined" && process.memoryUsage) {
+          finalHeapUsed = process.memoryUsage().heapUsed;
+        }
+      } catch (_e) {
+        // Ignore in Frida environment
       }
-    } catch (_e) {
-      // Ignore in Frida environment
-    }
-    const memoryDiff = finalHeapUsed - initialHeapUsed;
-    
-    // If we expect no memory leak, check that memory usage is reasonable
-    if (!options?.expectMemoryLeak && memoryDiff > 10 * 1024 * 1024) { // 10MB threshold
-      console.warn(`Warning: High memory usage detected in ${testName}: ${memoryDiff} bytes`);
-    }
-  }, {
-    category: TestCategory.PERFORMANCE,
-    requiresMono: true
-  });
+      const memoryDiff = finalHeapUsed - initialHeapUsed;
+
+      // If we expect no memory leak, check that memory usage is reasonable
+      if (!options?.expectMemoryLeak && memoryDiff > 10 * 1024 * 1024) {
+        // 10MB threshold
+        console.warn(`Warning: High memory usage detected in ${testName}: ${memoryDiff} bytes`);
+      }
+    },
+    {
+      category: TestCategory.PERFORMANCE,
+      requiresMono: true,
+    },
+  );
 }
 
 /**
@@ -522,23 +554,27 @@ export function createMemoryTest(
 export function createThreadingTest(
   testName: string,
   testFn: () => Promise<void> | void,
-  options?: { timeout?: number }
+  options?: { timeout?: number },
 ): TestResult {
-  return createTest(testName, async () => {
-    const timeout = options?.timeout ?? 5000; // 5 second default timeout
-    
-    const result = Promise.race([
-      Promise.resolve(testFn()),
-      new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error(`Test timed out after ${timeout}ms`)), timeout)
-      )
-    ]);
-    
-    await result;
-  }, {
-    category: TestCategory.MONO_DEPENDENT,
-    requiresMono: true
-  });
+  return createTest(
+    testName,
+    async () => {
+      const timeout = options?.timeout ?? 5000; // 5 second default timeout
+
+      const result = Promise.race([
+        Promise.resolve(testFn()),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Test timed out after ${timeout}ms`)), timeout),
+        ),
+      ]);
+
+      await result;
+    },
+    {
+      category: TestCategory.MONO_DEPENDENT,
+      requiresMono: true,
+    },
+  );
 }
 
 /**
@@ -547,16 +583,16 @@ export function createThreadingTest(
 export function createAssemblyTest(
   testName: string,
   assemblyName: string,
-  testFn?: (assembly: any) => void
+  testFn?: (assembly: any) => void,
 ): TestResult {
   return createMonoTest(testName, () => {
     const setup = setupCommonTestEnvironment();
     assertNotNull(setup.domain, "Mono domain should be available");
-    
+
     try {
       const assembly = setup.domain.getAssembly(assemblyName);
       assertNotNull(assembly, `Assembly ${assemblyName} should be loadable`);
-      
+
       if (testFn) {
         testFn(assembly);
       }
@@ -573,23 +609,23 @@ export function createTypeCheckingTest(
   testName: string,
   typeName: string,
   expectedBaseType?: string,
-  expectedInterfaces?: string[]
+  expectedInterfaces?: string[],
 ): TestResult {
   return createMonoTest(testName, () => {
     const setup = setupCommonTestEnvironment();
     assertNotNull(setup.domain, "Mono domain should be available");
-    
+
     try {
       const type = setup.domain.class(typeName);
       assertNotNull(type, `Type ${typeName} should be accessible`);
-      
+
       if (expectedBaseType) {
         // Check base type - implementation depends on actual Mono API
         const baseType = type.getParent();
         assertNotNull(baseType, `Type ${typeName} should have a base type`);
         // Additional checks would go here based on actual API
       }
-      
+
       if (expectedInterfaces) {
         // Check interfaces - implementation depends on actual Mono API
         // Additional checks would go here based on actual API
@@ -611,10 +647,10 @@ export function measureMemory(before?: number): number {
   // Frida doesn't have global.gc or process.memoryUsage
   // Try to use them if available (Node.js environment), otherwise return 0
   try {
-    if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
+    if (typeof globalThis !== "undefined" && (globalThis as any).gc) {
       (globalThis as any).gc();
     }
-    if (typeof process !== 'undefined' && process.memoryUsage) {
+    if (typeof process !== "undefined" && process.memoryUsage) {
       const memory = process.memoryUsage();
       return memory.heapUsed;
     }
@@ -629,23 +665,23 @@ export function measureMemory(before?: number): number {
  */
 export function measurePerformance(testFn: () => void, options: PerformanceTestOptions): PerformanceMetrics {
   const times: number[] = [];
-  
+
   // Warmup phase
   for (let i = 0; i < options.warmupIterations!; i++) {
     testFn();
   }
-  
+
   // Force garbage collection if requested (only in Node.js)
   if (options.collectGarbage) {
     try {
-      if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
+      if (typeof globalThis !== "undefined" && (globalThis as any).gc) {
         (globalThis as any).gc();
       }
     } catch (_e) {
       // Ignore in Frida environment
     }
   }
-  
+
   // Performance measurement phase
   for (let i = 0; i < options.iterations!; i++) {
     const iterationStart = Date.now();
@@ -653,20 +689,20 @@ export function measurePerformance(testFn: () => void, options: PerformanceTestO
     const iterationEnd = Date.now();
     times.push(iterationEnd - iterationStart);
   }
-  
+
   // Calculate metrics
   const totalTime = times.reduce((sum, time) => sum + time, 0);
   const averageTime = totalTime / times.length;
   const minTime = Math.min(...times);
   const maxTime = Math.max(...times);
   const opsPerSecond = 1000 / averageTime;
-  
+
   return {
     iterations: options.iterations!,
     totalTime,
     averageTime,
     minTime,
     maxTime,
-    opsPerSecond
+    opsPerSecond,
   };
 }

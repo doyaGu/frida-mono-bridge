@@ -1,6 +1,5 @@
 import { MonoApi } from "../runtime/api";
 import { readUtf8String } from "../utils/string";
-import { pointerIsNull } from "../utils/memory";
 import { MonoHandle, CustomAttribute, parseCustomAttributes } from "./base";
 import { MonoImage } from "./image";
 import { MonoClass } from "./class";
@@ -65,7 +64,7 @@ export class MonoAssembly extends MonoHandle {
       const imageName = readUtf8String(imageNamePtr);
       if (imageName && imageName !== "") {
         // Remove .dll extension if present
-        return imageName.replace(/\.dll$/i, '');
+        return imageName.replace(/\.dll$/i, "");
       }
     } catch (error) {
       // Continue to final fallback
@@ -82,12 +81,12 @@ export class MonoAssembly extends MonoHandle {
     const name = this.getName();
     const version = this.getVersion();
     const culture = this.getCulture();
-    
+
     // Try to get public key token
-    let publicKeyToken = 'null';
+    let publicKeyToken = "null";
     try {
       const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
-      if (!assemblyNamePtr.isNull() && this.api.hasExport('mono_assembly_name_get_pubkeytoken')) {
+      if (!assemblyNamePtr.isNull() && this.api.hasExport("mono_assembly_name_get_pubkeytoken")) {
         const tokenPtr = this.native.mono_assembly_name_get_pubkeytoken(assemblyNamePtr);
         if (!tokenPtr.isNull()) {
           // Public key token is 8 bytes
@@ -95,17 +94,17 @@ export class MonoAssembly extends MonoHandle {
           for (let i = 0; i < 8; i++) {
             const byte = tokenPtr.add(i).readU8();
             if (byte === 0 && i === 0) break; // No token
-            bytes.push(byte.toString(16).padStart(2, '0'));
+            bytes.push(byte.toString(16).padStart(2, "0"));
           }
           if (bytes.length > 0) {
-            publicKeyToken = bytes.join('');
+            publicKeyToken = bytes.join("");
           }
         }
       }
     } catch {
       // Keep default 'null'
     }
-    
+
     return `${name}, Version=${version.major}.${version.minor}.${version.build}.${version.revision}, Culture=${culture}, PublicKeyToken=${publicKeyToken}`;
   }
 
@@ -117,11 +116,11 @@ export class MonoAssembly extends MonoHandle {
       const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
       if (!assemblyNamePtr.isNull()) {
         // Check if the function exists
-        if (this.api.hasExport('mono_assembly_name_get_culture')) {
+        if (this.api.hasExport("mono_assembly_name_get_culture")) {
           const culturePtr = this.native.mono_assembly_name_get_culture(assemblyNamePtr);
           if (!culturePtr.isNull()) {
             const culture = culturePtr.readUtf8String();
-            if (culture && culture !== '') {
+            if (culture && culture !== "") {
               return culture;
             }
           }
@@ -130,7 +129,7 @@ export class MonoAssembly extends MonoHandle {
     } catch {
       // Fall through to default
     }
-    return 'neutral';
+    return "neutral";
   }
 
   /**
@@ -139,24 +138,19 @@ export class MonoAssembly extends MonoHandle {
   getVersion(): { major: number; minor: number; build: number; revision: number } {
     try {
       const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
-      if (!assemblyNamePtr.isNull() && this.api.hasExport('mono_assembly_name_get_version')) {
+      if (!assemblyNamePtr.isNull() && this.api.hasExport("mono_assembly_name_get_version")) {
         // mono_assembly_name_get_version returns major version and takes out params for minor/build/revision
         const minorPtr = Memory.alloc(4);
         const buildPtr = Memory.alloc(4);
         const revisionPtr = Memory.alloc(4);
-        
-        const major = this.native.mono_assembly_name_get_version(
-          assemblyNamePtr,
-          minorPtr,
-          buildPtr,
-          revisionPtr
-        );
-        
+
+        const major = this.native.mono_assembly_name_get_version(assemblyNamePtr, minorPtr, buildPtr, revisionPtr);
+
         return {
           major: major as number,
           minor: minorPtr.readU16(),
           build: buildPtr.readU16(),
-          revision: revisionPtr.readU16()
+          revision: revisionPtr.readU16(),
         };
       }
     } catch {
@@ -187,10 +181,7 @@ export class MonoAssembly extends MonoHandle {
    */
   isSystemAssembly(): boolean {
     const name = this.getName().toLowerCase();
-    const systemPrefixes = [
-      'system.', 'mscorlib', 'netstandard', 'dotnet',
-      'mono.', 'unityengine', 'unity.'
-    ];
+    const systemPrefixes = ["system.", "mscorlib", "netstandard", "dotnet", "mono.", "unityengine", "unity."];
     return systemPrefixes.some(prefix => name.startsWith(prefix));
   }
 
@@ -254,7 +245,7 @@ export class MonoAssembly extends MonoHandle {
       classCount,
       typeCount: classCount,
       metadataSize: 0, // Would need image size calculation
-      loadTime: Date.now() // Assembly load timestamp
+      loadTime: Date.now(), // Assembly load timestamp
     };
   }
 
@@ -265,16 +256,16 @@ export class MonoAssembly extends MonoHandle {
   getPerformanceStats(): AssemblyPerformanceStats {
     const name = this.getName();
     const image = this.#getImage();
-    
+
     // Measure class lookup time
     const classStart = Date.now();
     const classCount = image.getClassCount();
     // Do a sample lookup
     try {
-      image.tryClassFromName('System', 'Object');
+      image.tryClassFromName("System", "Object");
     } catch {}
     const classLookupTime = Date.now() - classStart;
-    
+
     // Measure method lookup time
     const methodStart = Date.now();
     let methodCount = 0;
@@ -286,7 +277,7 @@ export class MonoAssembly extends MonoHandle {
       }
     } catch {}
     const methodLookupTime = Date.now() - methodStart;
-    
+
     // Measure field access time
     const fieldStart = Date.now();
     let fieldCount = 0;
@@ -298,17 +289,17 @@ export class MonoAssembly extends MonoHandle {
       }
     } catch {}
     const fieldAccessTime = Date.now() - fieldStart;
-    
+
     // Estimate memory usage based on class count and metadata
     // This is a rough estimate: ~1KB per class for metadata
     const estimatedMemoryUsage = classCount * 1024;
-    
+
     // Cache hit rate is not directly measurable, estimate based on repeated lookups
     let cacheHitRate = 0;
     try {
       const lookupStart = Date.now();
       for (let i = 0; i < 10; i++) {
-        image.tryClassFromName('System', 'Object');
+        image.tryClassFromName("System", "Object");
       }
       const lookupTime = Date.now() - lookupStart;
       // If 10 lookups take less than 2ms total, assume good cache hit rate
@@ -316,7 +307,7 @@ export class MonoAssembly extends MonoHandle {
     } catch {
       cacheHitRate = 0;
     }
-    
+
     return {
       assemblyName: name,
       classCount,
@@ -326,7 +317,7 @@ export class MonoAssembly extends MonoHandle {
       methodLookupTime,
       fieldAccessTime,
       totalMemoryUsage: estimatedMemoryUsage,
-      cacheHitRate
+      cacheHitRate,
     };
   }
 
@@ -357,14 +348,14 @@ export class MonoAssembly extends MonoHandle {
 
   /**
    * Get all custom attributes on this assembly.
-   * 
+   *
    * Uses `mono_custom_attrs_from_assembly` to get the custom attributes info,
    * then constructs the attributes using `mono_custom_attrs_construct`.
-   * 
+   *
    * @returns Array of CustomAttribute objects with attribute information
    */
   getCustomAttributes(): CustomAttribute[] {
-    if (!this.api.hasExport('mono_custom_attrs_from_assembly')) {
+    if (!this.api.hasExport("mono_custom_attrs_from_assembly")) {
       return [];
     }
 
@@ -373,51 +364,47 @@ export class MonoAssembly extends MonoHandle {
       return parseCustomAttributes(
         this.api,
         customAttrInfoPtr,
-        (ptr) => new MonoClass(this.api, ptr).getName(),
-        (ptr) => new MonoClass(this.api, ptr).getFullName()
+        ptr => new MonoClass(this.api, ptr).getName(),
+        ptr => new MonoClass(this.api, ptr).getFullName(),
       );
     } catch {
       return [];
     }
   }
 
-  
   // ===== DEPENDENCY ANALYSIS =====
 
   /**
    * Get all assemblies referenced by this assembly.
-   * 
+   *
    * This reads the AssemblyRef metadata table to find all referenced assemblies,
    * then attempts to resolve them from loaded assemblies in the current domain.
    */
   getReferencedAssemblies(): MonoAssembly[] {
     if (this.#referencedAssemblies === null) {
       this.#referencedAssemblies = [];
-      
+
       try {
         const image = this.#getImage();
-        
+
         // MONO_TABLE_ASSEMBLYREF = 35
         const MONO_TABLE_ASSEMBLYREF = 35;
-        
+
         // Check if the API is available
-        if (!this.api.hasExport('mono_image_get_table_rows')) {
+        if (!this.api.hasExport("mono_image_get_table_rows")) {
           return this.#referencedAssemblies;
         }
-        
+
         // Get number of assembly references
-        const refCount = this.native.mono_image_get_table_rows(
-          image.pointer,
-          MONO_TABLE_ASSEMBLYREF
-        );
-        
+        const refCount = this.native.mono_image_get_table_rows(image.pointer, MONO_TABLE_ASSEMBLYREF);
+
         if (refCount <= 0) {
           return this.#referencedAssemblies;
         }
-        
+
         // Get loaded assemblies to resolve references
         const loadedAssemblies = new Map<string, MonoAssembly>();
-        
+
         // Use mono_assembly_foreach to enumerate all loaded assemblies
         const seenPtrs = new Set<string>();
         const callback = new NativeCallback(
@@ -426,7 +413,7 @@ export class MonoAssembly extends MonoHandle {
             const key = assemblyPtr.toString();
             if (seenPtrs.has(key)) return;
             seenPtrs.add(key);
-            
+
             try {
               const asm = new MonoAssembly(this.api, assemblyPtr);
               const name = asm.getName().toLowerCase();
@@ -435,21 +422,21 @@ export class MonoAssembly extends MonoHandle {
               // Skip invalid assemblies
             }
           },
-          'void',
-          ['pointer', 'pointer']
+          "void",
+          ["pointer", "pointer"],
         );
-        
+
         this.native.mono_assembly_foreach(callback, NULL);
-        
+
         // Try to get referenced assembly names using mono_assembly_get_assemblyref
-        if (this.api.hasExport('mono_assembly_get_assemblyref')) {
+        if (this.api.hasExport("mono_assembly_get_assemblyref")) {
           const assemblyNameStruct = Memory.alloc(256); // MonoAssemblyName is a structure
-          
+
           for (let i = 0; i < Number(refCount); i++) {
             try {
               // mono_assembly_get_assemblyref fills the MonoAssemblyName structure
               this.native.mono_assembly_get_assemblyref(image.pointer, i, assemblyNameStruct);
-              
+
               // Get name from the assembly name structure
               const namePtr = this.native.mono_assembly_name_get_name(assemblyNameStruct);
               if (!namePtr.isNull()) {
@@ -459,9 +446,7 @@ export class MonoAssembly extends MonoHandle {
                   const resolved = loadedAssemblies.get(normalizedName);
                   if (resolved && resolved.pointer.toString() !== this.pointer.toString()) {
                     // Avoid duplicates
-                    if (!this.#referencedAssemblies.some(a => 
-                      a.pointer.toString() === resolved.pointer.toString()
-                    )) {
+                    if (!this.#referencedAssemblies.some(a => a.pointer.toString() === resolved.pointer.toString())) {
                       this.#referencedAssemblies.push(resolved);
                     }
                   }
@@ -481,12 +466,12 @@ export class MonoAssembly extends MonoHandle {
 
   /**
    * Get all assemblies that reference this assembly.
-   * 
+   *
    * This performs a reverse dependency analysis by iterating through all loaded
    * assemblies and checking if they reference this assembly.
-   * 
+   *
    * @returns Array of assemblies that depend on this assembly
-   * 
+   *
    * @example
    * const mscorlib = domain.getAssembly('mscorlib');
    * const dependents = mscorlib.getReferencingAssemblies();
@@ -495,11 +480,11 @@ export class MonoAssembly extends MonoHandle {
   getReferencingAssemblies(): MonoAssembly[] {
     if (this.#referencingAssemblies === null) {
       this.#referencingAssemblies = [];
-      
+
       try {
         const myName = this.getName().toLowerCase();
         const myPointer = this.pointer.toString();
-        
+
         // Enumerate all loaded assemblies
         const seenPtrs = new Set<string>();
         const callback = new NativeCallback(
@@ -508,25 +493,22 @@ export class MonoAssembly extends MonoHandle {
             const key = assemblyPtr.toString();
             if (seenPtrs.has(key)) return;
             seenPtrs.add(key);
-            
+
             // Skip self
             if (key === myPointer) return;
-            
+
             try {
               const otherAsm = new MonoAssembly(this.api, assemblyPtr);
-              
+
               // Check if this assembly references us
               const refs = otherAsm.getReferencedAssemblies();
-              const referencesMe = refs.some(ref => 
-                ref.getName().toLowerCase() === myName ||
-                ref.pointer.toString() === myPointer
+              const referencesMe = refs.some(
+                ref => ref.getName().toLowerCase() === myName || ref.pointer.toString() === myPointer,
               );
-              
+
               if (referencesMe) {
                 // Avoid duplicates
-                if (!this.#referencingAssemblies!.some(a => 
-                  a.pointer.toString() === key
-                )) {
+                if (!this.#referencingAssemblies!.some(a => a.pointer.toString() === key)) {
                   this.#referencingAssemblies!.push(otherAsm);
                 }
               }
@@ -534,10 +516,10 @@ export class MonoAssembly extends MonoHandle {
               // Skip assemblies that fail to enumerate
             }
           },
-          'void',
-          ['pointer', 'pointer']
+          "void",
+          ["pointer", "pointer"],
         );
-        
+
         this.native.mono_assembly_foreach(callback, NULL);
       } catch {
         this.#referencingAssemblies = [];
@@ -551,9 +533,7 @@ export class MonoAssembly extends MonoHandle {
    */
   dependsOn(assembly: MonoAssembly | string): boolean {
     const targetName = assembly instanceof MonoAssembly ? assembly.name : assembly;
-    return this.getReferencedAssemblies().some(
-      ref => ref.name.toLowerCase() === targetName.toLowerCase()
-    );
+    return this.getReferencedAssemblies().some(ref => ref.name.toLowerCase() === targetName.toLowerCase());
   }
 
   /**
@@ -568,30 +548,29 @@ export class MonoAssembly extends MonoHandle {
       }
       visited.add(name);
 
-      const dependencies = asm.getReferencedAssemblies()
+      const dependencies = asm
+        .getReferencedAssemblies()
         .filter(dep => !visited.has(dep.name))
         .map(dep => buildTree(dep));
 
       return {
         name,
         visited: false,
-        dependencies
+        dependencies,
       };
     };
 
     return {
       root: buildTree(this),
       totalAssemblies: visited.size,
-      maxDepth: this.calculateDependencyDepth(buildTree(this))
+      maxDepth: this.calculateDependencyDepth(buildTree(this)),
     };
   }
 
   private calculateDependencyDepth(node: AssemblyDependencyNode, depth = 0): number {
     if (node.visited) return depth;
     if (node.dependencies.length === 0) return depth;
-    return Math.max(
-      ...node.dependencies.map(dep => this.calculateDependencyDepth(dep, depth + 1))
-    );
+    return Math.max(...node.dependencies.map(dep => this.calculateDependencyDepth(dep, depth + 1)));
   }
 
   // ===== COMPARISON AND EQUALITY =====
@@ -638,8 +617,7 @@ export class MonoAssembly extends MonoHandle {
     const version2 = other.getVersion();
 
     // Simple compatibility check - same major version
-    return version1.major === version2.major &&
-           version1.minor >= version2.minor;
+    return version1.major === version2.major && version1.minor >= version2.minor;
   }
 
   // ===== REFLECTION AND INSPECTION =====
@@ -654,26 +632,26 @@ export class MonoAssembly extends MonoHandle {
         fullName: this.getFullName(),
         culture: this.getCulture(),
         version: this.getVersion(),
-        location: this.getLocation()
+        location: this.getLocation(),
       },
       classification: {
         isSystemAssembly: this.isSystemAssembly(),
         isUserAssembly: this.isUserAssembly(),
         isFullyLoaded: this.isFullyLoaded(),
-        loadState: this.getLoadState()
+        loadState: this.getLoadState(),
       },
       statistics: {
         classCount: this.getClassCount(),
         typeCount: this.getTypeCount(),
         referencedCount: this.getReferencedAssemblies().length,
-        referencingCount: this.getReferencingAssemblies().length
+        referencingCount: this.getReferencingAssemblies().length,
       },
       analysis: {
         hasEntryPoint: this.getEntryPoint() !== null,
         entryPointName: this.getEntryPoint()?.name || null,
         dependencyCount: this.getReferencedAssemblies().length,
-        maxDependencyDepth: this.getDependencyTree().maxDepth
-      }
+        maxDependencyDepth: this.getDependencyTree().maxDepth,
+      },
     };
   }
 
@@ -691,7 +669,7 @@ export class MonoAssembly extends MonoHandle {
    */
   describe(): string {
     const info = this.getDetailedInfo();
-    return `${info.basic.name} v${info.basic.version.major}.${info.basic.version.minor}.${info.basic.version.build} (${info.classification.isUserAssembly ? 'User' : 'System'} Assembly)`;
+    return `${info.basic.name} v${info.basic.version.major}.${info.basic.version.minor}.${info.basic.version.build} (${info.classification.isUserAssembly ? "User" : "System"} Assembly)`;
   }
 
   // ===== CONVENIENCE METHODS =====
@@ -716,7 +694,7 @@ export class MonoAssembly extends MonoHandle {
       isUser: this.isUserAssembly(),
       isLoaded: this.isFullyLoaded(),
       classCount: this.getClassCount(),
-      location: this.getLocation()
+      location: this.getLocation(),
     };
   }
 
@@ -752,10 +730,10 @@ export class MonoAssembly extends MonoHandle {
 // ===== INTERFACES AND TYPES =====
 
 export enum AssemblyLoadState {
-  Unknown = 'unknown',
-  Loading = 'loading',
-  Loaded = 'loaded',
-  Error = 'error'
+  Unknown = "unknown",
+  Loading = "loading",
+  Loaded = "loaded",
+  Error = "error",
 }
 
 export interface AssemblySizeInfo {
@@ -830,5 +808,3 @@ export interface AssemblyDependencyTree {
   totalAssemblies: number;
   maxDepth: number;
 }
-
-  

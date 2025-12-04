@@ -1,10 +1,10 @@
 /**
  * Generic Types Test Runner
- * 
+ *
  * Runs MonoClass generic type tests independently
  */
 
-import { createGenericTypeTests } from '../test-generic-types';
+import { createGenericTypeTests } from "../test-generic-types";
 
 const results = createGenericTypeTests();
 

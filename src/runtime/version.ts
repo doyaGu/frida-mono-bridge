@@ -18,8 +18,9 @@ export class MonoRuntimeVersion {
   }
 
   static fromApi(api: MonoApi): MonoRuntimeVersion {
-    const hasDelegateThunk = api.hasExport("mono_get_delegate_invoke") && api.hasExport("mono_method_get_unmanaged_thunk");
-    const metadataTables = REQUIRED_FOR_METADATA.every((name) => api.hasExport(name));
+    const hasDelegateThunk =
+      api.hasExport("mono_get_delegate_invoke") && api.hasExport("mono_method_get_unmanaged_thunk");
+    const metadataTables = REQUIRED_FOR_METADATA.every(name => api.hasExport(name));
     const gcHandles = api.hasExport("mono_gchandle_new") && api.hasExport("mono_gchandle_free");
     const internalCalls = api.hasExport("mono_add_internal_call");
     return new MonoRuntimeVersion({

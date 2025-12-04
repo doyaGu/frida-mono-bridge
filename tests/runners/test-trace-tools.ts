@@ -1,10 +1,10 @@
 /**
  * Trace Tools Test Runner
- * 
+ *
  * Standalone runner for Trace utility tests
  */
 
-import { createTraceToolsTests } from '../test-trace-tools';
+import { createTraceToolsTests } from "../test-trace-tools";
 
 const results = createTraceToolsTests();
 

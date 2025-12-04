@@ -6,7 +6,7 @@ import { MonoObject } from "./object";
 /**
  * Summary information about a MonoString instance.
  * Provides comprehensive metadata for inspection and debugging.
- * 
+ *
  * @example
  * ```typescript
  * const summary = str.getSummary();
@@ -231,7 +231,7 @@ export class MonoString extends MonoObject {
    * @param form Normalization form (NFC, NFD, NFKC, NFKD)
    * @returns Normalized string
    */
-  normalize(form?: 'NFC' | 'NFD' | 'NFKC' | 'NFKD'): string {
+  normalize(form?: "NFC" | "NFD" | "NFKC" | "NFKD"): string {
     return this.toString().normalize(form);
   }
 
@@ -295,16 +295,16 @@ export class MonoString extends MonoObject {
    * @returns True if the string is empty or contains only whitespace
    */
   isNullOrWhitespace(): boolean {
-    return this.trim() === '';
+    return this.trim() === "";
   }
 
   // ===== SUMMARY AND DESCRIPTION METHODS =====
 
   /**
    * Get comprehensive summary information about this string.
-   * 
+   *
    * @returns MonoStringSummary object with all string metadata
-   * 
+   *
    * @example
    * ```typescript
    * const summary = str.getSummary();
@@ -319,29 +319,29 @@ export class MonoString extends MonoObject {
     const value = this.toString();
     const length = value.length;
     const isEmpty = length === 0;
-    const isWhitespace = value.trim() === '';
-    
+    const isWhitespace = value.trim() === "";
+
     // Create a preview (first 50 chars with ellipsis)
     let preview = value;
     if (length > 50) {
-      preview = value.substring(0, 50) + '...';
+      preview = value.substring(0, 50) + "...";
     }
-    
+
     return {
       pointer: this.pointer.toString(),
       length,
       preview,
       isEmpty,
       isWhitespace,
-      value
+      value,
     };
   }
 
   /**
    * Get a human-readable description of this string.
-   * 
+   *
    * @returns A multi-line string with detailed string information
-   * 
+   *
    * @example
    * ```typescript
    * console.log(str.describe());
@@ -354,33 +354,29 @@ export class MonoString extends MonoObject {
   describe(): string {
     const value = this.toString();
     const length = value.length;
-    
+
     // Escape special characters for display
     let displayValue = value;
     if (length > 100) {
-      displayValue = value.substring(0, 100) + '...';
+      displayValue = value.substring(0, 100) + "...";
     }
     displayValue = displayValue
-      .replace(/\\/g, '\\\\')
-      .replace(/\n/g, '\\n')
-      .replace(/\r/g, '\\r')
-      .replace(/\t/g, '\\t');
-    
-    const lines = [
-      `MonoString: "${displayValue}"`,
-      `  Length: ${length} characters`,
-      `  Pointer: ${this.pointer}`
-    ];
-    
-    return lines.join('\n');
+      .replace(/\\/g, "\\\\")
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\t/g, "\\t");
+
+    const lines = [`MonoString: "${displayValue}"`, `  Length: ${length} characters`, `  Pointer: ${this.pointer}`];
+
+    return lines.join("\n");
   }
 
   /**
    * Compare two strings for equality.
-   * 
+   *
    * @param other Another MonoString to compare with
    * @returns true if both strings have the same content
-   * 
+   *
    * @example
    * ```typescript
    * if (str1.equals(str2)) {
@@ -401,7 +397,7 @@ export class MonoString extends MonoObject {
     if (this._cachedString !== null) {
       return this._cachedString;
     }
-    
+
     // Try mono_string_to_utf8 first (most reliable for Unity Mono)
     if (this.api.hasExport("mono_string_to_utf8")) {
       const utf8Ptr = this.native.mono_string_to_utf8(this.pointer);
@@ -411,7 +407,7 @@ export class MonoString extends MonoObject {
         return this._cachedString;
       }
     }
-    
+
     // Fallback: Try mono_string_to_utf16
     if (this.api.hasExport("mono_string_to_utf16")) {
       const utf16Ptr = this.native.mono_string_to_utf16(this.pointer);
@@ -420,7 +416,7 @@ export class MonoString extends MonoObject {
         return this._cachedString;
       }
     }
-    
+
     // Last resort: Try mono_string_chars + mono_string_length
     if (this.api.hasExport("mono_string_chars") && this.api.hasExport("mono_string_length")) {
       const chars = this.native.mono_string_chars(this.pointer);
@@ -428,7 +424,7 @@ export class MonoString extends MonoObject {
       this._cachedString = readUtf16String(chars, length);
       return this._cachedString;
     }
-    
+
     return "";
   }
 

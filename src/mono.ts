@@ -129,7 +129,6 @@ export class MonoNamespace {
     return Types;
   }
 
-  
   /**
    * Initialize the Mono runtime
    * @internal Called automatically when needed

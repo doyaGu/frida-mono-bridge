@@ -20,24 +20,22 @@ declare const NativePointer: any;
  */
 export function isPointerLike(kind: number): boolean {
   // Common pointer-like type kinds in Mono
-  return kind === 0x1 || // OBJECT
-         kind === 0x2 || // SZARRAY
-         kind === 0x3 || // STRING
-         kind === 0x4 || // CLASS
-         kind === 0x6 || // GENERICINST
-         kind === 0x8 || // ARRAY
-         kind === 0x1C; // PTR
+  return (
+    kind === 0x1 || // OBJECT
+    kind === 0x2 || // SZARRAY
+    kind === 0x3 || // STRING
+    kind === 0x4 || // CLASS
+    kind === 0x6 || // GENERICINST
+    kind === 0x8 || // ARRAY
+    kind === 0x1c
+  ); // PTR
 }
 
 // ============================================================================
 // TYPE GUARDS
 // ============================================================================
 
-function throwValidationError(
-  parameter: string,
-  message: string,
-  value?: unknown
-): never {
+function throwValidationError(parameter: string, message: string, value?: unknown): never {
   throw new MonoValidationError(message, parameter, value);
 }
 
@@ -48,10 +46,12 @@ export function isNativePointer(value: any): value is any {
   if (value instanceof NativePointer) {
     return true;
   }
-  return value !== null
-    && typeof value === "object"
-    && typeof value.isNull === "function"
-    && typeof value.toString === "function";
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    typeof value.isNull === "function" &&
+    typeof value.toString === "function"
+  );
 }
 
 /**
@@ -65,7 +65,7 @@ export function isNullOrUndefined(value: any): value is null | undefined {
  * Check if value is a non-empty string
  */
 export function isNonEmptyString(value: any): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 /**
@@ -78,10 +78,7 @@ export function isNonEmptyArray(value: any): value is any[] {
 /**
  * Check if object has specific property
  */
-export function hasProperty<T extends object, K extends PropertyKey>(
-  obj: T,
-  prop: K
-): boolean {
+export function hasProperty<T extends object, K extends PropertyKey>(obj: T, prop: K): boolean {
   return obj && prop in obj;
 }
 
@@ -89,72 +86,84 @@ export function hasProperty<T extends object, K extends PropertyKey>(
  * Type guard for Mono handle objects
  */
 export function isMonoHandle(value: any): boolean {
-  return isObject(value) && value && typeof (value as any).handle === 'object';
+  return isObject(value) && value && typeof (value as any).handle === "object";
 }
 
 /**
  * Type guard for Mono class objects
  */
 export function isMonoClass(value: any): boolean {
-  return isObject(value) &&
-         hasProperty(value, 'name') && isString((value as any).name) &&
-         hasProperty(value, 'methods') && isArray((value as any).methods) &&
-         hasProperty(value, 'fields') && isArray((value as any).fields);
+  return (
+    isObject(value) &&
+    hasProperty(value, "name") &&
+    isString((value as any).name) &&
+    hasProperty(value, "methods") &&
+    isArray((value as any).methods) &&
+    hasProperty(value, "fields") &&
+    isArray((value as any).fields)
+  );
 }
 
 /**
  * Type guard for Mono method objects
  */
 export function isMonoMethod(value: any): boolean {
-  return isObject(value) &&
-         hasProperty(value, 'name') && isString((value as any).name) &&
-         hasMethod(value, 'isStatic') &&
-         hasMethod(value, 'invoke');
+  return (
+    isObject(value) &&
+    hasProperty(value, "name") &&
+    isString((value as any).name) &&
+    hasMethod(value, "isStatic") &&
+    hasMethod(value, "invoke")
+  );
 }
 
 /**
  * Type guard for Mono field objects
  */
 export function isMonoField(value: any): boolean {
-  return isObject(value) &&
-         hasProperty(value, 'name') && isString((value as any).name) &&
-         hasProperty(value, 'type') &&
-         hasMethod(value, 'isStatic');
+  return (
+    isObject(value) &&
+    hasProperty(value, "name") &&
+    isString((value as any).name) &&
+    hasProperty(value, "type") &&
+    hasMethod(value, "isStatic")
+  );
 }
 
 /**
  * Check if value is a string
  */
 export function isString(value: any): value is string {
-  return typeof value === 'string';
+  return typeof value === "string";
 }
 
 /**
  * Check if value is a number
  */
 export function isNumber(value: any): value is number {
-  return typeof value === 'number' && !isNaN(value);
+  return typeof value === "number" && !isNaN(value);
 }
 
 /**
  * Check if value is a boolean
  */
 export function isBoolean(value: any): value is boolean {
-  return typeof value === 'boolean';
+  return typeof value === "boolean";
 }
 
 /**
  * Check if value is a function
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 export function isFunction(value: any): value is Function {
-  return typeof value === 'function';
+  return typeof value === "function";
 }
 
 /**
  * Check if value is an object (not null, not array)
  */
 export function isObject(value: any): value is object {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 /**
@@ -167,10 +176,7 @@ export function isArray(value: any): value is any[] {
 /**
  * Check if object has specific method
  */
-export function hasMethod<T extends object, K extends PropertyKey>(
-  obj: T,
-  method: K
-): boolean {
+export function hasMethod<T extends object, K extends PropertyKey>(obj: T, method: K): boolean {
   return hasProperty(obj, method) && isFunction((obj as any)[method]);
 }
 
@@ -188,11 +194,7 @@ export function isValidMethodSignature(value: any): value is string {
 /**
  * Validate and throw if invalid
  */
-export function validateRequired<T>(
-  value: T | null | undefined,
-  name: string,
-  validator?: (value: T) => boolean
-): T {
+export function validateRequired<T>(value: T | null | undefined, name: string, validator?: (value: T) => boolean): T {
   if (isNullOrUndefined(value)) {
     throwValidationError(name, `Required parameter '${name}' is null or undefined`, value as unknown);
   }
@@ -210,7 +212,7 @@ export function validateRequired<T>(
 export function validateString(
   value: string | null | undefined,
   name: string,
-  options: { minLength?: number; maxLength?: number; pattern?: RegExp } = {}
+  options: { minLength?: number; maxLength?: number; pattern?: RegExp } = {},
 ): string {
   if (isNullOrUndefined(value)) {
     throwValidationError(name, `Parameter '${name}' is null or undefined`, value as unknown);
@@ -245,7 +247,6 @@ export function validateString(
  * Simplified type validation utilities
  */
 export class TypeValidator {
-
   /**
    * Basic type validation for method parameters
    */
@@ -256,7 +257,7 @@ export class TypeValidator {
 
       if (args.length !== parameters.length) {
         logger.warn(`Parameter count mismatch: expected ${parameters.length}, got ${args.length}`, {
-          methodName: method.getName()
+          methodName: method.getName(),
         });
         return false;
       }
@@ -271,7 +272,7 @@ export class TypeValidator {
           logger.debug(`Parameter ${i} may be incompatible`, {
             methodName: method.getName(),
             expectedType: param.type.getFullName(),
-            actualType: typeof arg
+            actualType: typeof arg,
           });
         }
       }
@@ -298,11 +299,11 @@ export class TypeValidator {
 
     const valueType = typeof value;
     switch (valueType) {
-      case 'string':
+      case "string":
         return allowCoercion; // Most string assignments can be coerced
-      case 'number':
+      case "number":
         return allowCoercion; // Most numeric assignments can be coerced
-      case 'boolean':
+      case "boolean":
         return allowCoercion; // Boolean assignments can be coerced
       default:
         return false;
@@ -322,7 +323,7 @@ export class TypeValidator {
     }
 
     // Basic validation for primitive types
-    return typeof value === 'object' || typeof value === 'string' || typeof value === 'number';
+    return typeof value === "object" || typeof value === "string" || typeof value === "number";
   }
 
   /**
@@ -337,7 +338,6 @@ export class TypeValidator {
  * Simplified type-safe wrapper for Mono operations
  */
 export class TypeSafeOperations {
-
   /**
    * Type-safe method invocation with basic validation
    */
@@ -348,12 +348,9 @@ export class TypeSafeOperations {
     options: {
       strictTypeChecking?: boolean;
       validateParameters?: boolean;
-    } = {}
+    } = {},
   ): T {
-    const {
-      strictTypeChecking = false,
-      validateParameters = false
-    } = options;
+    const { strictTypeChecking = false, validateParameters = false } = options;
 
     try {
       // Basic parameter validation if requested
@@ -364,7 +361,7 @@ export class TypeSafeOperations {
 
           if (args.length !== parameters.length) {
             logger.warn(`Parameter count mismatch: expected ${parameters.length}, got ${args.length}`, {
-              methodName: method.getName()
+              methodName: method.getName(),
             });
           }
         } catch (error) {
@@ -378,12 +375,14 @@ export class TypeSafeOperations {
       // Basic result validation
       if (result !== null && result !== undefined && strictTypeChecking) {
         try {
-          if (!(result instanceof MonoObject) &&
-              typeof result !== 'string' &&
-              typeof result !== 'number' &&
-              typeof result !== 'boolean') {
+          if (
+            !(result instanceof MonoObject) &&
+            typeof result !== "string" &&
+            typeof result !== "number" &&
+            typeof result !== "boolean"
+          ) {
             logger.debug(`Method result may not be a valid Mono type: ${typeof result}`, {
-              methodName: method.getName()
+              methodName: method.getName(),
             });
           }
         } catch (error) {
@@ -395,7 +394,7 @@ export class TypeSafeOperations {
     } catch (error) {
       logger.error(`Type-safe method invocation failed: ${error}`, {
         methodName: method.getName(),
-        args: args.length
+        args: args.length,
       });
       throw error;
     }
@@ -409,7 +408,7 @@ export class TypeSafeOperations {
     instance: MonoObject | null,
     options: {
       strictTypeChecking?: boolean;
-    } = {}
+    } = {},
   ): T {
     const { strictTypeChecking = false } = options;
 
@@ -419,12 +418,14 @@ export class TypeSafeOperations {
       // Basic validation for field values
       if (strictTypeChecking && result !== null && result !== undefined) {
         try {
-          if (!(result instanceof MonoObject) &&
-              typeof result !== 'string' &&
-              typeof result !== 'number' &&
-              typeof result !== 'boolean') {
+          if (
+            !(result instanceof MonoObject) &&
+            typeof result !== "string" &&
+            typeof result !== "number" &&
+            typeof result !== "boolean"
+          ) {
             logger.warn(`Field value may not be a valid Mono type: ${typeof result}`, {
-              fieldName: field.getName()
+              fieldName: field.getName(),
             });
           }
         } catch (error) {
@@ -435,7 +436,7 @@ export class TypeSafeOperations {
       return result as T;
     } catch (error) {
       logger.error(`Type-safe field access failed: ${error}`, {
-        fieldName: field.getName()
+        fieldName: field.getName(),
       });
       throw error;
     }
@@ -450,7 +451,7 @@ export class TypeSafeOperations {
     value: T,
     options: {
       strictTypeChecking?: boolean;
-    } = {}
+    } = {},
   ): void {
     const { strictTypeChecking = false } = options;
 
@@ -458,12 +459,14 @@ export class TypeSafeOperations {
       // Basic validation for field assignment
       if (strictTypeChecking && value !== null && value !== undefined) {
         try {
-          if (!(value instanceof MonoObject) &&
-              typeof value !== 'string' &&
-              typeof value !== 'number' &&
-              typeof value !== 'boolean') {
+          if (
+            !(value instanceof MonoObject) &&
+            typeof value !== "string" &&
+            typeof value !== "number" &&
+            typeof value !== "boolean"
+          ) {
             logger.warn(`Field assignment value may not be a valid Mono type: ${typeof value}`, {
-              fieldName: field.getName()
+              fieldName: field.getName(),
             });
           }
         } catch (error) {
@@ -475,7 +478,7 @@ export class TypeSafeOperations {
     } catch (error) {
       logger.error(`Type-safe field assignment failed: ${error}`, {
         fieldName: field.getName(),
-        valueType: typeof value
+        valueType: typeof value,
       });
       throw error;
     }
@@ -490,7 +493,7 @@ export class TypeSafeOperations {
     options: {
       boundsCheck?: boolean;
       strictTypeChecking?: boolean;
-    } = {}
+    } = {},
   ): T {
     const { boundsCheck = true, strictTypeChecking = false } = options;
 
@@ -504,13 +507,15 @@ export class TypeSafeOperations {
       // Basic validation for array elements
       if (strictTypeChecking && result !== null && result !== undefined) {
         try {
-          if (!(result instanceof MonoObject) &&
-              typeof result !== 'string' &&
-              typeof result !== 'number' &&
-              typeof result !== 'boolean') {
+          if (
+            !(result instanceof MonoObject) &&
+            typeof result !== "string" &&
+            typeof result !== "number" &&
+            typeof result !== "boolean"
+          ) {
             logger.warn(`Array element may not be a valid Mono type: ${typeof result}`, {
               arrayLength: array.length,
-              index
+              index,
             });
           }
         } catch (error) {
@@ -522,7 +527,7 @@ export class TypeSafeOperations {
     } catch (error) {
       logger.error(`Type-safe array element access failed: ${error}`, {
         arrayLength: array.length,
-        index
+        index,
       });
       throw error;
     }
@@ -538,12 +543,9 @@ export class TypeSafeOperations {
     options: {
       boundsCheck?: boolean;
       strictTypeChecking?: boolean;
-    } = {}
+    } = {},
   ): void {
-    const {
-      boundsCheck = true,
-      strictTypeChecking = false
-    } = options;
+    const { boundsCheck = true, strictTypeChecking = false } = options;
 
     try {
       if (boundsCheck && (index < 0 || index >= array.length)) {
@@ -553,13 +555,15 @@ export class TypeSafeOperations {
       // Basic validation for array assignment
       if (strictTypeChecking && value !== null && value !== undefined) {
         try {
-          if (!(value instanceof MonoObject) &&
-              typeof value !== 'string' &&
-              typeof value !== 'number' &&
-              typeof value !== 'boolean') {
+          if (
+            !(value instanceof MonoObject) &&
+            typeof value !== "string" &&
+            typeof value !== "number" &&
+            typeof value !== "boolean"
+          ) {
             logger.warn(`Array assignment value may not be a valid Mono type: ${typeof value}`, {
               arrayLength: array.length,
-              index
+              index,
             });
           }
         } catch (error) {
@@ -572,7 +576,7 @@ export class TypeSafeOperations {
       logger.error(`Type-safe array element assignment failed: ${error}`, {
         arrayLength: array.length,
         index,
-        valueType: typeof value
+        valueType: typeof value,
       });
       throw error;
     }
@@ -583,7 +587,6 @@ export class TypeSafeOperations {
  * Simplified compile-time type constraints for Mono operations
  */
 export class TypeConstraints {
-
   /**
    * Check if a value can be assigned to a Mono class type
    */

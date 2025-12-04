@@ -1,10 +1,10 @@
 /**
  * MonoString Test Runner
- * 
+ *
  * Standalone runner for MonoString tests
  */
 
-import { createMonoStringTests } from '../test-mono-string';
+import { createMonoStringTests } from "../test-mono-string";
 
 const results = createMonoStringTests();
 

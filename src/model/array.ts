@@ -9,7 +9,7 @@ import { allocUtf8 } from "../runtime/mem";
 /**
  * Summary information about a MonoArray instance.
  * Provides comprehensive metadata for inspection and debugging.
- * 
+ *
  * @example
  * ```typescript
  * const summary = array.getSummary();
@@ -118,34 +118,30 @@ export class MonoArray<T = any> extends MonoObject {
       // Use Number() to safely convert all numeric types to number
       return Number(result);
     }
-    
+
     // Fallback: Call System.Array.get_Length property via managed code
     // This works on all Mono runtimes including Unity's custom builds
     const arrayClass = this.native.mono_get_array_class();
     if (pointerIsNull(arrayClass)) {
       throw new Error("Cannot get System.Array class");
     }
-    
+
     // Get the Length property getter
     // mono_class_get_method_from_name(klass, name, param_count)
     const methodName = allocUtf8("get_Length");
-    const getLengthMethod = this.native.mono_class_get_method_from_name(
-      arrayClass, 
-      methodName, 
-      0
-    );
-    
+    const getLengthMethod = this.native.mono_class_get_method_from_name(arrayClass, methodName, 0);
+
     if (pointerIsNull(getLengthMethod)) {
       throw new Error("Cannot find Array.get_Length method");
     }
-    
+
     // Invoke get_Length on this array instance
     const result = this.api.runtimeInvoke(getLengthMethod, this.pointer, []);
-    
+
     if (pointerIsNull(result)) {
       return 0;
     }
-    
+
     // Result is a boxed Int32, unbox it
     const unboxed = this.native.mono_object_unbox(result);
     return unboxed.readS32();
@@ -174,23 +170,23 @@ export class MonoArray<T = any> extends MonoObject {
     if (this._elementSize !== null) {
       return this._elementSize;
     }
-    
+
     const arrayClass = this.getClass();
-    
+
     // Try mono_array_element_size first - this is the correct API for getting element size
     // It takes the array class (e.g., System.Int32[]) and returns the size of each element
     if (this.api.hasExport("mono_array_element_size")) {
       this._elementSize = Number(this.native.mono_array_element_size(arrayClass.pointer));
       return this._elementSize;
     }
-    
+
     // Fallback: Try mono_class_array_element_size (Note: on some Mono versions this may return
     // different values, so mono_array_element_size is preferred)
     if (this.api.hasExport("mono_class_array_element_size")) {
       this._elementSize = Number(this.native.mono_class_array_element_size(arrayClass.pointer));
       return this._elementSize;
     }
-    
+
     // Last resort: Determine from element class using mono_class_value_size
     const elementClass = this.getElementClass();
     if (elementClass.isValueType()) {
@@ -201,7 +197,7 @@ export class MonoArray<T = any> extends MonoObject {
         return this._elementSize;
       }
     }
-    
+
     // Reference types are always pointer-sized
     this._elementSize = Process.pointerSize;
     return this._elementSize;
@@ -227,11 +223,16 @@ export class MonoArray<T = any> extends MonoObject {
     const elementSize = this.getElementSize();
 
     switch (elementSize) {
-      case 1: return address.readU8();
-      case 2: return address.readU16();
-      case 4: return address.readU32();
-      case 8: return address.readU64().toNumber();
-      default: throw new Error(`Unsupported element size: ${elementSize}`);
+      case 1:
+        return address.readU8();
+      case 2:
+        return address.readU16();
+      case 4:
+        return address.readU32();
+      case 8:
+        return address.readU64().toNumber();
+      default:
+        throw new Error(`Unsupported element size: ${elementSize}`);
     }
   }
 
@@ -243,11 +244,20 @@ export class MonoArray<T = any> extends MonoObject {
     const elementSize = this.getElementSize();
 
     switch (elementSize) {
-      case 1: address.writeU8(value); break;
-      case 2: address.writeU16(value); break;
-      case 4: address.writeU32(value); break;
-      case 8: address.writeU64(value); break;
-      default: throw new Error(`Unsupported element size: ${elementSize}`);
+      case 1:
+        address.writeU8(value);
+        break;
+      case 2:
+        address.writeU16(value);
+        break;
+      case 4:
+        address.writeU32(value);
+        break;
+      case 8:
+        address.writeU64(value);
+        break;
+      default:
+        throw new Error(`Unsupported element size: ${elementSize}`);
     }
   }
 
@@ -569,7 +579,7 @@ export class MonoArray<T = any> extends MonoObject {
   getBigInt(index: number): bigint {
     const address = this.getElementAddress(index);
     const elementSize = this.getElementSize();
-    
+
     if (elementSize === 8) {
       // Read as two 32-bit parts and combine
       const low = BigInt(address.readU32());
@@ -593,11 +603,11 @@ export class MonoArray<T = any> extends MonoObject {
   setBigInt(index: number, value: bigint): void {
     const address = this.getElementAddress(index);
     const elementSize = this.getElementSize();
-    
+
     if (elementSize === 8) {
       // Write as two 32-bit parts
-      address.writeU32(Number(value & 0xFFFFFFFFn));
-      address.add(4).writeU32(Number((value >> 32n) & 0xFFFFFFFFn));
+      address.writeU32(Number(value & 0xffffffffn));
+      address.add(4).writeU32(Number((value >> 32n) & 0xffffffffn));
     } else if (elementSize === 4) {
       address.writeS32(Number(value));
     } else if (elementSize === 2) {
@@ -616,7 +626,7 @@ export class MonoArray<T = any> extends MonoObject {
   reverse(): void {
     const len = this.length;
     const halfLen = Math.floor(len / 2);
-    
+
     for (let i = 0; i < halfLen; i++) {
       const j = len - 1 - i;
       const temp = this.getTyped(i);
@@ -646,7 +656,7 @@ export class MonoArray<T = any> extends MonoObject {
   fill(value: T, start?: number, end?: number): void {
     const actualStart = start ?? 0;
     const actualEnd = end ?? this.length;
-    
+
     for (let i = actualStart; i < actualEnd && i < this.length; i++) {
       this.setTyped(i, value);
     }
@@ -663,7 +673,7 @@ export class MonoArray<T = any> extends MonoObject {
     const actualTargetStart = targetStart ?? 0;
     const actualSourceStart = sourceStart ?? 0;
     const actualSourceEnd = sourceEnd ?? this.length;
-    
+
     let targetIndex = actualTargetStart;
     for (let i = actualSourceStart; i < actualSourceEnd && i < this.length && targetIndex < target.length; i++) {
       target.setTyped(targetIndex++, this.getTyped(i));
@@ -689,7 +699,7 @@ export class MonoArray<T = any> extends MonoObject {
     // Convert to JS array, sort, and copy back
     const items = this.toArray();
     items.sort(compareFn);
-    
+
     for (let i = 0; i < items.length; i++) {
       this.setTyped(i, items[i]);
     }
@@ -721,7 +731,7 @@ export class MonoArray<T = any> extends MonoObject {
         items.push(String(item));
       }
     }
-    return items.join(separator ?? ',');
+    return items.join(separator ?? ",");
   }
 
   /**
@@ -752,7 +762,7 @@ export class MonoArray<T = any> extends MonoObject {
    * @returns Index of element, or -1 if not found
    */
   lastIndexOf(element: T, fromIndex?: number): number {
-    const start = fromIndex ?? (this.length - 1);
+    const start = fromIndex ?? this.length - 1;
     for (let i = start; i >= 0; i--) {
       const item = this.getTyped(i);
       if (element instanceof MonoObject && item instanceof MonoObject) {
@@ -818,9 +828,9 @@ export class MonoArray<T = any> extends MonoObject {
 
   /**
    * Get a human-readable description of this array.
-   * 
+   *
    * @returns A multi-line string with detailed array information
-   * 
+   *
    * @example
    * ```typescript
    * console.log(array.describe());
@@ -833,26 +843,25 @@ export class MonoArray<T = any> extends MonoObject {
    */
   describe(): string {
     const elementClass = this.getElementClass();
-    const elementType = elementClass.getType();
     const isValueType = elementClass.isValueType();
     const elementSize = this.getElementSize();
     const totalSize = this.length * elementSize;
-    
+
     const lines = [
       `MonoArray: ${elementClass.getFullName()}[${this.length}]`,
-      `  Element Type: ${elementClass.getFullName()} (${isValueType ? 'ValueType' : 'ReferenceType'})`,
+      `  Element Type: ${elementClass.getFullName()} (${isValueType ? "ValueType" : "ReferenceType"})`,
       `  Length: ${this.length}, Element Size: ${elementSize} bytes, Total: ${totalSize} bytes`,
-      `  Pointer: ${this.pointer}`
+      `  Pointer: ${this.pointer}`,
     ];
-    
-    return lines.join('\n');
+
+    return lines.join("\n");
   }
 
   /**
    * Get comprehensive summary information about this array.
-   * 
+   *
    * @returns MonoArraySummary object with all array metadata
-   * 
+   *
    * @example
    * ```typescript
    * const summary = array.getSummary();
@@ -869,7 +878,7 @@ export class MonoArray<T = any> extends MonoObject {
     const isValueType = elementClass.isValueType();
     const isPrimitive = kind >= MonoTypeKind.I1 && kind <= MonoTypeKind.R8;
     const isString = kind === MonoTypeKind.String;
-    
+
     return {
       pointer: this.pointer.toString(),
       elementType: elementClass.getFullName(),
@@ -879,15 +888,15 @@ export class MonoArray<T = any> extends MonoObject {
       isValueType: isValueType,
       isReferenceType: !isValueType,
       isPrimitiveArray: isPrimitive,
-      isStringArray: isString
+      isStringArray: isString,
     };
   }
 
   /**
    * Check if this array is empty (length === 0).
-   * 
+   *
    * @returns true if the array has no elements
-   * 
+   *
    * @example
    * ```typescript
    * if (array.isEmpty()) {
@@ -901,9 +910,9 @@ export class MonoArray<T = any> extends MonoObject {
 
   /**
    * Check if this array is not empty (length > 0).
-   * 
+   *
    * @returns true if the array has at least one element
-   * 
+   *
    * @example
    * ```typescript
    * if (array.isNotEmpty()) {
@@ -917,9 +926,9 @@ export class MonoArray<T = any> extends MonoObject {
 
   /**
    * Check if this array contains primitive numeric types.
-   * 
+   *
    * @returns true if elements are primitive numbers (int, float, etc.)
-   * 
+   *
    * @example
    * ```typescript
    * if (array.isPrimitiveArray()) {
@@ -935,9 +944,9 @@ export class MonoArray<T = any> extends MonoObject {
 
   /**
    * Check if this array contains string elements.
-   * 
+   *
    * @returns true if elements are System.String
-   * 
+   *
    * @example
    * ```typescript
    * if (array.isStringArray()) {
@@ -952,10 +961,10 @@ export class MonoArray<T = any> extends MonoObject {
 
   /**
    * Compare two arrays for equality.
-   * 
+   *
    * @param other Another MonoHandle to compare with
    * @returns true if both have the same pointer
-   * 
+   *
    * @example
    * ```typescript
    * if (array1.equals(array2)) {
@@ -970,7 +979,7 @@ export class MonoArray<T = any> extends MonoObject {
 
   /**
    * Get array information (legacy method, prefer getSummary()).
-   * 
+   *
    * @returns Basic array information object
    * @deprecated Use getSummary() for more comprehensive information
    */
@@ -985,7 +994,7 @@ export class MonoArray<T = any> extends MonoObject {
       elementClass: elementClass.getFullName(),
       length: this.length,
       elementSize: this.getElementSize(),
-      totalSize: this.length * this.getElementSize()
+      totalSize: this.length * this.getElementSize(),
     };
   }
 
@@ -997,7 +1006,7 @@ export class MonoArray<T = any> extends MonoObject {
 
     try {
       if (pointerIsNull(this.pointer)) {
-        errors.push('Array pointer is null');
+        errors.push("Array pointer is null");
         return { isValid: false, errors };
       }
 
@@ -1008,16 +1017,15 @@ export class MonoArray<T = any> extends MonoObject {
 
       const elementClass = this.getElementClass();
       if (!elementClass) {
-        errors.push('Unable to determine element class');
+        errors.push("Unable to determine element class");
       }
-
     } catch (error) {
       errors.push(`Array validation failed: ${error}`);
     }
 
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
     };
   }
 
@@ -1041,8 +1049,18 @@ export class MonoArray<T = any> extends MonoObject {
    */
   static createNumericArray(
     api: MonoApi,
-    elementType: 'int8' | 'int16' | 'int32' | 'int64' | 'uint8' | 'uint16' | 'uint32' | 'uint64' | 'float32' | 'float64',
-    length: number
+    elementType:
+      | "int8"
+      | "int16"
+      | "int32"
+      | "int64"
+      | "uint8"
+      | "uint16"
+      | "uint32"
+      | "uint64"
+      | "float32"
+      | "float64",
+    length: number,
   ): MonoArray<number> {
     const domain = api.getRootDomain();
     const elementClass = api.native.mono_class_from_name(domain, "mscorlib", elementType) as NativePointer;
@@ -1069,19 +1087,15 @@ export class MonoArray<T = any> extends MonoObject {
   /**
    * Create object array
    */
-  static createObjectArray<T extends MonoObject>(
-    api: MonoApi,
-    elementClass: MonoClass,
-    length: number
-  ): MonoArray<T> {
+  static createObjectArray<T extends MonoObject>(api: MonoApi, elementClass: MonoClass, length: number): MonoArray<T> {
     return MonoArray.new(api, elementClass, length) as MonoArray<T>;
   }
 
   /**
    * Returns a string representation of this array for debugging.
-   * 
+   *
    * @returns A concise string like "System.Int32[10]"
-   * 
+   *
    * @example
    * ```typescript
    * console.log(array.toString());

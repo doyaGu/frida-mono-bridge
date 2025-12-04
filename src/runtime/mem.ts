@@ -1,4 +1,3 @@
-
 const POINTER_SIZE = Process.pointerSize;
 
 /**

@@ -9,5 +9,5 @@ import { runTestCategory } from "../test-runner-base";
 // Auto-run test category
 runTestCategory("Mono Threading Tests", testMonoThreading, {
   verbose: true,
-  stopOnFirstFailure: false
+  stopOnFirstFailure: false,
 });

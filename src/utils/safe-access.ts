@@ -21,7 +21,10 @@ export interface SafeAccessOptions {
 export class SafePropertyAccess {
   private silent: boolean;
 
-  constructor(private obj: any, options?: SafeAccessOptions) {
+  constructor(
+    private obj: any,
+    options?: SafeAccessOptions,
+  ) {
     this.silent = options?.silent ?? false;
   }
 
@@ -45,7 +48,7 @@ export class SafePropertyAccess {
   call(methodName: string, ...args: any[]): any {
     try {
       const method = this.obj[methodName];
-      if (typeof method === 'function') {
+      if (typeof method === "function") {
         return method.apply(this.obj, args);
       }
       throw new MonoError(`Property '${methodName}' is not a function`, "Safe Property Access");

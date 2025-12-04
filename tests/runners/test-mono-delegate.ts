@@ -1,10 +1,10 @@
 /**
  * MonoDelegate Test Runner
- * 
+ *
  * Standalone runner for MonoDelegate tests
  */
 
-import { createMonoDelegateTests } from '../test-mono-delegate';
+import { createMonoDelegateTests } from "../test-mono-delegate";
 
 const results = createMonoDelegateTests();
 

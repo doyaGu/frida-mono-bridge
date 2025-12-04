@@ -2,7 +2,11 @@ import { MonoApi } from "./api";
 
 export class GCHandle {
   #handle: number;
-  constructor(private readonly api: MonoApi, handle: number, private readonly weak: boolean) {
+  constructor(
+    private readonly api: MonoApi,
+    handle: number,
+    private readonly weak: boolean,
+  ) {
     this.#handle = handle;
   }
 

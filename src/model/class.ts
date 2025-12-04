@@ -242,7 +242,7 @@ export class MonoClass extends MonoHandle {
   }
 
   getVTable(domain: MonoDomain | NativePointer | null = null): NativePointer {
-    const domainPtr = domain instanceof MonoDomain ? domain.pointer : domain ?? this.api.getRootDomain();
+    const domainPtr = domain instanceof MonoDomain ? domain.pointer : (domain ?? this.api.getRootDomain());
     this.ensureInitialized();
     const vtable = this.native.mono_class_vtable(domainPtr, this.pointer);
     if (pointerIsNull(vtable)) {
@@ -286,7 +286,7 @@ export class MonoClass extends MonoHandle {
    * @returns Array of CustomAttribute objects with attribute type information
    */
   getCustomAttributes(): CustomAttribute[] {
-    if (!this.api.hasExport('mono_custom_attrs_from_class')) {
+    if (!this.api.hasExport("mono_custom_attrs_from_class")) {
       return [];
     }
 
@@ -295,8 +295,8 @@ export class MonoClass extends MonoHandle {
       return parseCustomAttributes(
         this.api,
         customAttrInfoPtr,
-        (ptr) => new MonoClass(this.api, ptr).getName(),
-        (ptr) => new MonoClass(this.api, ptr).getFullName()
+        ptr => new MonoClass(this.api, ptr).getName(),
+        ptr => new MonoClass(this.api, ptr).getFullName(),
       );
     } catch {
       return [];
@@ -312,7 +312,7 @@ export class MonoClass extends MonoHandle {
    */
   private parseGenericParameterCountFromName(): number {
     const name = this.getName();
-    const backtickIndex = name.lastIndexOf('`');
+    const backtickIndex = name.lastIndexOf("`");
     if (backtickIndex === -1) {
       return 0;
     }
@@ -332,7 +332,7 @@ export class MonoClass extends MonoHandle {
     }
 
     // Try mono_class_is_generic first (standard Mono API)
-    if (this.api.hasExport('mono_class_is_generic')) {
+    if (this.api.hasExport("mono_class_is_generic")) {
       try {
         const result = this.native.mono_class_is_generic(this.pointer);
         this.#isGenericTypeDefinition = Number(result) !== 0;
@@ -404,7 +404,7 @@ export class MonoClass extends MonoHandle {
   getGenericArgumentCount(): number {
     // For constructed generic types, try Unity API if available
     if (this.isConstructedGenericType()) {
-      if (this.api.hasExport('mono_unity_class_get_generic_argument_count')) {
+      if (this.api.hasExport("mono_unity_class_get_generic_argument_count")) {
         try {
           const count = this.native.mono_unity_class_get_generic_argument_count(this.pointer);
           return Number(count);
@@ -422,13 +422,13 @@ export class MonoClass extends MonoHandle {
    * Get the generic type arguments for a constructed generic type.
    * For example, for `List<string>`, returns `[System.String]`.
    * Returns empty array for non-generic types.
-   * 
+   *
    * Note: This currently requires Unity-specific API for full implementation.
    * Without it, returns an empty array.
    */
   getGenericArguments(): MonoClass[] {
     // This requires Unity API to enumerate actual type arguments
-    if (!this.api.hasExport('mono_unity_class_get_generic_argument_at')) {
+    if (!this.api.hasExport("mono_unity_class_get_generic_argument_at")) {
       return [];
     }
 
@@ -451,7 +451,7 @@ export class MonoClass extends MonoHandle {
    * Get the generic type definition for a constructed generic type.
    * For example, for `List<string>`, returns the open `List<T>`.
    * Returns null for non-generic types.
-   * 
+   *
    * Note: This currently requires Unity-specific API for full implementation.
    */
   getGenericTypeDefinition(): MonoClass | null {
@@ -460,7 +460,7 @@ export class MonoClass extends MonoHandle {
       return null;
     }
 
-    if (!this.api.hasExport('mono_unity_class_get_generic_type_definition')) {
+    if (!this.api.hasExport("mono_unity_class_get_generic_type_definition")) {
       return null;
     }
 
@@ -478,13 +478,13 @@ export class MonoClass extends MonoHandle {
 
   /**
    * Create a constructed generic type from this generic type definition.
-   * 
+   *
    * Uses `mono_reflection_type_from_name` to construct the generic type by building
    * a type name string in CLR format (e.g., `List`1[[System.String, mscorlib]]`).
-   * 
+   *
    * @param typeArguments Array of MonoClass to use as type arguments
    * @returns Constructed generic type, or null if construction failed
-   * 
+   *
    * @example
    * const listType = Mono.domain.class('System.Collections.Generic.List`1');
    * const stringClass = Mono.domain.class('System.String');
@@ -500,13 +500,12 @@ export class MonoClass extends MonoHandle {
     if (typeArguments.length !== paramCount) {
       throw new Error(
         `Type argument count mismatch: ${this.getFullName()} requires ${paramCount} ` +
-        `arguments but ${typeArguments.length} were provided`
+          `arguments but ${typeArguments.length} were provided`,
       );
     }
 
     // Try mono_reflection_type_from_name approach (most reliable)
-    if (this.api.hasExport('mono_reflection_type_from_name') && 
-        this.api.hasExport('mono_class_from_mono_type')) {
+    if (this.api.hasExport("mono_reflection_type_from_name") && this.api.hasExport("mono_class_from_mono_type")) {
       const result = this.makeGenericTypeViaReflection(typeArguments);
       if (result) {
         return result;
@@ -514,7 +513,7 @@ export class MonoClass extends MonoHandle {
     }
 
     // Fallback: Try Unity-specific API if available
-    if (this.api.hasExport('mono_unity_class_make_generic')) {
+    if (this.api.hasExport("mono_unity_class_make_generic")) {
       const result = this.makeGenericTypeViaUnityApi(typeArguments);
       if (result) {
         return result;
@@ -522,8 +521,10 @@ export class MonoClass extends MonoHandle {
     }
 
     // Cannot create generic type - log warning
-    console.log(`[WARN] makeGenericType: Cannot create ${this.getFullName()}<${typeArguments.map(t => t.getFullName()).join(', ')}>. ` +
-                `Neither mono_reflection_type_from_name nor Unity-specific APIs are available or successful.`);
+    console.log(
+      `[WARN] makeGenericType: Cannot create ${this.getFullName()}<${typeArguments.map(t => t.getFullName()).join(", ")}>. ` +
+        `Neither mono_reflection_type_from_name nor Unity-specific APIs are available or successful.`,
+    );
     return null;
   }
 
@@ -533,19 +534,19 @@ export class MonoClass extends MonoHandle {
    */
   private buildGenericTypeName(typeArguments: MonoClass[]): string {
     const baseName = this.getFullName();
-    
+
     // Build type argument strings with assembly qualification
     const argStrings = typeArguments.map(arg => {
       const argFullName = arg.getFullName();
       const argImage = arg.getImage();
       const argAssemblyName = argImage.getName();
-      
+
       // Format: [TypeName, AssemblyName]
       return `[${argFullName}, ${argAssemblyName}]`;
     });
 
     // Combine: TypeName`N[[Arg1, Asm1],[Arg2, Asm2]]
-    return `${baseName}[${argStrings.join(',')}]`;
+    return `${baseName}[${argStrings.join(",")}]`;
   }
 
   /**
@@ -557,22 +558,22 @@ export class MonoClass extends MonoHandle {
       const typeName = this.buildGenericTypeName(typeArguments);
       const typeNamePtr = allocUtf8(typeName);
       const image = this.getImage();
-      
+
       // mono_reflection_type_from_name(name, image) -> MonoType*
       const monoType = this.native.mono_reflection_type_from_name(typeNamePtr, image.pointer);
-      
+
       if (pointerIsNull(monoType)) {
         // Try with null image (search all assemblies)
         const monoTypeGlobal = this.native.mono_reflection_type_from_name(typeNamePtr, NULL);
         if (pointerIsNull(monoTypeGlobal)) {
           return null;
         }
-        
+
         // Convert MonoType to MonoClass
         const klassPtr = this.native.mono_class_from_mono_type(monoTypeGlobal);
         return pointerIsNull(klassPtr) ? null : new MonoClass(this.api, klassPtr);
       }
-      
+
       // Convert MonoType to MonoClass
       const klassPtr = this.native.mono_class_from_mono_type(monoType);
       return pointerIsNull(klassPtr) ? null : new MonoClass(this.api, klassPtr);
@@ -590,18 +591,14 @@ export class MonoClass extends MonoHandle {
       // Build array of MonoClass pointers for type arguments
       const argPtrs = typeArguments.map(arg => arg.pointer);
       const argArray = Memory.alloc(Process.pointerSize * argPtrs.length);
-      
+
       for (let i = 0; i < argPtrs.length; i++) {
         argArray.add(i * Process.pointerSize).writePointer(argPtrs[i]);
       }
-      
+
       // mono_unity_class_make_generic(MonoClass* klass, MonoClass** types, int count)
-      const resultPtr = this.native.mono_unity_class_make_generic(
-        this.pointer, 
-        argArray, 
-        argPtrs.length
-      );
-      
+      const resultPtr = this.native.mono_unity_class_make_generic(this.pointer, argArray, argPtrs.length);
+
       return pointerIsNull(resultPtr) ? null : new MonoClass(this.api, resultPtr);
     } catch {
       return null;
@@ -611,7 +608,9 @@ export class MonoClass extends MonoHandle {
   // ===== END GENERIC TYPE SUPPORT =====
 
   isSubclassOf(target: MonoClass, checkInterfaces = false): boolean {
-    return (this.native.mono_class_is_subclass_of(this.pointer, target.pointer, checkInterfaces ? 1 : 0) as number) !== 0;
+    return (
+      (this.native.mono_class_is_subclass_of(this.pointer, target.pointer, checkInterfaces ? 1 : 0) as number) !== 0
+    );
   }
 
   isAssignableFrom(other: MonoClass): boolean {
@@ -641,8 +640,8 @@ export class MonoClass extends MonoHandle {
       return this.#methods.slice();
     }
     const methods = enumerateHandles(
-      (iter) => this.native.mono_class_get_methods(this.pointer, iter),
-      (ptr) => new MonoMethod(this.api, ptr),
+      iter => this.native.mono_class_get_methods(this.pointer, iter),
+      ptr => new MonoMethod(this.api, ptr),
     );
     this.#methods = methods;
     return methods.slice();
@@ -667,8 +666,8 @@ export class MonoClass extends MonoHandle {
       return this.#fields.slice();
     }
     const fields = enumerateHandles(
-      (iter) => this.native.mono_class_get_fields(this.pointer, iter),
-      (ptr) => new MonoField(this.api, ptr),
+      iter => this.native.mono_class_get_fields(this.pointer, iter),
+      ptr => new MonoField(this.api, ptr),
     );
     this.#fields = fields;
     return fields.slice();
@@ -693,8 +692,8 @@ export class MonoClass extends MonoHandle {
       return this.#properties.slice();
     }
     const properties = enumerateHandles(
-      (iter) => this.native.mono_class_get_properties(this.pointer, iter),
-      (ptr) => new MonoProperty(this.api, ptr),
+      iter => this.native.mono_class_get_properties(this.pointer, iter),
+      ptr => new MonoProperty(this.api, ptr),
     );
     this.#properties = properties;
     return properties.slice();
@@ -705,8 +704,8 @@ export class MonoClass extends MonoHandle {
       return this.#interfaces.slice();
     }
     const interfaces = enumerateHandles(
-      (iter) => this.native.mono_class_get_interfaces(this.pointer, iter),
-      (ptr) => new MonoClass(this.api, ptr),
+      iter => this.native.mono_class_get_interfaces(this.pointer, iter),
+      ptr => new MonoClass(this.api, ptr),
     );
     this.#interfaces = interfaces;
     return interfaces.slice();
@@ -717,8 +716,8 @@ export class MonoClass extends MonoHandle {
       return this.#nestedTypes.slice();
     }
     const nested = enumerateHandles(
-      (iter) => this.native.mono_class_get_nested_types(this.pointer, iter),
-      (ptr) => new MonoClass(this.api, ptr),
+      iter => this.native.mono_class_get_nested_types(this.pointer, iter),
+      ptr => new MonoClass(this.api, ptr),
     );
     this.#nestedTypes = nested;
     return nested.slice();
@@ -783,15 +782,15 @@ export class MonoClass extends MonoHandle {
     const namespace = this.getNamespace();
 
     const modifiers = [];
-    if (this.isInterface()) modifiers.push('interface');
-    if (this.isAbstract()) modifiers.push('abstract');
-    if (this.isSealed()) modifiers.push('sealed');
-    if (this.isValueType()) modifiers.push('struct');
-    if (this.isEnum()) modifiers.push('enum');
-    if (this.isDelegate()) modifiers.push('delegate');
+    if (this.isInterface()) modifiers.push("interface");
+    if (this.isAbstract()) modifiers.push("abstract");
+    if (this.isSealed()) modifiers.push("sealed");
+    if (this.isValueType()) modifiers.push("struct");
+    if (this.isEnum()) modifiers.push("enum");
+    if (this.isDelegate()) modifiers.push("delegate");
 
-    const modifierStr = modifiers.length > 0 ? `${modifiers.join(' ')} ` : '';
-    const namespaceStr = namespace ? `${namespace}.` : '';
+    const modifierStr = modifiers.length > 0 ? `${modifiers.join(" ")} ` : "";
+    const namespaceStr = namespace ? `${namespace}.` : "";
 
     return `${modifierStr}class ${namespaceStr}${name}`;
   }
@@ -803,7 +802,7 @@ export class MonoClass extends MonoHandle {
     const errors: string[] = [];
 
     if (!obj) {
-      errors.push('Object is null');
+      errors.push("Object is null");
       return { isValid: false, errors };
     }
 
@@ -822,14 +821,13 @@ export class MonoClass extends MonoHandle {
       if (!this.isAssignableFrom(objectClass)) {
         errors.push(`Object of type ${objectClass.getFullName()} is not compatible with ${this.getFullName()}`);
       }
-
     } catch (error) {
       errors.push(`Failed to validate object: ${error}`);
     }
 
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
     };
   }
 }

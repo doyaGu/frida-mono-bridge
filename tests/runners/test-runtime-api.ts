@@ -12,7 +12,7 @@ function runRuntimeApiTests(): TestResult {
   const passed = results.filter(r => r.passed).length;
   const failed = results.filter(r => r.failed).length;
   const skipped = results.filter(r => r.skipped).length;
-  
+
   return {
     name: "Runtime API Tests",
     passed: failed === 0,
@@ -25,5 +25,5 @@ function runRuntimeApiTests(): TestResult {
 // Auto-run test category
 runTestCategory("Runtime API Tests", runRuntimeApiTests, {
   verbose: true,
-  stopOnFirstFailure: false
+  stopOnFirstFailure: false,
 });

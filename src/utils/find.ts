@@ -33,9 +33,9 @@ export interface FindOptions {
  */
 function wildcardToRegex(pattern: string, caseInsensitive = true): RegExp {
   const escaped = pattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")  // Escape regex special chars
-    .replace(/\*/g, ".*")                   // * -> .*
-    .replace(/\?/g, ".");                   // ? -> .
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&") // Escape regex special chars
+    .replace(/\*/g, ".*") // * -> .*
+    .replace(/\?/g, "."); // ? -> .
 
   return new RegExp(`^${escaped}$`, caseInsensitive ? "i" : "");
 }
@@ -46,7 +46,7 @@ function wildcardToRegex(pattern: string, caseInsensitive = true): RegExp {
  */
 function createMatcher(pattern: string, options: FindOptions = {}): RegExp {
   const caseInsensitive = options.caseInsensitive !== false;
-  
+
   if (options.regex) {
     // Use pattern as-is (regex)
     try {
@@ -86,30 +86,30 @@ function matchesPattern(name: string, pattern: string, options: FindOptions = {}
  *
  * // Find classes in Game namespace
  * const gameClasses = classes(api, "Game.*", true);
- * 
+ *
  * // Find classes using regex
  * const controllers = classes(api, ".*Controller$", { regex: true });
- * 
+ *
  * // Find with limit and filter
  * const filtered = classes(api, "*", { limit: 10, filter: c => !c.isInterface() });
  */
 export function classes(
-  api: MonoApi, 
-  pattern: string, 
-  searchNamespaceOrOptions: boolean | FindOptions = true
+  api: MonoApi,
+  pattern: string,
+  searchNamespaceOrOptions: boolean | FindOptions = true,
 ): MonoClass[] {
   const results: MonoClass[] = [];
   const domain = MonoDomain.getRoot(api);
   const seenClasses = new Set<string>();
-  
+
   // Handle backwards compatibility with boolean parameter
   let options: FindOptions;
-  if (typeof searchNamespaceOrOptions === 'boolean') {
+  if (typeof searchNamespaceOrOptions === "boolean") {
     options = { searchNamespace: searchNamespaceOrOptions };
   } else {
     options = searchNamespaceOrOptions;
   }
-  
+
   const searchNamespace = options.searchNamespace !== false;
   const limit = options.limit;
   const customFilter = options.filter;
@@ -120,24 +120,24 @@ export function classes(
     if (limit !== undefined && results.length >= limit) {
       return;
     }
-    
+
     const image = assembly.image;
-    
+
     // Use image.getClasses() to enumerate all classes
     const klassArray = image.getClasses();
-    
+
     for (const klass of klassArray) {
       // Check limit again
       if (limit !== undefined && results.length >= limit) {
         break;
       }
-      
+
       const klassKey = klass.pointer.toString();
       if (seenClasses.has(klassKey)) {
         continue;
       }
       seenClasses.add(klassKey);
-      
+
       const name = klass.getName();
       const namespace = klass.getNamespace();
       const fullName = namespace ? `${namespace}.${name}` : name;
@@ -148,7 +148,7 @@ export function classes(
       } else if (!searchNamespace && matchesPattern(name, pattern, options)) {
         matches = true;
       }
-      
+
       if (matches) {
         // Apply custom filter if provided
         if (customFilter && !customFilter(klass)) {
@@ -176,10 +176,10 @@ export function classes(
  *
  * // Find methods in Player class
  * const playerMethods = methods(api, "Player.*");
- * 
+ *
  * // Find using regex
  * const handlers = methods(api, "On[A-Z].*", { regex: true });
- * 
+ *
  * // Find static methods only
  * const staticMethods = methods(api, "*Get*", { filter: m => m.isStatic() });
  */
@@ -198,14 +198,19 @@ export function methods(api: MonoApi, pattern: string, options: FindOptions = {}
   }
 
   // Find matching classes
-  const matchingClasses = classes(api, classPattern, { ...options, searchNamespace: true, limit: undefined, filter: undefined });
+  const matchingClasses = classes(api, classPattern, {
+    ...options,
+    searchNamespace: true,
+    limit: undefined,
+    filter: undefined,
+  });
 
   for (const klass of matchingClasses) {
     // Check limit
     if (limit !== undefined && results.length >= limit) {
       break;
     }
-    
+
     const klassMethods = klass.getMethods();
 
     for (const method of klassMethods) {
@@ -213,7 +218,7 @@ export function methods(api: MonoApi, pattern: string, options: FindOptions = {}
       if (limit !== undefined && results.length >= limit) {
         break;
       }
-      
+
       const methodName = method.getName();
 
       if (matchesPattern(methodName, methodPattern, options)) {
@@ -243,10 +248,10 @@ export function methods(api: MonoApi, pattern: string, options: FindOptions = {}
  *
  * // Find fields in Player class
  * const playerFields = fields(api, "Player.*");
- * 
+ *
  * // Find using regex
  * const privateFields = fields(api, "_.*", { regex: true });
- * 
+ *
  * // Find static fields only
  * const staticFields = fields(api, "*", { filter: f => f.isStatic() });
  */
@@ -265,14 +270,19 @@ export function fields(api: MonoApi, pattern: string, options: FindOptions = {})
   }
 
   // Find matching classes
-  const matchingClasses = classes(api, classPattern, { ...options, searchNamespace: true, limit: undefined, filter: undefined });
+  const matchingClasses = classes(api, classPattern, {
+    ...options,
+    searchNamespace: true,
+    limit: undefined,
+    filter: undefined,
+  });
 
   for (const klass of matchingClasses) {
     // Check limit
     if (limit !== undefined && results.length >= limit) {
       break;
     }
-    
+
     const klassFields = klass.getFields();
 
     for (const field of klassFields) {
@@ -280,7 +290,7 @@ export function fields(api: MonoApi, pattern: string, options: FindOptions = {})
       if (limit !== undefined && results.length >= limit) {
         break;
       }
-      
+
       const fieldName = field.getName();
 
       if (matchesPattern(fieldName, fieldPattern, options)) {
@@ -310,10 +320,10 @@ export function fields(api: MonoApi, pattern: string, options: FindOptions = {})
  *
  * // Find properties in Player class
  * const playerProps = properties(api, "Player.*");
- * 
+ *
  * // Find using regex
  * const getterProps = properties(api, "get_.*", { regex: true });
- * 
+ *
  * // Find read-only properties
  * const readOnly = properties(api, "*", { filter: p => p.setter === null });
  */
@@ -332,14 +342,19 @@ export function properties(api: MonoApi, pattern: string, options: FindOptions =
   }
 
   // Find matching classes
-  const matchingClasses = classes(api, classPattern, { ...options, searchNamespace: true, limit: undefined, filter: undefined });
+  const matchingClasses = classes(api, classPattern, {
+    ...options,
+    searchNamespace: true,
+    limit: undefined,
+    filter: undefined,
+  });
 
   for (const klass of matchingClasses) {
     // Check limit
     if (limit !== undefined && results.length >= limit) {
       break;
     }
-    
+
     const klassProperties = klass.getProperties();
 
     for (const prop of klassProperties) {
@@ -347,7 +362,7 @@ export function properties(api: MonoApi, pattern: string, options: FindOptions =
       if (limit !== undefined && results.length >= limit) {
         break;
       }
-      
+
       const propName = prop.getName();
 
       if (matchesPattern(propName, propPattern, options)) {
@@ -390,7 +405,7 @@ export function classExact(api: MonoApi, fullName: string): MonoClass | null {
 
     const image = assembly.image;
     const klass = image.tryClassFromName(namespace, className);
-    
+
     if (klass !== null) {
       result = klass;
     }

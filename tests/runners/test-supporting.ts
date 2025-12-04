@@ -9,5 +9,5 @@ import { runTestCategory } from "../test-runner-base";
 // Auto-run test category
 runTestCategory("Supporting Tests", testSupporting, {
   verbose: true,
-  stopOnFirstFailure: false
+  stopOnFirstFailure: false,
 });

@@ -2,7 +2,7 @@ import { MonoApi, MonoArg, MonoManagedExceptionError } from "../runtime/api";
 import { MonoClass } from "./class";
 import { MonoMethod } from "./method";
 import { MonoObject } from "./object";
-import { MonoType, MonoTypeKind, MonoTypeSummary } from "./type";
+import { MonoType, MonoTypeKind } from "./type";
 
 type AnyNativeFunction = NativeFunction<any, any[]>;
 
@@ -116,25 +116,25 @@ const MONO_TO_NATIVE_TYPE_MAP: Partial<Record<MonoTypeKind, NativeFunctionReturn
 
 /**
  * Wrapper for Mono delegate objects with managed and native invocation support.
- * 
+ *
  * Provides both safe managed invocation and high-performance native thunk compilation.
  * Delegates in .NET are type-safe function pointers that can reference both static
  * and instance methods.
- * 
+ *
  * @extends MonoObject
- * 
+ *
  * @example
  * ```typescript
  * // Create a delegate for a static method
  * const delegate = MonoDelegate.create(api, actionClass, null, staticMethod);
- * 
+ *
  * // Invoke using managed mode (safe)
  * delegate.invokeManaged([arg1, arg2]);
- * 
+ *
  * // Compile native thunk for high-performance invocation
  * const thunk = delegate.compileNative<NativeFunction<"void", ["pointer"]>>("void", ["pointer"]);
  * thunk(delegate.pointer);
- * 
+ *
  * // Get delegate information
  * console.log(delegate.describe());
  * console.log(delegate.getSummary());
@@ -156,17 +156,22 @@ export class MonoDelegate extends MonoObject {
    * @param target Target object instance (null for static methods)
    * @param method MonoMethod or method pointer to bind
    * @returns New MonoDelegate instance
-   * 
+   *
    * @example
    * ```typescript
    * // Create delegate for static method
    * const delegate = MonoDelegate.create(api, actionClass, null, staticMethod);
-   * 
+   *
    * // Create delegate for instance method
    * const delegate = MonoDelegate.create(api, actionClass, targetInstance, instanceMethod);
    * ```
    */
-  static create(api: MonoApi, delegateClass: MonoClass, target: MonoObject | NativePointer | null, method: MonoMethod | NativePointer): MonoDelegate {
+  static create(
+    api: MonoApi,
+    delegateClass: MonoClass,
+    target: MonoObject | NativePointer | null,
+    method: MonoMethod | NativePointer,
+  ): MonoDelegate {
     const instance = delegateClass.newObject(false);
     const methodPtr = method instanceof MonoMethod ? method.pointer : (method as NativePointer);
     const targetPtr = target instanceof MonoObject ? target.pointer : (target ?? NULL);
@@ -217,7 +222,7 @@ export class MonoDelegate extends MonoObject {
   /**
    * Get the Invoke method for this delegate type.
    * The Invoke method defines the delegate's signature.
-   * 
+   *
    * @returns MonoMethod representing the Invoke method
    */
   getInvokeMethod(): MonoMethod {
@@ -232,7 +237,7 @@ export class MonoDelegate extends MonoObject {
   /**
    * Get the native thunk pointer for this delegate.
    * The thunk is used for high-performance native invocation.
-   * 
+   *
    * @returns Native pointer to the delegate's thunk
    */
   getNativeThunk(): NativePointer {
@@ -242,7 +247,7 @@ export class MonoDelegate extends MonoObject {
 
   /**
    * Get the return type of this delegate's Invoke method.
-   * 
+   *
    * @returns MonoType representing the return type
    */
   getReturnType(): MonoType {
@@ -251,7 +256,7 @@ export class MonoDelegate extends MonoObject {
 
   /**
    * Get the parameter types of this delegate's Invoke method.
-   * 
+   *
    * @returns Array of MonoType representing parameter types
    */
   getParameterTypes(): MonoType[] {
@@ -260,7 +265,7 @@ export class MonoDelegate extends MonoObject {
 
   /**
    * Get the number of parameters this delegate accepts.
-   * 
+   *
    * @returns Number of parameters
    */
   getParameterCount(): number {
@@ -271,30 +276,30 @@ export class MonoDelegate extends MonoObject {
 
   /**
    * Invoke the delegate using managed invocation (safe mode).
-   * 
+   *
    * This method is safer than native invocation as it handles
    * type conversion and exception handling automatically.
-   * 
+   *
    * @param args Arguments to pass to the delegate
    * @param options Invocation options
    * @returns Result pointer from the delegate invocation
    * @throws MonoManagedExceptionError if the delegate throws and throwOnManagedException is true
-   * 
+   *
    * @example
    * ```typescript
    * // Invoke with no arguments
    * delegate.invokeManaged();
-   * 
+   *
    * // Invoke with arguments
    * delegate.invokeManaged([arg1, arg2]);
-   * 
+   *
    * // Invoke without throwing on managed exceptions
    * const result = delegate.invokeManaged([], { throwOnManagedException: false });
    * ```
    */
   invokeManaged(args: MonoArg[] = [], options: DelegateInvokeOptions = {}): NativePointer {
     const { invoke } = this.ensureInvokeData();
-    const prepared = args.map((arg) => prepareDelegateArgument(this.api, arg));
+    const prepared = args.map(arg => prepareDelegateArgument(this.api, arg));
     try {
       return this.api.runtimeInvoke(invoke, this.pointer, prepared);
     } catch (error) {
@@ -340,9 +345,8 @@ export class MonoDelegate extends MonoObject {
     argTypes: NativeFunctionArgumentType[],
     cacheOrOptions: boolean | CompileNativeOptions = true,
   ): T {
-    const options: CompileNativeOptions = typeof cacheOrOptions === 'boolean' 
-      ? { cache: cacheOrOptions } 
-      : cacheOrOptions;
+    const options: CompileNativeOptions =
+      typeof cacheOrOptions === "boolean" ? { cache: cacheOrOptions } : cacheOrOptions;
     const { cache = true, validateAbi = true } = options;
 
     const cacheKey = `${returnType}->${argTypes.join(",")}`;
@@ -357,22 +361,19 @@ export class MonoDelegate extends MonoObject {
     if (validateAbi) {
       const validation = this.validateAbi(returnType, argTypes);
       if (!validation.valid) {
-        const errorMsg = `ABI validation failed for delegate compilation:\n` +
-          `  Errors: ${validation.errors.join('; ')}\n` +
-          `  Expected signature: ${validation.expectedSignature.returnType}(${validation.expectedSignature.argTypes.join(', ')})`;
+        const errorMsg =
+          `ABI validation failed for delegate compilation:\n` +
+          `  Errors: ${validation.errors.join("; ")}\n` +
+          `  Expected signature: ${validation.expectedSignature.returnType}(${validation.expectedSignature.argTypes.join(", ")})`;
         throw new Error(errorMsg);
       }
       if (validation.warnings.length > 0) {
-        console.warn(`[MonoDelegate] ABI warnings: ${validation.warnings.join('; ')}`);
+        console.warn(`[MonoDelegate] ABI warnings: ${validation.warnings.join("; ")}`);
       }
     }
 
     const { thunk } = this.ensureInvokeData();
-    const nativeFn = new NativeFunction<any, any[]>(
-      thunk,
-      returnType as any,
-      argTypes as any[],
-    ) as T;
+    const nativeFn = new NativeFunction<any, any[]>(thunk, returnType as any, argTypes as any[]) as T;
     if (cache) {
       this.#nativeFunctions.set(cacheKey, nativeFn);
     }
@@ -382,66 +383,63 @@ export class MonoDelegate extends MonoObject {
   /**
    * Validates that the provided native types match the delegate's managed signature.
    * Call this before compileNative to check for ABI mismatches.
-   * 
+   *
    * @param returnType The native return type to validate
    * @param argTypes The native argument types to validate (first should be "pointer" for delegate instance)
    * @returns Validation result with errors and warnings
    */
-  validateAbi(
-    returnType: NativeFunctionReturnType,
-    argTypes: NativeFunctionArgumentType[]
-  ): AbiValidationResult {
+  validateAbi(returnType: NativeFunctionReturnType, argTypes: NativeFunctionArgumentType[]): AbiValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
-    
+
     const invokeMethod = this.getInvokeMethod();
     const managedReturnType = invokeMethod.getReturnType();
     const managedParamTypes = invokeMethod.getParameterTypes();
-    
+
     // Build expected signature
     const expectedReturnType = monoTypeToNativeType(managedReturnType);
     const expectedArgTypes: string[] = ["pointer"]; // First arg is always delegate instance
     for (const paramType of managedParamTypes) {
       expectedArgTypes.push(monoTypeToNativeType(paramType));
     }
-    
+
     // Validate return type
     if (!isCompatibleNativeType(returnType, expectedReturnType)) {
       errors.push(
         `Return type mismatch: provided '${returnType}', expected '${expectedReturnType}' ` +
-        `(managed type: ${managedReturnType.getName()})`
+          `(managed type: ${managedReturnType.getName()})`,
       );
     }
-    
+
     // Validate argument count
     const expectedArgCount = managedParamTypes.length + 1; // +1 for delegate instance
     if (argTypes.length !== expectedArgCount) {
       errors.push(
         `Argument count mismatch: provided ${argTypes.length}, expected ${expectedArgCount} ` +
-        `(1 delegate instance + ${managedParamTypes.length} parameters)`
+          `(1 delegate instance + ${managedParamTypes.length} parameters)`,
       );
     }
-    
+
     // Validate first argument (delegate instance)
     if (argTypes.length > 0 && argTypes[0] !== "pointer") {
       errors.push(`First argument must be 'pointer' (delegate instance), got '${argTypes[0]}'`);
     }
-    
+
     // Validate parameter types
     const minLen = Math.min(argTypes.length - 1, managedParamTypes.length);
     for (let i = 0; i < minLen; i++) {
       const providedType = argTypes[i + 1];
       const managedType = managedParamTypes[i];
       const expectedType = monoTypeToNativeType(managedType);
-      
+
       if (!isCompatibleNativeType(providedType, expectedType)) {
         errors.push(
           `Parameter ${i} type mismatch: provided '${providedType}', expected '${expectedType}' ` +
-          `(managed type: ${managedType.getName()})`
+            `(managed type: ${managedType.getName()})`,
         );
       }
     }
-    
+
     // Check for value types passed by value (potential issue)
     for (let i = 0; i < managedParamTypes.length; i++) {
       const managedType = managedParamTypes[i];
@@ -451,12 +449,12 @@ export class MonoDelegate extends MonoObject {
         if (kind === MonoTypeKind.ValueType) {
           warnings.push(
             `Parameter ${i} is a struct type (${managedType.getName()}). ` +
-            `Ensure calling convention handles struct passing correctly.`
+              `Ensure calling convention handles struct passing correctly.`,
           );
         }
       }
     }
-    
+
     return {
       valid: errors.length === 0,
       errors,
@@ -476,7 +474,7 @@ export class MonoDelegate extends MonoObject {
     const invokeMethod = this.getInvokeMethod();
     const managedReturnType = invokeMethod.getReturnType();
     const managedParamTypes = invokeMethod.getParameterTypes();
-    
+
     return {
       returnType: monoTypeToNativeType(managedReturnType),
       argTypes: ["pointer", ...managedParamTypes.map(monoTypeToNativeType)],
@@ -497,14 +495,14 @@ export class MonoDelegate extends MonoObject {
    * Get the invocation list of this delegate (for multicast delegates).
    * For a non-multicast delegate, returns an array containing only this delegate.
    * For a multicast delegate, returns all delegates in the invocation list.
-   * 
+   *
    * @returns Array of MonoDelegate instances in the invocation list
    */
   getInvocationList(): MonoDelegate[] {
     // Try to call GetInvocationList() managed method
     const klass = this.getClass();
     const getInvocationListMethod = klass.tryGetMethod("GetInvocationList", 0);
-    
+
     if (!getInvocationListMethod) {
       // Method not found - return self as single-element array
       return [this];
@@ -513,7 +511,7 @@ export class MonoDelegate extends MonoObject {
     try {
       // Invoke GetInvocationList() which returns Delegate[]
       const resultPtr = this.api.runtimeInvoke(getInvocationListMethod.pointer, this.pointer, []);
-      
+
       if (resultPtr.isNull()) {
         return [this];
       }
@@ -521,7 +519,7 @@ export class MonoDelegate extends MonoObject {
       // Parse the returned array
       const delegates: MonoDelegate[] = [];
       const arrayLength = this.native.mono_array_length(resultPtr) as number;
-      
+
       for (let i = 0; i < arrayLength; i++) {
         const elementPtr = this.native.mono_array_addr_with_size(resultPtr, Process.pointerSize, i);
         const delegatePtr = elementPtr.readPointer();
@@ -529,7 +527,7 @@ export class MonoDelegate extends MonoObject {
           delegates.push(new MonoDelegate(this.api, delegatePtr));
         }
       }
-      
+
       return delegates.length > 0 ? delegates : [this];
     } catch (error) {
       // If invocation fails, return self
@@ -540,7 +538,7 @@ export class MonoDelegate extends MonoObject {
 
   /**
    * Check if this delegate is a multicast delegate (has multiple invocation targets).
-   * 
+   *
    * @returns true if this is a multicast delegate with multiple targets
    */
   isMulticast(): boolean {
@@ -549,7 +547,7 @@ export class MonoDelegate extends MonoObject {
 
   /**
    * Get the number of delegates in the invocation list.
-   * 
+   *
    * @returns Number of delegates (1 for simple delegates, >1 for multicast)
    */
   getInvocationCount(): number {
@@ -560,7 +558,7 @@ export class MonoDelegate extends MonoObject {
 
   /**
    * Get information about the delegate's target and method.
-   * 
+   *
    * @returns DelegateTargetInfo with target and method details
    */
   getTargetInfo(): DelegateTargetInfo {
@@ -591,7 +589,7 @@ export class MonoDelegate extends MonoObject {
 
   /**
    * Check if this delegate has a target instance (instance method delegate).
-   * 
+   *
    * @returns true if delegate targets an instance method
    */
   hasTarget(): boolean {
@@ -602,9 +600,9 @@ export class MonoDelegate extends MonoObject {
 
   /**
    * Get comprehensive summary information about this delegate.
-   * 
+   *
    * @returns MonoDelegateSummary with detailed delegate information
-   * 
+   *
    * @example
    * ```typescript
    * const summary = delegate.getSummary();
@@ -636,9 +634,9 @@ export class MonoDelegate extends MonoObject {
 
   /**
    * Get a human-readable description of this delegate.
-   * 
+   *
    * @returns Formatted delegate signature string
-   * 
+   *
    * @example
    * ```typescript
    * // Returns: "Action<String, Int32>(String, Int32) -> Void"
@@ -650,24 +648,24 @@ export class MonoDelegate extends MonoObject {
     const invokeMethod = this.getInvokeMethod();
     const returnType = invokeMethod.getReturnType();
     const parameterTypes = invokeMethod.getParameterTypes();
-    
+
     const typeName = klass.getName();
-    const params = parameterTypes.map(t => t.getName()).join(', ');
+    const params = parameterTypes.map(t => t.getName()).join(", ");
     const returnTypeName = returnType.getName();
-    
+
     let description = `${typeName}(${params}) -> ${returnTypeName}`;
-    
+
     const invocationCount = this.getInvocationCount();
     if (invocationCount > 1) {
       description += ` [multicast: ${invocationCount}]`;
     }
-    
+
     return description;
   }
 
   /**
    * Get string representation of this delegate.
-   * 
+   *
    * @returns String in format "DelegateType(params) -> ReturnType"
    */
   override toString(): string {
@@ -713,13 +711,13 @@ function prepareDelegateArgument(api: MonoApi, arg: MonoArg): NativePointer {
  */
 function monoTypeToNativeType(monoType: MonoType): string {
   const kind = monoType.getKind();
-  
+
   // Check the mapping first
   const mapped = MONO_TO_NATIVE_TYPE_MAP[kind];
   if (mapped !== undefined) {
     return mapped as string;
   }
-  
+
   // For unknown types, default to pointer (safest assumption for references)
   return "pointer";
 }
@@ -729,39 +727,38 @@ function monoTypeToNativeType(monoType: MonoType): string {
  */
 function isCompatibleNativeType(
   provided: NativeFunctionReturnType | NativeFunctionArgumentType,
-  expected: string
+  expected: string,
 ): boolean {
   // Exact match
   if (provided === expected) {
     return true;
   }
-  
+
   // Compatible aliases
   const aliases: Record<string, string[]> = {
-    "int": ["int32"],
-    "int32": ["int"],
-    "uint": ["uint32"],
-    "uint32": ["uint"],
-    "long": ["int64"],
-    "int64": ["long"],
-    "ulong": ["uint64"],
-    "uint64": ["ulong"],
-    "pointer": ["void*"],
+    int: ["int32"],
+    int32: ["int"],
+    uint: ["uint32"],
+    uint32: ["uint"],
+    long: ["int64"],
+    int64: ["long"],
+    ulong: ["uint64"],
+    uint64: ["ulong"],
+    pointer: ["void*"],
     "void*": ["pointer"],
   };
-  
+
   const providedAliases = aliases[provided as string] || [];
   if (providedAliases.includes(expected)) {
     return true;
   }
-  
+
   // Pointer types are compatible with each other
-  const isPointerType = (t: string) => 
-    ["pointer", "void*"].includes(t) || t.endsWith("*");
-  
+  const isPointerType = (t: string) => ["pointer", "void*"].includes(t) || t.endsWith("*");
+
   if (isPointerType(provided as string) && isPointerType(expected)) {
     return true;
   }
-  
+
   return false;
 }

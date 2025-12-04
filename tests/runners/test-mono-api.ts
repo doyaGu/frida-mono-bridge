@@ -21,7 +21,7 @@ if (shouldAutoRun) {
       runTestCategory("Mono API Tests", testMonoApi, {
         verbose: true,
         stopOnFirstFailure: false,
-        ...autoRunConfig
+        ...autoRunConfig,
       });
     } catch (error) {
       console.error("[Mono API Tests] Unhandled error during test run:", error);

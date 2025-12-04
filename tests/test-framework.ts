@@ -31,7 +31,7 @@ export enum TestCategory {
   MONO_DEPENDENT = "mono-dependent",
   PERFORMANCE = "performance",
   INTEGRATION = "integration",
-  ERROR_HANDLING = "error-handling"
+  ERROR_HANDLING = "error-handling",
 }
 
 export interface TestOptions {
@@ -44,7 +44,10 @@ export interface TestOptions {
 export class TestSuite {
   public results: TestResult[] = [];
 
-  constructor(public readonly name: string, public readonly category?: TestCategory) {}
+  constructor(
+    public readonly name: string,
+    public readonly category?: TestCategory,
+  ) {}
 
   addResult(result: TestResult): void {
     this.results.push(result);
@@ -94,7 +97,7 @@ export function createTest(name: string, testFn: () => void, options?: TestOptio
     if (error instanceof Error) {
       console.error(`    Error: ${error.message}`);
       if (error.stack) {
-        console.error(`    Stack: ${error.stack.split('\n').slice(0, 3).join('\n    ')}`);
+        console.error(`    Stack: ${error.stack.split("\n").slice(0, 3).join("\n    ")}`);
       }
     }
     return {
@@ -138,7 +141,6 @@ export function createDomainTest(name: string, testFn: (domain: MonoDomain) => v
 export function fail(message: string): never {
   throw new Error(`Assertion failed: ${message}`);
 }
-
 
 export function assert(condition: boolean, message: string): void {
   if (!condition) {
@@ -243,13 +245,7 @@ export interface ApiAvailabilityTestOptions {
 }
 
 export function createApiAvailabilityTest(options: ApiAvailabilityTestOptions): TestResult {
-  const {
-    context,
-    testName,
-    message,
-    requiredExports = [],
-    validate,
-  } = options;
+  const { context, testName, message, requiredExports = [], validate } = options;
 
   const resolvedTestName = testName ?? "Mono API should be available";
   const resolvedMessage = message ?? `Mono.api should be accessible for ${context}`;
@@ -307,7 +303,7 @@ export function createStandaloneTest(name: string, testFn: () => void, options?:
   const result = createTest(name, testFn, {
     ...options,
     category: TestCategory.STANDALONE,
-    requiresMono: false
+    requiresMono: false,
   });
   return result;
 }
@@ -316,7 +312,7 @@ export function createMonoDependentTest(name: string, testFn: () => void, option
   return createTest(name, testFn, {
     ...options,
     category: TestCategory.MONO_DEPENDENT,
-    requiresMono: true
+    requiresMono: true,
   });
 }
 
@@ -324,7 +320,7 @@ export function createIntegrationTest(name: string, testFn: () => void, options?
   return createTest(name, testFn, {
     ...options,
     category: TestCategory.INTEGRATION,
-    requiresMono: true
+    requiresMono: true,
   });
 }
 
@@ -332,7 +328,7 @@ export function createPerformanceTest(name: string, testFn: () => void, options?
   return createTest(name, testFn, {
     ...options,
     category: TestCategory.PERFORMANCE,
-    requiresMono: true
+    requiresMono: true,
   });
 }
 
@@ -340,7 +336,7 @@ export function createErrorHandlingTest(name: string, testFn: () => void, option
   return createTest(name, testFn, {
     ...options,
     category: TestCategory.ERROR_HANDLING,
-    requiresMono: true
+    requiresMono: true,
   });
 }
 
@@ -349,33 +345,48 @@ export function createMonoTestEnhanced<T>(name: string, testFn: () => T, options
   return createMonoDependentTest(name, () => Mono.perform(testFn), options);
 }
 
-export function createDomainTestEnhanced(name: string, testFn: (domain: MonoDomain) => void, options?: TestOptions): TestResult {
-  return createMonoDependentTest(name, () => {
-    const domain = Mono.domain;
-    testFn(domain);
-  }, options);
+export function createDomainTestEnhanced(
+  name: string,
+  testFn: (domain: MonoDomain) => void,
+  options?: TestOptions,
+): TestResult {
+  return createMonoDependentTest(
+    name,
+    () => {
+      const domain = Mono.domain;
+      testFn(domain);
+    },
+    options,
+  );
 }
 
 export function createSmokeTest(category: TestCategory, context: string): TestResult {
-  return createTest(`Smoke test for ${context}`, () => {
-    // Basic functionality check
-    console.log(`[SUCCESS] ${context} smoke test passed`);
-  }, {
-    category,
-    requiresMono: category === TestCategory.MONO_DEPENDENT
-  });
+  return createTest(
+    `Smoke test for ${context}`,
+    () => {
+      // Basic functionality check
+      console.log(`[SUCCESS] ${context} smoke test passed`);
+    },
+    {
+      category,
+      requiresMono: category === TestCategory.MONO_DEPENDENT,
+    },
+  );
 }
 
 // Additional specialized test creation functions
 export function createMonoThread(name: string, testFn: () => void, options?: TestOptions): TestResult {
   return createMonoDependentTest(name, testFn, {
     ...options,
-    category: TestCategory.MONO_DEPENDENT
+    category: TestCategory.MONO_DEPENDENT,
   });
 }
 
 // Alias for createDomainTestEnhanced to provide consistent naming
-export function createDomainTestEnhancedAlias(name: string, testFn: (domain: any) => void, options?: TestOptions): TestResult {
+export function createDomainTestEnhancedAlias(
+  name: string,
+  testFn: (domain: any) => void,
+  options?: TestOptions,
+): TestResult {
   return createDomainTest(name, testFn);
 }
-

@@ -10,7 +10,7 @@ export class MonoError extends Error {
   constructor(
     message: string,
     public readonly context?: string,
-    public readonly cause?: Error
+    public readonly cause?: Error,
   ) {
     super(message);
     this.name = "MonoError";
@@ -46,12 +46,14 @@ export class MonoError extends Error {
       name: this.name,
       message: this.message,
       context: this.context,
-      cause: this.cause ? {
-        name: this.cause.name,
-        message: this.cause.message,
-        stack: this.cause.stack
-      } : null,
-      stack: this.stack
+      cause: this.cause
+        ? {
+            name: this.cause.name,
+            message: this.cause.message,
+            stack: this.cause.stack,
+          }
+        : null,
+      stack: this.stack,
     };
   }
 }
@@ -64,7 +66,7 @@ export class MonoValidationError extends MonoError {
     message: string,
     public readonly parameter?: string,
     public readonly value?: unknown,
-    cause?: Error
+    cause?: Error,
   ) {
     const context = parameter ? `Validation: ${parameter}` : "Validation";
     super(message, context, cause);
@@ -88,7 +90,7 @@ export function validationError(
   parameter: string,
   reason: string,
   value?: unknown,
-  cause?: Error
+  cause?: Error,
 ): MonoValidationError {
   const message = `Parameter '${parameter}' ${reason}`;
   return new MonoValidationError(message, parameter, value, cause);
@@ -107,10 +109,7 @@ export class MonoMemoryError extends MonoError {
 /**
  * Assert helper that throws a MonoError when condition fails
  */
-export function monoInvariant(
-  condition: unknown,
-  errorFactory: () => MonoError
-): asserts condition {
+export function monoInvariant(condition: unknown, errorFactory: () => MonoError): asserts condition {
   if (!condition) {
     throw errorFactory();
   }
@@ -144,11 +143,9 @@ export class MonoMethodError extends MonoError {
     message: string,
     public readonly methodName?: string,
     public readonly className?: string,
-    cause?: Error
+    cause?: Error,
   ) {
-    const context = className && methodName
-      ? `Method Invocation: ${className}.${methodName}`
-      : "Method Invocation";
+    const context = className && methodName ? `Method Invocation: ${className}.${methodName}` : "Method Invocation";
 
     super(message, context, cause);
     this.name = "MonoMethodError";
@@ -162,11 +159,9 @@ export class MonoAssemblyError extends MonoError {
   constructor(
     message: string,
     public readonly assemblyName?: string,
-    cause?: Error
+    cause?: Error,
   ) {
-    const context = assemblyName
-      ? `Assembly Loading: ${assemblyName}`
-      : "Assembly Loading";
+    const context = assemblyName ? `Assembly Loading: ${assemblyName}` : "Assembly Loading";
 
     super(message, context, cause);
     this.name = "MonoAssemblyError";
@@ -181,11 +176,10 @@ export class MonoTypeError extends MonoError {
     message: string,
     public readonly expectedType?: string,
     public readonly actualType?: string,
-    cause?: Error
+    cause?: Error,
   ) {
-    const context = expectedType && actualType
-      ? `Type Conversion: expected ${expectedType}, got ${actualType}`
-      : "Type Conversion";
+    const context =
+      expectedType && actualType ? `Type Conversion: expected ${expectedType}, got ${actualType}` : "Type Conversion";
 
     super(message, context, cause);
     this.name = "MonoTypeError";
@@ -195,10 +189,7 @@ export class MonoTypeError extends MonoError {
 /**
  * Handle Mono errors and convert to appropriate error type
  */
-export function handleMonoError(
-  error: unknown,
-  context?: string
-): MonoError {
+export function handleMonoError(error: unknown, context?: string): MonoError {
   if (error instanceof MonoError) {
     return error;
   }
@@ -207,23 +198,23 @@ export function handleMonoError(
     // Try to categorize common error patterns
     const message = error.message.toLowerCase();
 
-    if (message.includes('thread') || message.includes('attach')) {
+    if (message.includes("thread") || message.includes("attach")) {
       return new MonoThreadError(error.message, error);
     }
 
-    if (message.includes('assembly') || message.includes('module')) {
+    if (message.includes("assembly") || message.includes("module")) {
       return new MonoAssemblyError(error.message, undefined, error);
     }
 
-    if (message.includes('method') || message.includes('invoke')) {
+    if (message.includes("method") || message.includes("invoke")) {
       return new MonoMethodError(error.message, undefined, undefined, error);
     }
 
-    if (message.includes('type') || message.includes('cast')) {
+    if (message.includes("type") || message.includes("cast")) {
       return new MonoTypeError(error.message, undefined, undefined, error);
     }
 
-    if (message.includes('memory') || message.includes('gc')) {
+    if (message.includes("memory") || message.includes("gc")) {
       return new MonoMemoryError(error.message, error);
     }
 
@@ -238,10 +229,7 @@ export function handleMonoError(
 /**
  * Wrap a function with standardized error handling
  */
-export function withErrorHandling<T extends any[], R>(
-  fn: (...args: T) => R,
-  context?: string
-): (...args: T) => R {
+export function withErrorHandling<T extends any[], R>(fn: (...args: T) => R, context?: string): (...args: T) => R {
   return (...args: T): R => {
     try {
       return fn(...args);
@@ -257,7 +245,7 @@ export function withErrorHandling<T extends any[], R>(
 export async function withAsyncErrorHandling<T extends any[], R>(
   fn: (...params: T) => Promise<R>,
   params: T,
-  context?: string
+  context?: string,
 ): Promise<R> {
   try {
     return await fn(...params);
@@ -269,15 +257,17 @@ export async function withAsyncErrorHandling<T extends any[], R>(
 /**
  * Result type for operations that might fail
  */
-export type MonoResult<T> = {
-  success: true;
-  data: T;
-  error?: never;
-} | {
-  success: false;
-  data?: never;
-  error: MonoError;
-};
+export type MonoResult<T> =
+  | {
+      success: true;
+      data: T;
+      error?: never;
+    }
+  | {
+      success: false;
+      data?: never;
+      error: MonoError;
+    };
 
 /**
  * Create successful result
@@ -296,10 +286,7 @@ export function monoErrorResult<T>(error: MonoError): MonoResult<T> {
 /**
  * Wrap function to return Result type instead of throwing
  */
-export function asResult<T extends any[], R>(
-  fn: (...args: T) => R,
-  context?: string
-): (...args: T) => MonoResult<R> {
+export function asResult<T extends any[], R>(fn: (...args: T) => R, context?: string): (...args: T) => MonoResult<R> {
   return (...args: T): MonoResult<R> => {
     try {
       const result = fn(...args);
@@ -354,9 +341,7 @@ export class ValidationBuilder {
     try {
       fn();
     } catch (error) {
-      const message = errorPrefix
-        ? `${errorPrefix}: ${error}`
-        : String(error);
+      const message = errorPrefix ? `${errorPrefix}: ${error}` : String(error);
       this.errors.push(message);
     }
     return this;
@@ -385,7 +370,7 @@ export class ValidationBuilder {
     return {
       isValid: this.errors.length === 0,
       errors: [...this.errors],
-      warnings: [...this.warnings]
+      warnings: [...this.warnings],
     };
   }
 
@@ -395,7 +380,7 @@ export class ValidationBuilder {
   buildOrThrow(context?: string): void {
     const result = this.build();
     if (!result.isValid) {
-      const message = result.errors.join('; ');
+      const message = result.errors.join("; ");
       throw new MonoValidationError(message, context);
     }
   }

@@ -12,16 +12,13 @@ const logger = new Logger({ tag: "RetryOperation" });
 export class RetryOperation {
   constructor(
     private maxRetries: number = 3,
-    private delay: number = 100
+    private delay: number = 100,
   ) {}
 
   /**
    * Execute operation with retry logic
    */
-  async execute<T>(
-    operation: () => T,
-    context: string
-  ): Promise<T> {
+  async execute<T>(operation: () => T, context: string): Promise<T> {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {

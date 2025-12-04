@@ -166,7 +166,7 @@ export class MonoField<T = any> extends MonoHandle {
    * @returns Array of CustomAttribute objects with attribute type information
    */
   getCustomAttributes(): CustomAttribute[] {
-    if (!this.api.hasExport('mono_custom_attrs_from_field')) {
+    if (!this.api.hasExport("mono_custom_attrs_from_field")) {
       return [];
     }
 
@@ -176,8 +176,8 @@ export class MonoField<T = any> extends MonoHandle {
       return parseCustomAttributes(
         this.api,
         customAttrInfoPtr,
-        (ptr) => new MonoClass(this.api, ptr).getName(),
-        (ptr) => new MonoClass(this.api, ptr).getFullName()
+        ptr => new MonoClass(this.api, ptr).getName(),
+        ptr => new MonoClass(this.api, ptr).getFullName(),
       );
     } catch {
       return [];
@@ -251,7 +251,11 @@ export class MonoField<T = any> extends MonoHandle {
     this.setValue(null, value, options);
   }
 
-  setValueObject(instance: MonoObject | NativePointer | null, value: MonoObject | NativePointer | null, options: FieldAccessOptions = {}): void {
+  setValueObject(
+    instance: MonoObject | NativePointer | null,
+    value: MonoObject | NativePointer | null,
+    options: FieldAccessOptions = {},
+  ): void {
     if (value instanceof MonoObject) {
       if (this.getType().isValueType()) {
         this.setValue(instance, value.unbox(), options);
@@ -286,9 +290,9 @@ export class MonoField<T = any> extends MonoHandle {
   getFlagNames(): string[] {
     try {
       const flagNames: string[] = [];
-      if (this.isStatic()) flagNames.push('static');
-      if (this.isInitOnly()) flagNames.push('init-only');
-      if (this.isLiteral()) flagNames.push('literal');
+      if (this.isStatic()) flagNames.push("static");
+      if (this.isInitOnly()) flagNames.push("init-only");
+      if (this.isLiteral()) flagNames.push("literal");
       return flagNames;
     } catch {
       return [];
@@ -310,7 +314,7 @@ export class MonoField<T = any> extends MonoHandle {
       isInitOnly: this.isInitOnly(),
       hasDefault: this.hasDefault(),
       type: type.getSummary(),
-      token: this.getToken()
+      token: this.getToken(),
     };
   }
 
@@ -318,11 +322,11 @@ export class MonoField<T = any> extends MonoHandle {
     const type = this.getType();
     const modifiers = [];
 
-    if (this.isStatic()) modifiers.push('static');
-    if (this.isInitOnly()) modifiers.push('readonly');
-    if (this.isLiteral()) modifiers.push('const');
+    if (this.isStatic()) modifiers.push("static");
+    if (this.isInitOnly()) modifiers.push("readonly");
+    if (this.isLiteral()) modifiers.push("const");
 
-    const modifierStr = modifiers.length > 0 ? modifiers.join(' ') + ' ' : '';
+    const modifierStr = modifiers.length > 0 ? modifiers.join(" ") + " " : "";
     const accessStr = this.getAccessibility();
 
     return `${modifierStr}${accessStr} ${type.getFullName()} ${this.getName()}`;
@@ -339,7 +343,7 @@ export class MonoField<T = any> extends MonoHandle {
       isConstant: this.isLiteral(),
       offset: this.getOffset(),
       token: this.getToken(),
-      declaringType: this.getParent().getFullName()
+      declaringType: this.getParent().getFullName(),
     };
   }
 
@@ -348,7 +352,10 @@ export class MonoField<T = any> extends MonoHandle {
   }
 
   // Private helper methods
-  private readRawValue(instance: MonoObject | NativePointer | null | undefined, options: FieldAccessOptions): RawFieldValue {
+  private readRawValue(
+    instance: MonoObject | NativePointer | null | undefined,
+    options: FieldAccessOptions,
+  ): RawFieldValue {
     const type = this.getType();
     const { size } = type.getValueSize();
     const storageSize = Math.max(size, Process.pointerSize);
@@ -377,7 +384,9 @@ export class MonoField<T = any> extends MonoHandle {
     klass.ensureInitialized();
     const vtable = this.native.mono_class_vtable(domainPtr, klass.pointer);
     if (pointerIsNull(vtable)) {
-      throw new Error(`mono_class_vtable returned NULL for ${klass.getFullName()} when accessing static field ${this.getName()}`);
+      throw new Error(
+        `mono_class_vtable returned NULL for ${klass.getFullName()} when accessing static field ${this.getName()}`,
+      );
     }
     return vtable;
   }
@@ -476,7 +485,7 @@ export class MonoField<T = any> extends MonoHandle {
         return result || "";
       }
     }
-    
+
     // Fallback: Try mono_string_to_utf16
     if (this.api.hasExport("mono_string_to_utf16")) {
       const utf16Ptr = this.native.mono_string_to_utf16(pointer);
@@ -484,14 +493,14 @@ export class MonoField<T = any> extends MonoHandle {
         return readUtf16String(utf16Ptr);
       }
     }
-    
+
     // Last resort: Try mono_string_chars + mono_string_length
     if (this.api.hasExport("mono_string_chars") && this.api.hasExport("mono_string_length")) {
       const chars = this.native.mono_string_chars(pointer);
       const length = this.native.mono_string_length(pointer) as number;
       return readUtf16String(chars, length);
     }
-    
+
     return "";
   }
 }

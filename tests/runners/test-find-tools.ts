@@ -1,10 +1,10 @@
 /**
  * Find Tools Test Runner
- * 
+ *
  * Standalone runner for Find utility tests
  */
 
-import { createFindToolTests } from '../test-find-tools';
+import { createFindToolTests } from "../test-find-tools";
 
 const results = createFindToolTests();
 

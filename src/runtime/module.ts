@@ -23,11 +23,7 @@ const COMMON_MODULE_NAMES = [
   "libmono-2.0.dylib",
 ];
 
-const PROBE_EXPORT_NAMES = [
-  "mono_runtime_invoke",
-  "mono_thread_attach",
-  "mono_get_root_domain",
-];
+const PROBE_EXPORT_NAMES = ["mono_runtime_invoke", "mono_thread_attach", "mono_get_root_domain"];
 
 export class MonoModuleDiscoveryError extends Error {
   constructor(message: string) {
@@ -41,7 +37,9 @@ export function findMonoModule(): MonoModuleInfo {
   const modules = Process.enumerateModules();
 
   for (const candidate of COMMON_MODULE_NAMES) {
-    const moduleInfo = modules.find((m) => m.name === candidate || m.path.endsWith(`/${candidate}`) || m.path.endsWith(`\\${candidate}`));
+    const moduleInfo = modules.find(
+      m => m.name === candidate || m.path.endsWith(`/${candidate}`) || m.path.endsWith(`\\${candidate}`),
+    );
     if (moduleInfo) {
       return normalizeModuleInfo(moduleInfo);
     }
