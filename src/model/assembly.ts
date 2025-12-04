@@ -1,6 +1,7 @@
 import { MonoApi } from "../runtime/api";
 import { readUtf8String } from "../utils/string";
-import { MonoHandle } from "./base";
+import { pointerIsNull } from "../utils/memory";
+import { MonoHandle, CustomAttribute, parseCustomAttributes } from "./base";
 import { MonoImage } from "./image";
 import { MonoClass } from "./class";
 
@@ -355,12 +356,29 @@ export class MonoAssembly extends MonoHandle {
   }
 
   /**
-   * Get all custom attributes on this assembly
+   * Get all custom attributes on this assembly.
+   * 
+   * Uses `mono_custom_attrs_from_assembly` to get the custom attributes info,
+   * then constructs the attributes using `mono_custom_attrs_construct`.
+   * 
+   * @returns Array of CustomAttribute objects with attribute information
    */
   getCustomAttributes(): CustomAttribute[] {
-    // This would require reflection infrastructure
-    // For now, return empty array
-    return [];
+    if (!this.api.hasExport('mono_custom_attrs_from_assembly')) {
+      return [];
+    }
+
+    try {
+      const customAttrInfoPtr = this.native.mono_custom_attrs_from_assembly(this.pointer);
+      return parseCustomAttributes(
+        this.api,
+        customAttrInfoPtr,
+        (ptr) => new MonoClass(this.api, ptr).getName(),
+        (ptr) => new MonoClass(this.api, ptr).getFullName()
+      );
+    } catch {
+      return [];
+    }
   }
 
   
@@ -759,13 +777,6 @@ export interface AssemblyPerformanceStats {
   fieldAccessTime: number;
   totalMemoryUsage: number;
   cacheHitRate: number;
-}
-
-export interface CustomAttribute {
-  name: string;
-  type: string;
-  constructorArguments: any[];
-  properties: Record<string, any>;
 }
 
 export interface AssemblyInfo {

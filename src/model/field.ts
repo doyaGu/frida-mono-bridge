@@ -1,4 +1,4 @@
-import { MonoHandle, MemberAccessibility } from "./base";
+import { MonoHandle, MemberAccessibility, CustomAttribute, parseCustomAttributes } from "./base";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String, readUtf16String } from "../utils/string";
 import { MonoClass } from "./class";
@@ -158,6 +158,30 @@ export class MonoField<T = any> extends MonoHandle {
 
   hasDefault(): boolean {
     return hasFlag(this.getFlags(), FieldAttribute.HasDefault);
+  }
+
+  /**
+   * Get custom attributes applied to this field.
+   * Uses mono_custom_attrs_from_field API to retrieve attribute metadata.
+   * @returns Array of CustomAttribute objects with attribute type information
+   */
+  getCustomAttributes(): CustomAttribute[] {
+    if (!this.api.hasExport('mono_custom_attrs_from_field')) {
+      return [];
+    }
+
+    try {
+      const parentClass = this.getParent();
+      const customAttrInfoPtr = this.native.mono_custom_attrs_from_field(parentClass.pointer, this.pointer);
+      return parseCustomAttributes(
+        this.api,
+        customAttrInfoPtr,
+        (ptr) => new MonoClass(this.api, ptr).getName(),
+        (ptr) => new MonoClass(this.api, ptr).getFullName()
+      );
+    } catch {
+      return [];
+    }
   }
 
   getValue(instance?: MonoObject | NativePointer | null, options: FieldAccessOptions = {}): NativePointer {

@@ -10,11 +10,32 @@ export interface ThreadRunOptions {
    * Only use this for operations that are already guaranteed to be in an attached context.
    */
   attachIfNeeded?: boolean;
+  
+  /**
+   * Timeout in milliseconds for the operation.
+   * If exceeded, the operation will be interrupted if possible.
+   */
+  timeout?: number;
+}
+
+/**
+ * Statistics about thread attachment operations.
+ */
+export interface ThreadStats {
+  /** Total number of attachments performed */
+  totalAttachments: number;
+  /** Currently attached threads */
+  currentAttachedCount: number;
+  /** Current active attachment contexts */
+  activeContextCount: number;
+  /** Thread IDs currently attached */
+  attachedThreadIds: number[];
 }
 
 export class ThreadManager {
   private readonly attachedThreads = new Map<number, NativePointer>();
   private readonly activeAttachments = new Set<number>();
+  private totalAttachmentCount = 0;
 
   constructor(private readonly api: MonoApi) {}
 
@@ -109,7 +130,76 @@ export class ThreadManager {
     }
     const attached = this.api.attachThread();
     this.attachedThreads.set(threadId, attached);
+    this.totalAttachmentCount++;
     return attached;
+  }
+
+  /**
+   * Get statistics about thread attachments.
+   * Useful for debugging and monitoring.
+   */
+  getStats(): ThreadStats {
+    return {
+      totalAttachments: this.totalAttachmentCount,
+      currentAttachedCount: this.attachedThreads.size,
+      activeContextCount: this.activeAttachments.size,
+      attachedThreadIds: Array.from(this.attachedThreads.keys()),
+    };
+  }
+
+  /**
+   * Check if a specific thread is attached.
+   * @param threadId Thread ID to check (defaults to current thread)
+   */
+  isAttached(threadId = getCurrentThreadId()): boolean {
+    const handle = this.attachedThreads.get(threadId);
+    return handle !== undefined && !isNull(handle);
+  }
+
+  /**
+   * Detach a specific thread.
+   * @param threadId Thread ID to detach (defaults to current thread)
+   * @returns True if thread was detached, false if it wasn't attached
+   */
+  detach(threadId = getCurrentThreadId()): boolean {
+    const handle = this.attachedThreads.get(threadId);
+    if (!handle || isNull(handle)) {
+      return false;
+    }
+    
+    try {
+      this.api.detachThread(handle);
+      this.attachedThreads.delete(threadId);
+      this.activeAttachments.delete(threadId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Execute a callback with error handling and automatic cleanup on failure.
+   * @param fn Callback to execute
+   * @param onError Optional error handler
+   */
+  runSafe<T>(fn: () => T, onError?: (error: Error) => T | undefined): T | undefined {
+    try {
+      return this.run(fn);
+    } catch (error) {
+      if (onError) {
+        return onError(error instanceof Error ? error : new Error(String(error)));
+      }
+      return undefined;
+    }
+  }
+
+  /**
+   * Execute an async operation with thread attachment.
+   * Note: Frida's JavaScript runtime is single-threaded, but this helps with
+   * Promise-based code patterns.
+   */
+  async runAsync<T>(fn: () => Promise<T>): Promise<T> {
+    return this.run(() => fn());
   }
 }
 

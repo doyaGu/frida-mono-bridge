@@ -1,7 +1,7 @@
 import { allocUtf8, readU32 } from "../runtime/mem";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { MonoHandle } from "./base";
+import { MonoHandle, CustomAttribute, parseCustomAttributes } from "./base";
 import { MonoField } from "./field";
 import { MonoMethod } from "./method";
 import { MonoObject } from "./object";
@@ -280,6 +280,29 @@ export class MonoClass extends MonoHandle {
     return hasFlag(this.getFlags(), TypeAttribute.BeforeFieldInit);
   }
 
+  /**
+   * Get custom attributes applied to this class.
+   * Uses mono_custom_attrs_from_class API to retrieve attribute metadata.
+   * @returns Array of CustomAttribute objects with attribute type information
+   */
+  getCustomAttributes(): CustomAttribute[] {
+    if (!this.api.hasExport('mono_custom_attrs_from_class')) {
+      return [];
+    }
+
+    try {
+      const customAttrInfoPtr = this.native.mono_custom_attrs_from_class(this.pointer);
+      return parseCustomAttributes(
+        this.api,
+        customAttrInfoPtr,
+        (ptr) => new MonoClass(this.api, ptr).getName(),
+        (ptr) => new MonoClass(this.api, ptr).getFullName()
+      );
+    } catch {
+      return [];
+    }
+  }
+
   // ===== GENERIC TYPE SUPPORT (Standard Mono API) =====
 
   /**
@@ -456,9 +479,8 @@ export class MonoClass extends MonoHandle {
   /**
    * Create a constructed generic type from this generic type definition.
    * 
-   * Note: This method is not fully implemented. Creating new generic type
-   * instantiations at runtime requires complex mono_class_inflate_generic_type
-   * infrastructure.
+   * Uses `mono_reflection_type_from_name` to construct the generic type by building
+   * a type name string in CLR format (e.g., `List`1[[System.String, mscorlib]]`).
    * 
    * @param typeArguments Array of MonoClass to use as type arguments
    * @returns Constructed generic type, or null if construction failed
@@ -467,6 +489,7 @@ export class MonoClass extends MonoHandle {
    * const listType = Mono.domain.class('System.Collections.Generic.List`1');
    * const stringClass = Mono.domain.class('System.String');
    * const stringListType = listType?.makeGenericType([stringClass]);
+   * // stringListType is now List<string>
    */
   makeGenericType(typeArguments: MonoClass[]): MonoClass | null {
     if (!this.isGenericTypeDefinition()) {
@@ -481,12 +504,108 @@ export class MonoClass extends MonoHandle {
       );
     }
 
-    // Generic instantiation requires building MonoGenericContext structure
-    // and calling mono_class_inflate_generic_type, which is complex.
-    // This is a placeholder for future implementation.
-    console.log(`[WARN] makeGenericType is not fully implemented. ` +
-                `Cannot create ${this.getFullName()}<${typeArguments.map(t => t.getFullName()).join(', ')}>`);
+    // Try mono_reflection_type_from_name approach (most reliable)
+    if (this.api.hasExport('mono_reflection_type_from_name') && 
+        this.api.hasExport('mono_class_from_mono_type')) {
+      const result = this.makeGenericTypeViaReflection(typeArguments);
+      if (result) {
+        return result;
+      }
+    }
+
+    // Fallback: Try Unity-specific API if available
+    if (this.api.hasExport('mono_unity_class_make_generic')) {
+      const result = this.makeGenericTypeViaUnityApi(typeArguments);
+      if (result) {
+        return result;
+      }
+    }
+
+    // Cannot create generic type - log warning
+    console.log(`[WARN] makeGenericType: Cannot create ${this.getFullName()}<${typeArguments.map(t => t.getFullName()).join(', ')}>. ` +
+                `Neither mono_reflection_type_from_name nor Unity-specific APIs are available or successful.`);
     return null;
+  }
+
+  /**
+   * Build CLR type name with assembly qualification for generic type arguments.
+   * Format: Namespace.TypeName`N[[ArgType1, Assembly1],[ArgType2, Assembly2]]
+   */
+  private buildGenericTypeName(typeArguments: MonoClass[]): string {
+    const baseName = this.getFullName();
+    
+    // Build type argument strings with assembly qualification
+    const argStrings = typeArguments.map(arg => {
+      const argFullName = arg.getFullName();
+      const argImage = arg.getImage();
+      const argAssemblyName = argImage.getName();
+      
+      // Format: [TypeName, AssemblyName]
+      return `[${argFullName}, ${argAssemblyName}]`;
+    });
+
+    // Combine: TypeName`N[[Arg1, Asm1],[Arg2, Asm2]]
+    return `${baseName}[${argStrings.join(',')}]`;
+  }
+
+  /**
+   * Create generic type using mono_reflection_type_from_name.
+   * This parses a CLR-format type string to create the constructed generic type.
+   */
+  private makeGenericTypeViaReflection(typeArguments: MonoClass[]): MonoClass | null {
+    try {
+      const typeName = this.buildGenericTypeName(typeArguments);
+      const typeNamePtr = allocUtf8(typeName);
+      const image = this.getImage();
+      
+      // mono_reflection_type_from_name(name, image) -> MonoType*
+      const monoType = this.native.mono_reflection_type_from_name(typeNamePtr, image.pointer);
+      
+      if (pointerIsNull(monoType)) {
+        // Try with null image (search all assemblies)
+        const monoTypeGlobal = this.native.mono_reflection_type_from_name(typeNamePtr, NULL);
+        if (pointerIsNull(monoTypeGlobal)) {
+          return null;
+        }
+        
+        // Convert MonoType to MonoClass
+        const klassPtr = this.native.mono_class_from_mono_type(monoTypeGlobal);
+        return pointerIsNull(klassPtr) ? null : new MonoClass(this.api, klassPtr);
+      }
+      
+      // Convert MonoType to MonoClass
+      const klassPtr = this.native.mono_class_from_mono_type(monoType);
+      return pointerIsNull(klassPtr) ? null : new MonoClass(this.api, klassPtr);
+    } catch (e) {
+      // Silently fail and return null
+      return null;
+    }
+  }
+
+  /**
+   * Create generic type using Unity-specific mono_unity_class_make_generic API.
+   */
+  private makeGenericTypeViaUnityApi(typeArguments: MonoClass[]): MonoClass | null {
+    try {
+      // Build array of MonoClass pointers for type arguments
+      const argPtrs = typeArguments.map(arg => arg.pointer);
+      const argArray = Memory.alloc(Process.pointerSize * argPtrs.length);
+      
+      for (let i = 0; i < argPtrs.length; i++) {
+        argArray.add(i * Process.pointerSize).writePointer(argPtrs[i]);
+      }
+      
+      // mono_unity_class_make_generic(MonoClass* klass, MonoClass** types, int count)
+      const resultPtr = this.native.mono_unity_class_make_generic(
+        this.pointer, 
+        argArray, 
+        argPtrs.length
+      );
+      
+      return pointerIsNull(resultPtr) ? null : new MonoClass(this.api, resultPtr);
+    } catch {
+      return null;
+    }
   }
 
   // ===== END GENERIC TYPE SUPPORT =====

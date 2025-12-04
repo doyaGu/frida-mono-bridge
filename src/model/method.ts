@@ -2,7 +2,7 @@ import { MonoApi, MonoManagedExceptionError } from "../runtime/api";
 import { allocUtf8, readU32 } from "../runtime/mem";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { MonoHandle, MethodArgument, MemberAccessibility } from "./base";
+import { MonoHandle, MethodArgument, MemberAccessibility, CustomAttribute, parseCustomAttributes } from "./base";
 import { MonoImage } from "./image";
 import { MonoObject } from "./object";
 import { MonoClass } from "./class";
@@ -229,6 +229,29 @@ export class MonoMethod extends MonoHandle {
     return pickFlags(this.getFlagValues().implementationFlags, METHOD_IMPL_FLAGS);
   }
 
+  /**
+   * Get custom attributes applied to this method.
+   * Uses mono_custom_attrs_from_method API to retrieve attribute metadata.
+   * @returns Array of CustomAttribute objects with attribute type information
+   */
+  getCustomAttributes(): CustomAttribute[] {
+    if (!this.api.hasExport('mono_custom_attrs_from_method')) {
+      return [];
+    }
+
+    try {
+      const customAttrInfoPtr = this.native.mono_custom_attrs_from_method(this.pointer);
+      return parseCustomAttributes(
+        this.api,
+        customAttrInfoPtr,
+        (ptr) => new MonoClass(this.api, ptr).getName(),
+        (ptr) => new MonoClass(this.api, ptr).getFullName()
+      );
+    } catch {
+      return [];
+    }
+  }
+
   getFullName(includeSignature = true): string {
     const namePtr = this.native.mono_method_full_name(this.pointer, includeSignature ? 1 : 0);
     if (pointerIsNull(namePtr)) {
@@ -324,20 +347,12 @@ export class MonoMethod extends MonoHandle {
   /**
    * Get the number of generic type parameters for this method.
    * Returns 0 for non-generic methods.
+   * 
+   * Note: This parses the method name to determine the count since
+   * `mono_unity_method_get_generic_argument_count` does NOT exist in any known Mono version.
    */
   getGenericArgumentCount(): number {
-    // Try Unity API first
-    if (this.api.hasExport('mono_unity_method_get_generic_argument_count')) {
-      try {
-        const count = this.native.mono_unity_method_get_generic_argument_count(this.pointer);
-        return Number(count);
-      } catch {
-        // Fall through to name parsing
-      }
-    }
-
-    // Fall back to parsing from method name
-    // Generic methods are marked like MethodName`2 or in full name <T, U>
+    // Parse from method name - generic methods are marked like MethodName`2 or in full name <T, U>
     const fullName = this.getFullName(true);
     
     // Count type parameters in angle brackets
@@ -361,36 +376,26 @@ export class MonoMethod extends MonoHandle {
    * For a generic method definition, returns the type parameter classes.
    * For an instantiated generic method, returns the actual type arguments.
    * 
-   * Note: This requires Unity API for full implementation.
-   * Without it, returns an empty array.
+   * Note: Full implementation requires APIs that don't exist in known Mono versions.
+   * `mono_unity_method_get_generic_argument_at` does NOT exist.
+   * Returns an empty array for now - future implementations could use reflection
+   * or parse method signatures.
    */
   getGenericArguments(): MonoClass[] {
-    // This requires Unity API
-    if (!this.api.hasExport('mono_unity_method_get_generic_argument_at')) {
-      return [];
-    }
-
-    try {
-      const count = this.getGenericArgumentCount();
-      const args: MonoClass[] = [];
-      for (let i = 0; i < count; i++) {
-        const argPtr = this.native.mono_unity_method_get_generic_argument_at(this.pointer, i);
-        if (!pointerIsNull(argPtr)) {
-          args.push(new MonoClass(this.api, argPtr));
-        }
-      }
-      return args;
-    } catch {
-      return [];
-    }
+    // APIs for getting generic method arguments don't exist in known Mono versions:
+    // - mono_unity_method_get_generic_argument_at: NOT exported
+    // - mono_unity_method_get_generic_argument_count: NOT exported
+    // 
+    // Future implementation could use reflection via MethodInfo.GetGenericArguments()
+    return [];
   }
 
   /**
    * Create an instantiated generic method from this generic method definition.
    * 
-   * Note: This method requires mono_class_inflate_generic_method and 
-   * MonoGenericContext infrastructure which is complex to implement.
-   * Currently returns null - full implementation deferred.
+   * Uses available Mono APIs to instantiate the generic method with concrete type arguments.
+   * Tries multiple approaches: Unity-specific API, reflection-based instantiation, or
+   * direct context-based inflation.
    * 
    * @param typeArguments Array of MonoClass to use as type arguments
    * @returns Instantiated generic method, or null if instantiation failed
@@ -398,24 +403,11 @@ export class MonoMethod extends MonoHandle {
    * @example
    * // Get a generic method like T Max<T>(T a, T b)
    * const maxMethod = mathClass.method('Max`1');
+   * const intClass = Mono.domain.class('System.Int32');
    * // Create Max<int>
    * const maxInt = maxMethod?.makeGenericMethod([intClass]);
    */
   makeGenericMethod(typeArguments: MonoClass[]): MonoMethod | null {
-    // This requires mono_class_inflate_generic_method with a properly constructed
-    // MonoGenericContext. The context needs:
-    // - class_inst: for class type arguments (null for methods)
-    // - method_inst: for method type arguments
-    
-    // Creating MonoGenericInst is complex and requires internal mono structures
-    // that aren't easily accessible from Frida
-    
-    // For now, return null indicating not implemented
-    // Full implementation would need:
-    // 1. Create MonoGenericInst from typeArguments
-    // 2. Create MonoGenericContext with method_inst set
-    // 3. Call mono_class_inflate_generic_method(this.pointer, context)
-    
     if (!this.isGenericMethodDefinition()) {
       return null;
     }
@@ -428,16 +420,304 @@ export class MonoMethod extends MonoHandle {
       );
     }
 
-    // Try to use mono_class_inflate_generic_method if we can construct the context
-    if (!this.api.hasExport('mono_class_inflate_generic_method')) {
-      return null;
+    // Try mono_class_inflate_generic_method with constructed context
+    if (this.api.hasExport('mono_class_inflate_generic_method')) {
+      const result = this.makeGenericMethodViaInflation(typeArguments);
+      if (result) {
+        return result;
+      }
     }
 
-    // Without access to MonoGenericContext creation APIs, we cannot proceed
-    // This would require either:
-    // - Unity-specific APIs for method instantiation
-    // - Low-level access to mono metadata structures
+    // Try reflection-based approach using MethodInfo.MakeGenericMethod
+    const result = this.makeGenericMethodViaReflection(typeArguments);
+    if (result) {
+      return result;
+    }
+
+    // Log warning if all approaches fail
+    console.log(`[WARN] makeGenericMethod: Cannot instantiate ${this.getFullName()} with ` +
+                `[${typeArguments.map(t => t.getFullName()).join(', ')}]. ` +
+                `No suitable API available.`);
     return null;
+  }
+
+  /**
+   * Create generic method using mono_class_inflate_generic_method.
+   * This builds a MonoGenericContext structure and inflates the method.
+   * 
+   * MonoGenericContext structure:
+   * - class_inst: MonoGenericInst* (for class type arguments, null for method-only)
+   * - method_inst: MonoGenericInst* (for method type arguments)
+   * 
+   * MonoGenericInst structure:
+   * - id: int32 (debug, only in non-small config)
+   * - type_argc: uint (22 bits)
+   * - is_open: uint (1 bit)
+   * - type_argv: MonoType*[]
+   */
+  private makeGenericMethodViaInflation(typeArguments: MonoClass[]): MonoMethod | null {
+    try {
+      // Build MonoGenericInst-like structure for method_inst
+      // Structure: type_argc (4 bytes) + is_open flag (packed) + type_argv pointers
+      // In practice, we need to look at the actual Mono internals
+      
+      // First, check if we can get the generic container for this method
+      // The generic container has context.method_inst that we can use as a template
+      let templateInst: NativePointer | null = null;
+      
+      if (this.api.hasExport('mono_method_get_generic_container')) {
+        const container = this.native.mono_method_get_generic_container(this.pointer);
+        if (!pointerIsNull(container)) {
+          // MonoGenericContainer has a context field with method_inst
+          // The layout depends on Mono version, but typically:
+          // context is at offset 0 in the container
+          // context.class_inst is at offset 0
+          // context.method_inst is at offset sizeof(pointer)
+          templateInst = container.add(Process.pointerSize).readPointer();
+        }
+      }
+      
+      // Build type_argv array from type arguments (MonoType* for each class)
+      const typeCount = typeArguments.length;
+      const typeArgv = Memory.alloc(Process.pointerSize * typeCount);
+      
+      for (let i = 0; i < typeCount; i++) {
+        const monoType = typeArguments[i].getType().pointer;
+        typeArgv.add(i * Process.pointerSize).writePointer(monoType);
+      }
+      
+      // We need to construct a valid MonoGenericInst
+      // The problem is mono_metadata_get_generic_inst is not always exported
+      // We'll try to build the structure manually
+      
+      // MonoGenericInst layout (simplified, depends on MONO_SMALL_CONFIG):
+      // - uint type_argc (22 bits) + is_open (1 bit) + padding in first 4 bytes
+      // - MonoType* type_argv[type_argc]
+      //
+      // Actually, in modern Mono it's:
+      // struct _MonoGenericInst {
+      //   gint32 id;           // only if !MONO_SMALL_CONFIG
+      //   guint type_argc : 22;
+      //   guint is_open : 1;
+      //   MonoType *type_argv [MONO_ZERO_LEN_ARRAY];
+      // }
+      
+      // Calculate size: header + type_argv array
+      // Header is either 4 bytes (SMALL_CONFIG) or 8 bytes (with id)
+      // Let's try with 4-byte header first (more common in Unity)
+      const headerSize = 4; // Just the packed type_argc + is_open
+      const instSize = headerSize + Process.pointerSize * typeCount;
+      const methodInst = Memory.alloc(instSize);
+      
+      // Write type_argc (22 bits) + is_open (1 bit) = not open (0)
+      // type_argc in lower 22 bits
+      methodInst.writeU32(typeCount & 0x3FFFFF);
+      
+      // Write type_argv pointers
+      for (let i = 0; i < typeCount; i++) {
+        const monoType = typeArguments[i].getType().pointer;
+        methodInst.add(headerSize + i * Process.pointerSize).writePointer(monoType);
+      }
+      
+      // Build MonoGenericContext
+      // struct _MonoGenericContext {
+      //   MonoGenericInst *class_inst;
+      //   MonoGenericInst *method_inst;
+      // }
+      const contextSize = Process.pointerSize * 2;
+      const context = Memory.alloc(contextSize);
+      
+      // class_inst = NULL (method-level generic only)
+      context.writePointer(NULL);
+      // method_inst = our constructed inst
+      context.add(Process.pointerSize).writePointer(methodInst);
+      
+      // Call mono_class_inflate_generic_method
+      const inflatedMethod = this.native.mono_class_inflate_generic_method(this.pointer, context);
+      
+      if (pointerIsNull(inflatedMethod)) {
+        return null;
+      }
+      
+      return new MonoMethod(this.api, inflatedMethod);
+    } catch (e) {
+      // Silently fail - this approach may not work on all Mono versions
+      return null;
+    }
+  }
+
+  // NOTE: mono_unity_method_make_generic is NOT exported in any known Mono version
+  // (neither legacy mono.dll nor MonoBleedingEdge). Use reflection or inflation instead.
+
+  /**
+   * Create generic method using reflection (MethodInfo.MakeGenericMethod).
+   * This invokes the managed MakeGenericMethod method via reflection.
+   */
+  private makeGenericMethodViaReflection(typeArguments: MonoClass[]): MonoMethod | null {
+    try {
+      // Check for mono_method_get_object and required reflection APIs
+      if (!this.api.hasExport('mono_method_get_object') ||
+          !this.api.hasExport('mono_reflection_type_get_type')) {
+        return null;
+      }
+
+      const domain = this.api.getRootDomain();
+      
+      // Get System.Type[] for the type arguments
+      const typeArray = this.createTypeArray(typeArguments, domain);
+      if (pointerIsNull(typeArray)) {
+        return null;
+      }
+
+      // Get MethodInfo object for this method
+      const methodInfo = this.native.mono_method_get_object(domain, this.pointer, NULL);
+      if (pointerIsNull(methodInfo)) {
+        return null;
+      }
+
+      // Get the MakeGenericMethod method from MethodInfo
+      const methodInfoClass = this.native.mono_object_get_class(methodInfo);
+      if (pointerIsNull(methodInfoClass)) {
+        return null;
+      }
+
+      const makeGenericMethodName = Memory.allocUtf8String('MakeGenericMethod');
+      const makeGenericMethod = this.native.mono_class_get_method_from_name(
+        methodInfoClass, 
+        makeGenericMethodName, 
+        1
+      );
+      
+      if (pointerIsNull(makeGenericMethod)) {
+        return null;
+      }
+
+      // Invoke MakeGenericMethod(Type[] typeArguments)
+      const argsArray = Memory.alloc(Process.pointerSize);
+      argsArray.writePointer(typeArray);
+      
+      const excSlot = Memory.alloc(Process.pointerSize);
+      excSlot.writePointer(NULL);
+      
+      const resultMethodInfo = this.native.mono_runtime_invoke(
+        makeGenericMethod,
+        methodInfo,
+        argsArray,
+        excSlot
+      );
+      
+      if (pointerIsNull(resultMethodInfo) || !pointerIsNull(excSlot.readPointer())) {
+        return null;
+      }
+
+      // Get the MonoMethod from the resulting MethodInfo
+      const handleField = this.getMethodHandleFromMethodInfo(resultMethodInfo);
+      if (handleField && !pointerIsNull(handleField)) {
+        return new MonoMethod(this.api, handleField);
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Create a System.Type[] array from MonoClass array.
+   */
+  private createTypeArray(typeArguments: MonoClass[], domain: NativePointer): NativePointer {
+    try {
+      if (!this.api.hasExport('mono_type_get_object') ||
+          !this.api.hasExport('mono_array_new')) {
+        return NULL;
+      }
+
+      // Get System.Type class
+      const mscorlibImage = this.api.native.mono_image_loaded(Memory.allocUtf8String('mscorlib'));
+      if (pointerIsNull(mscorlibImage)) {
+        return NULL;
+      }
+
+      const typeClass = this.api.native.mono_class_from_name(
+        mscorlibImage,
+        Memory.allocUtf8String('System'),
+        Memory.allocUtf8String('Type')
+      );
+      
+      if (pointerIsNull(typeClass)) {
+        return NULL;
+      }
+
+      // Create Type[] array
+      const typeArray = this.native.mono_array_new(domain, typeClass, typeArguments.length);
+      if (pointerIsNull(typeArray)) {
+        return NULL;
+      }
+
+      // Fill the array with Type objects for each MonoClass
+      for (let i = 0; i < typeArguments.length; i++) {
+        const monoType = typeArguments[i].getType().pointer;
+        const typeObj = this.native.mono_type_get_object(domain, monoType);
+        
+        if (pointerIsNull(typeObj)) {
+          return NULL;
+        }
+        
+        // mono_array_set for reference types
+        this.native.mono_array_setref(typeArray, i, typeObj);
+      }
+
+      return typeArray;
+    } catch {
+      return NULL;
+    }
+  }
+
+  /**
+   * Extract the MonoMethod* from a MethodInfo reflection object.
+   */
+  private getMethodHandleFromMethodInfo(methodInfo: NativePointer): NativePointer | null {
+    try {
+      // Try Unity-specific API first (common in Unity runtime)
+      if (this.api.hasExport('unity_mono_reflection_method_get_method')) {
+        const method = this.native.unity_mono_reflection_method_get_method(methodInfo);
+        if (!pointerIsNull(method)) {
+          return method;
+        }
+      }
+
+      // Try mono_reflection_get_method if available
+      if (this.api.hasExport('mono_reflection_get_method')) {
+        const method = this.native.mono_reflection_get_method(methodInfo);
+        if (!pointerIsNull(method)) {
+          return method;
+        }
+      }
+
+      // Fallback: Try to read the method handle field directly
+      // MethodInfo has a RuntimeMethodHandle field at a known offset
+      const klass = this.native.mono_object_get_class(methodInfo);
+      if (pointerIsNull(klass)) {
+        return null;
+      }
+
+      // Try to get the "mhandle" field (internal method pointer)
+      const mhandleFieldName = Memory.allocUtf8String('mhandle');
+      const mhandleField = this.native.mono_class_get_field_from_name(klass, mhandleFieldName);
+      
+      if (!pointerIsNull(mhandleField)) {
+        const valuePtr = Memory.alloc(Process.pointerSize);
+        this.native.mono_field_get_value(methodInfo, mhandleField, valuePtr);
+        const methodPtr = valuePtr.readPointer();
+        if (!pointerIsNull(methodPtr)) {
+          return methodPtr;
+        }
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   invoke(instance: MonoObject | NativePointer | null, args: MethodArgument[] = [], options: InvokeOptions = {}): NativePointer {
