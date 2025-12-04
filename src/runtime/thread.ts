@@ -77,21 +77,6 @@ export class ThreadManager {
   }
 
   /**
-   * Detaches all threads that were attached by this manager.
-   * Should be called during cleanup/disposal.
-   */
-  detachAll(): void {
-    for (const [threadId, threadHandle] of this.attachedThreads.entries()) {
-      try {
-        this.api.detachThread(threadHandle);
-      } catch (_error) {
-        // Best-effort detach; loggers can hook here once logging infrastructure exists.
-      }
-      this.attachedThreads.delete(threadId);
-    }
-  }
-
-  /**
    * Checks if the specified thread is currently in an active attachment context.
    * @param threadId Thread ID to check (defaults to current thread)
    * @returns True if thread is in active attachment context
@@ -157,7 +142,12 @@ export class ThreadManager {
   }
 
   /**
-   * Detach a specific thread.
+   * Detach a specific thread from the Mono runtime.
+   *
+   * WARNING: Detaching the current thread during active script execution will
+   * cause Mono operations to fail. Only use this for cleanup of other threads
+   * or at script termination.
+   *
    * @param threadId Thread ID to detach (defaults to current thread)
    * @returns True if thread was detached, false if it wasn't attached
    */
@@ -174,6 +164,59 @@ export class ThreadManager {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Safely detach the current thread if it is exiting.
+   *
+   * This uses mono_thread_detach_if_exiting which only performs detachment
+   * if the thread is running pthread destructors. Safe to call at any time.
+   *
+   * @returns True if the thread was detached, false otherwise
+   */
+  detachIfExiting(): boolean {
+    if (!this.api.hasExport("mono_thread_detach_if_exiting")) {
+      return false;
+    }
+
+    try {
+      const result = this.api.native.mono_thread_detach_if_exiting();
+      if (result) {
+        // Thread was detached, update internal state
+        const threadId = getCurrentThreadId();
+        this.attachedThreads.delete(threadId);
+        this.activeAttachments.delete(threadId);
+      }
+      return !!result;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Detaches all threads that were attached by this manager.
+   *
+   * WARNING: This will detach ALL threads including the current one.
+   * Only call this during cleanup/disposal when no more Mono operations
+   * are needed. The current thread uses detachIfExiting for safety.
+   */
+  detachAll(): void {
+    const currentThreadId = getCurrentThreadId();
+
+    for (const [threadId, threadHandle] of this.attachedThreads.entries()) {
+      try {
+        if (threadId === currentThreadId) {
+          // For current thread, try safe detach first
+          this.detachIfExiting();
+        } else {
+          this.api.detachThread(threadHandle);
+        }
+      } catch (_error) {
+        // Best-effort detach; loggers can hook here once logging infrastructure exists.
+      }
+      this.attachedThreads.delete(threadId);
+      this.activeAttachments.delete(threadId);
     }
   }
 

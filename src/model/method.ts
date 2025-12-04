@@ -204,6 +204,46 @@ export class MonoMethod extends MonoHandle {
     return hasFlag(this.getFlagValues().flags, MethodAttribute.Abstract);
   }
 
+  /**
+   * Check if this method is an internal call (implemented in native code).
+   * InternalCall methods may require special handling when hooking.
+   */
+  isInternalCall(): boolean {
+    return hasFlag(this.getFlagValues().implementationFlags, MethodImplAttribute.InternalCall);
+  }
+
+  /**
+   * Check if this method uses P/Invoke to call native code.
+   */
+  isPInvoke(): boolean {
+    return hasFlag(this.getFlagValues().flags, MethodAttribute.PInvokeImpl);
+  }
+
+  /**
+   * Check if this method is implemented in native code (Runtime code type).
+   */
+  isRuntimeImplemented(): boolean {
+    const codeType = getMaskedValue(this.getFlagValues().implementationFlags, MethodImplAttribute.CodeTypeMask);
+    return codeType === MethodImplAttribute.Runtime;
+  }
+
+  /**
+   * Check if this method can potentially be hooked using Interceptor.
+   * Returns false for abstract methods, InternalCall, P/Invoke, and Runtime-implemented methods
+   * that may not have hookable native code addresses.
+   */
+  canBeHooked(): boolean {
+    // Abstract methods have no implementation
+    if (this.isAbstract()) return false;
+    // InternalCall methods are implemented in native runtime, may not be hookable in all cases
+    if (this.isInternalCall()) return false;
+    // PInvoke methods might work but can have complications
+    if (this.isPInvoke()) return false;
+    // Runtime-implemented methods (like generic instantiations) may not be hookable
+    if (this.isRuntimeImplemented()) return false;
+    return true;
+  }
+
   isConstructor(): boolean {
     const flags = this.getFlagValues().flags;
     return hasFlag(flags, MethodAttribute.RTSpecialName) && this.getName() === ".ctor";
@@ -721,6 +761,101 @@ export class MonoMethod extends MonoHandle {
     } catch {
       return null;
     }
+  }
+
+  // ===== JIT COMPILATION =====
+
+  /**
+   * Compile this method to native code and return the code address.
+   *
+   * This triggers JIT compilation of the method if it hasn't been compiled yet.
+   * The returned address points to the start of the native code that can be
+   * hooked with Frida's Interceptor.
+   *
+   * **Warning**: Calling this on methods that haven't been invoked before may cause
+   * issues in some Mono builds. Consider using `tryCompile()` for safer operation.
+   *
+   * @returns Native code address for this method
+   * @throws Error if compilation fails or returns NULL
+   */
+  compile(): NativePointer {
+    const result = this.tryCompile();
+    if (result === null) {
+      throw new Error(`Failed to compile method: ${this.getFullName()}`);
+    }
+    return result;
+  }
+
+  /**
+   * Attempt to compile this method to native code, returning null on failure.
+   *
+   * This is a safer alternative to `compile()` that won't throw exceptions.
+   * Use this when hooking methods that may or may not have been JIT compiled yet.
+   *
+   * **Note**: Mono uses lazy JIT compilation. Methods are compiled on first call,
+   * not when loaded. If a method hasn't been called yet, `mono_compile_method`
+   * may return a trampoline address or fail entirely. This is normal behavior.
+   *
+   * Possible failure cases:
+   * - Method is abstract (no implementation)
+   * - Method is an InternalCall or P/Invoke (native implementation)
+   * - Method hasn't been called yet and Mono's JIT compiler fails
+   * - Memory access violation during compilation (rare)
+   *
+   * @returns Native code address if compilation succeeds, null otherwise
+   *
+   * @example
+   * const codeAddr = method.tryCompile();
+   * if (codeAddr) {
+   *   Interceptor.attach(codeAddr, { onEnter(args) { ... } });
+   * } else {
+   *   console.log("Method cannot be hooked (not yet JIT compiled)");
+   * }
+   */
+  tryCompile(): NativePointer | null {
+    // Check if method can potentially be compiled
+    if (this.isAbstract()) {
+      methodLogger.debug(`Cannot compile abstract method: ${this.getFullName()}`);
+      return null;
+    }
+
+    // InternalCall and Runtime methods may not have JIT-able code
+    if (this.isInternalCall()) {
+      methodLogger.debug(`Method is InternalCall: ${this.getFullName()}`);
+      // InternalCall methods might still have an address via different mechanism
+      // but mono_compile_method typically won't work for them
+    }
+
+    try {
+      const codeAddr = this.native.mono_compile_method(this.pointer);
+
+      if (pointerIsNull(codeAddr)) {
+        methodLogger.debug(`mono_compile_method returned NULL for: ${this.getFullName()}`);
+        return null;
+      }
+
+      // Additional validation: Check if the address looks valid
+      // Very low addresses (< 0x1000) are typically invalid or trampolines
+      // However, this varies by platform, so we only check for NULL
+      return codeAddr;
+    } catch (error) {
+      // mono_compile_method can throw access violations for methods
+      // that haven't been JIT compiled and have problematic metadata
+      methodLogger.debug(`Exception compiling ${this.getFullName()}: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Check if this method has been JIT compiled (has native code available).
+   *
+   * This attempts to compile the method and returns true if successful.
+   * Note that after calling this, the method will be compiled if it wasn't already.
+   *
+   * @returns true if native code is available, false otherwise
+   */
+  isCompiled(): boolean {
+    return this.tryCompile() !== null;
   }
 
   invoke(

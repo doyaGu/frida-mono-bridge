@@ -175,13 +175,29 @@ export class MonoNamespace {
    * Usually not needed - use perform() instead
    * @returns Native pointer to the attached thread
    */
-  attachThread(): NativePointer {
+  ensureThreadAttached(): NativePointer {
     this.ensureInitialized();
     return this._api!._threadManager.ensureAttached();
   }
 
   /**
-   * Detach all threads from the Mono runtime
+   * Safely detach the current thread if it is exiting.
+   * Uses mono_thread_detach_if_exiting which only detaches when the thread
+   * is running pthread destructors. Safe to call at any time.
+   * @returns True if the thread was detached, false otherwise
+   */
+  detachIfExiting(): boolean {
+    if (!this._api) {
+      return false;
+    }
+    return this._api._threadManager.detachIfExiting();
+  }
+
+  /**
+   * Detach all threads from the Mono runtime.
+   *
+   * WARNING: This should only be called during cleanup/disposal.
+   * The current thread uses a safe detach mechanism (detachIfExiting).
    */
   detachAllThreads(): void {
     if (this._api) {

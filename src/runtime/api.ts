@@ -330,7 +330,9 @@ export class MonoApi {
       return;
     }
 
-    // Detach threads via thread manager if available
+    // Try to safely detach threads using detachIfExiting for the current thread.
+    // This uses mono_thread_detach_if_exiting which only detaches if the thread
+    // is actually exiting, preventing script hangs during normal disposal.
     if (this._threadManager && typeof this._threadManager.detachAll === "function") {
       this._threadManager.detachAll();
     }

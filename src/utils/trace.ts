@@ -74,13 +74,14 @@ function extractMethodArgs(method: MonoMethod, args: InvocationArguments): Nativ
  * @param method Method to hook
  * @param callbacks Callbacks for entry/exit
  * @returns Detach function that only detaches this specific hook
+ * @throws Error if method cannot be compiled (not yet JIT-compiled, abstract, etc.)
+ *
+ * **Note**: Mono uses lazy JIT compilation. Methods are compiled on first invocation,
+ * not when loaded. If a method hasn't been called yet in the target application,
+ * it may not be hookable. Consider using `tryMethod()` for safer operation.
  */
 export function method(monoMethod: MonoMethod, callbacks: MethodCallbacks): () => void {
-  const impl = monoMethod.api.native.mono_compile_method(monoMethod.pointer);
-
-  if (impl.isNull()) {
-    throw new Error(`Failed to compile method: ${monoMethod.getFullName()}`);
-  }
+  const impl = monoMethod.compile(); // Uses new safe compile method
 
   const listener = Interceptor.attach(impl, {
     onEnter(args) {
@@ -99,6 +100,51 @@ export function method(monoMethod: MonoMethod, callbacks: MethodCallbacks): () =
 }
 
 /**
+ * Try to hook a single method, returning null if the method cannot be hooked.
+ *
+ * This is a safer alternative to `method()` that doesn't throw on failure.
+ * Use this when hooking methods that may not have been JIT-compiled yet.
+ *
+ * @param monoMethod Method to hook
+ * @param callbacks Callbacks for entry/exit
+ * @returns Detach function if successful, null if method cannot be hooked
+ *
+ * @example
+ * const detach = Trace.tryMethod(method, {
+ *   onEnter(args) { console.log("called"); }
+ * });
+ * if (!detach) {
+ *   console.log("Method not hookable (possibly not JIT compiled yet)");
+ * }
+ */
+export function tryMethod(monoMethod: MonoMethod, callbacks: MethodCallbacks): (() => void) | null {
+  const impl = monoMethod.tryCompile();
+  if (impl === null) {
+    return null;
+  }
+
+  try {
+    const listener = Interceptor.attach(impl, {
+      onEnter(args) {
+        if (callbacks.onEnter) {
+          callbacks.onEnter(extractMethodArgs(monoMethod, args));
+        }
+      },
+      onLeave(retval) {
+        if (callbacks.onLeave) {
+          callbacks.onLeave(retval);
+        }
+      },
+    });
+
+    return () => listener.detach();
+  } catch (error) {
+    traceLogger.debug(`Failed to attach to ${monoMethod.getFullName()}: ${error}`);
+    return null;
+  }
+}
+
+/**
  * Hook a single method with extended context access
  *
  * @param method Method to hook
@@ -106,11 +152,7 @@ export function method(monoMethod: MonoMethod, callbacks: MethodCallbacks): () =
  * @returns Detach function
  */
 export function methodExtended(monoMethod: MonoMethod, callbacks: MethodCallbacksExtended): () => void {
-  const impl = monoMethod.api.native.mono_compile_method(monoMethod.pointer);
-
-  if (impl.isNull()) {
-    throw new Error(`Failed to compile method: ${monoMethod.getFullName()}`);
-  }
+  const impl = monoMethod.compile(); // Uses new safe compile method
 
   const listener = Interceptor.attach(impl, {
     onEnter(args) {
@@ -129,6 +171,40 @@ export function methodExtended(monoMethod: MonoMethod, callbacks: MethodCallback
 }
 
 /**
+ * Try to hook a method with extended context, returning null on failure.
+ *
+ * @param monoMethod Method to hook
+ * @param callbacks Callbacks for entry/exit with access to InvocationContext
+ * @returns Detach function if successful, null if method cannot be hooked
+ */
+export function tryMethodExtended(monoMethod: MonoMethod, callbacks: MethodCallbacksExtended): (() => void) | null {
+  const impl = monoMethod.tryCompile();
+  if (impl === null) {
+    return null;
+  }
+
+  try {
+    const listener = Interceptor.attach(impl, {
+      onEnter(args) {
+        if (callbacks.onEnter) {
+          callbacks.onEnter.call(this, extractMethodArgs(monoMethod, args));
+        }
+      },
+      onLeave(retval) {
+        if (callbacks.onLeave) {
+          callbacks.onLeave.call(this, retval);
+        }
+      },
+    });
+
+    return () => listener.detach();
+  } catch (error) {
+    traceLogger.debug(`Failed to attach to ${monoMethod.getFullName()}: ${error}`);
+    return null;
+  }
+}
+
+/**
  * Replace a method's return value.
  * The replacement function is called after the original method executes,
  * allowing you to modify or replace the return value.
@@ -141,11 +217,7 @@ export function replaceReturnValue(
   monoMethod: MonoMethod,
   replacement: (originalRetval: NativePointer, thisPtr: NativePointer, args: NativePointer[]) => NativePointer | void,
 ): () => void {
-  const impl = monoMethod.api.native.mono_compile_method(monoMethod.pointer);
-
-  if (impl.isNull()) {
-    throw new Error(`Failed to compile method: ${monoMethod.getFullName()}`);
-  }
+  const impl = monoMethod.compile();
 
   const listener = Interceptor.attach(impl, {
     onEnter(args) {
@@ -165,6 +237,44 @@ export function replaceReturnValue(
 }
 
 /**
+ * Try to replace a method's return value, returning null on failure.
+ *
+ * @param monoMethod Method to intercept
+ * @param replacement Function that receives (originalRetval, thisPtr, args) and returns new result
+ * @returns Revert function if successful, null if method cannot be hooked
+ */
+export function tryReplaceReturnValue(
+  monoMethod: MonoMethod,
+  replacement: (originalRetval: NativePointer, thisPtr: NativePointer, args: NativePointer[]) => NativePointer | void,
+): (() => void) | null {
+  const impl = monoMethod.tryCompile();
+  if (impl === null) {
+    return null;
+  }
+
+  try {
+    const listener = Interceptor.attach(impl, {
+      onEnter(args) {
+        const isInstance = monoMethod.isInstanceMethod();
+        (this as any).thisPtr = isInstance ? args[0] : ptr(0);
+        (this as any).methodArgs = extractMethodArgs(monoMethod, args);
+      },
+      onLeave(retval) {
+        const result = replacement(retval, (this as any).thisPtr, (this as any).methodArgs);
+        if (result !== undefined) {
+          retval.replace(result);
+        }
+      },
+    });
+
+    return () => listener.detach();
+  } catch (error) {
+    traceLogger.debug(`Failed to attach to ${monoMethod.getFullName()}: ${error}`);
+    return null;
+  }
+}
+
+/**
  * Hook all methods in a class
  *
  * @param klass Class to hook
@@ -176,12 +286,11 @@ export function classAll(klass: MonoClass, callbacks: MethodCallbacks): () => vo
   const detachers: Array<() => void> = [];
 
   for (const m of methods) {
-    try {
-      const detach = method(m, callbacks);
+    const detach = tryMethod(m, callbacks);
+    if (detach) {
       detachers.push(detach);
-    } catch (error) {
-      // Some methods might not be hookable (abstract, etc)
-      traceLogger.warn(`Failed to hook ${m.getFullName()}: ${error}`);
+    } else {
+      traceLogger.debug(`Skipped unhookable method: ${m.getFullName()}`);
     }
   }
 
@@ -209,30 +318,32 @@ export function classAll(klass: MonoClass, callbacks: MethodCallbacks): () => vo
 export function methodsByPattern(api: MonoApi, pattern: string, callbacks: MethodCallbacks): () => void {
   const methods = Find.methods(api, pattern);
   const detachers: Array<() => void> = [];
+  let hookedCount = 0;
 
-  traceLogger.info(`Tracing ${methods.length} methods matching "${pattern}"`);
+  traceLogger.info(`Found ${methods.length} methods matching "${pattern}"`);
 
   for (const m of methods) {
-    try {
-      const detach = method(m, {
-        onEnter(args) {
-          if (callbacks.onEnter) {
-            traceLogger.debug(`-> ${m.getFullName()}`);
-            callbacks.onEnter(args);
-          }
-        },
-        onLeave(retval) {
-          if (callbacks.onLeave) {
-            traceLogger.debug(`<- ${m.getFullName()}`);
-            callbacks.onLeave(retval);
-          }
-        },
-      });
+    const detach = tryMethod(m, {
+      onEnter(args) {
+        if (callbacks.onEnter) {
+          traceLogger.debug(`-> ${m.getFullName()}`);
+          callbacks.onEnter(args);
+        }
+      },
+      onLeave(retval) {
+        if (callbacks.onLeave) {
+          traceLogger.debug(`<- ${m.getFullName()}`);
+          callbacks.onLeave(retval);
+        }
+      },
+    });
+    if (detach) {
       detachers.push(detach);
-    } catch (error) {
-      traceLogger.warn(`Failed to hook ${m.getFullName()}`);
+      hookedCount++;
     }
   }
+
+  traceLogger.info(`Successfully hooked ${hookedCount}/${methods.length} methods`);
 
   return () => {
     detachers.forEach(d => d());
