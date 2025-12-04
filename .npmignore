@@ -4,6 +4,14 @@
 .vscode/
 .idea/
 
+# Config files
+.editorconfig
+.eslintrc*
+.prettierrc*
+.prettierignore
+eslint.config.mjs
+tsconfig.json
+
 # Source files (we include them via package.json files field)
 # Uncomment if you don't want to ship source
 # src/

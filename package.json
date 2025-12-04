@@ -2,6 +2,7 @@
   "name": "frida-mono-bridge",
   "version": "0.1.0",
   "description": "TypeScript bridge for instrumenting Mono runtimes with Frida",
+  "type": "module",
   "keywords": [
     "frida",
     "mono",
@@ -23,22 +24,34 @@
   },
   "homepage": "https://github.com/doyaGu/frida-mono-bridge#readme",
   "main": "dist/agent.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/agent.js",
+      "default": "./dist/agent.js"
+    }
+  },
   "files": [
     "dist/agent.js",
+    "dist/index.d.ts",
     "src/**/*.ts",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
   ],
+  "sideEffects": false,
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=18.0.0"
   },
   "scripts": {
     "prepublishOnly": "npm run clean && npm run build && npm run lint && node scripts/pre-publish.js",
     "prepack": "npm run build",
-    "build": "mkdir -p dist && frida-compile src/index.ts -o dist/agent.js",
+    "build": "frida-compile src/index.ts -o dist/agent.js",
     "watch": "frida-compile -w src/index.ts -o dist/agent.js",
-    "lint": "tsc --noEmit",
+    "lint": "eslint src/ && tsc --noEmit",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "test": "frida-compile tests/index.ts -o dist/tests.js",
     "test:core-infrastructure": "frida-compile tests/runners/test-core-infrastructure.ts -o dist/test-core-infrastructure.js",
     "test:mono-api": "frida-compile tests/runners/test-mono-api.ts -o dist/test-mono-api.js",
@@ -73,15 +86,22 @@
     "test:unity-engine-modules": "frida-compile tests/runners/test-unity-engine-modules.ts -o dist/test-unity-engine-modules.js",
     "clean": "rimraf dist",
     "generate:enums": "node scripts/generate-enums.ts",
-    "generate:signatures": "npx tsx scripts/generate-mono-signatures.ts"
+    "generate:signatures": "npx tsx scripts/generate-mono-signatures.ts",
+    "typecheck": "tsc --noEmit",
+    "docs": "typedoc --out docs/api src/index.ts"
   },
   "devDependencies": {
+    "@eslint/js": "^9.16.0",
     "@types/frida-gum": "^19.0.1",
     "@types/node": "^24.10.1",
+    "eslint": "^9.16.0",
     "frida-compile": "^19.0.4",
+    "prettier": "^3.4.2",
     "rimraf": "^6.0.1",
     "tslib": "^2.8.1",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typedoc": "^0.26.11",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.18.0"
   }
 }

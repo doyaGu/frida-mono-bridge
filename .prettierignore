@@ -1,0 +1,17 @@
+# Build output
+dist/
+
+# Dependencies
+node_modules/
+
+# Data files
+data/
+
+# Generated files
+*.d.ts
+
+# Documentation
+docs/*.md
+
+# Changelog (preserve manual formatting)
+CHANGELOG.md
