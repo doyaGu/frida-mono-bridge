@@ -5,8 +5,6 @@ import { MonoModuleInfo } from "./module";
 import { ALL_MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./signatures";
 import type { ThreadManager } from "./thread";
 
-type AnyNativeFunction = NativeFunction<any, NativeFunctionArgumentValue[]>;
-
 export type MonoArg = NativePointer | number | boolean | string | null | undefined;
 
 /** Argument types that can be passed to method/delegate invocation */
@@ -71,7 +69,10 @@ const CACHE_LIMITS = {
  * exception handling, and intelligent caching with LRU eviction.
  */
 export class MonoApi {
-  private readonly functionCache = new LruCache<MonoApiName, AnyNativeFunction>(CACHE_LIMITS.FUNCTION_CACHE);
+  private readonly functionCache = new LruCache<
+    MonoApiName,
+    NativeFunction<NativeFunctionReturnValue, NativeFunctionArgumentValue[]>
+  >(CACHE_LIMITS.FUNCTION_CACHE);
   private readonly addressCache = new LruCache<MonoApiName, NativePointer>(CACHE_LIMITS.ADDRESS_CACHE);
   private readonly delegateThunkCache = new LruCache<string, DelegateThunkInfo>(CACHE_LIMITS.DELEGATE_THUNK_CACHE);
 
@@ -412,13 +413,19 @@ export class MonoApi {
     }
   }
 
-  getNativeFunction(name: MonoApiName): AnyNativeFunction {
+  getNativeFunction(
+    name: MonoApiName,
+  ): NativeFunction<NativeFunctionReturnValue, NativeFunctionArgumentValue[]> {
     this.ensureNotDisposed();
 
     return this.functionCache.getOrCreate(name, () => {
       const signature = getSignature(name);
       const address = this.resolveAddress(name, true, signature);
-      return new NativeFunction(address, signature.retType as any, signature.argTypes as any[]) as AnyNativeFunction;
+      return new NativeFunction(
+        address,
+        signature.retType as NativeFunctionReturnType,
+        signature.argTypes as NativeFunctionArgumentType[],
+      );
     });
   }
 

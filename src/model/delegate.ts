@@ -7,8 +7,6 @@ import { isCompatibleNativeType, MonoType, MonoTypeKind, monoTypeKindToNative } 
 
 const delegateLogger = Logger.withTag("MonoDelegate");
 
-type AnyNativeFunction = NativeFunction<any, any[]>;
-
 // ===== TYPE DEFINITIONS =====
 
 /**
@@ -116,7 +114,7 @@ export interface MonoDelegateSummary {
 export class MonoDelegate extends MonoObject {
   #invokePtr: NativePointer | null = null;
   #thunkPtr: NativePointer | null = null;
-  #nativeFunctions = new Map<string, AnyNativeFunction>();
+  #nativeFunctions = new Map<string, NativeFunction<NativeFunctionReturnValue, NativeFunctionArgumentValue[]>>();
   #invokeMethod: MonoMethod | null = null;
 
   // ===== STATIC FACTORY =====
@@ -313,7 +311,7 @@ export class MonoDelegate extends MonoObject {
    * );
    * const result = thunk(delegate.pointer, 42);
    */
-  compileNative<T extends AnyNativeFunction = AnyNativeFunction>(
+  compileNative<T extends NativeFunction<NativeFunctionReturnValue, NativeFunctionArgumentValue[]> = NativeFunction<NativeFunctionReturnValue, NativeFunctionArgumentValue[]>>(
     returnType: NativeFunctionReturnType,
     argTypes: NativeFunctionArgumentType[],
     cacheOrOptions: boolean | CompileNativeOptions = true,
