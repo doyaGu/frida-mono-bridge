@@ -7,7 +7,7 @@
 
 import * as esbuild from "esbuild";
 import { execSync } from "child_process";
-import { existsSync, mkdirSync, rmSync } from "fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -44,13 +44,26 @@ await esbuild.build({
 });
 console.log("  ✓ dist/index.js created\n");
 
-// Step 2: Generate TypeScript declarations
+// Step 2: Generate bundled TypeScript declarations
 console.log("[2/2] Generating TypeScript declarations...");
 try {
-  execSync("npx tsc -p tsconfig.build.json", {
-    cwd: rootDir,
-    stdio: "inherit",
-  });
+  execSync(
+    "npx dts-bundle-generator -o dist/index.d.ts src/index.ts --no-check --no-banner",
+    {
+      cwd: rootDir,
+      stdio: "inherit",
+    }
+  );
+
+  // Add banner to the generated .d.ts file
+  const dtsPath = resolve(distDir, "index.d.ts");
+  const dtsContent = readFileSync(dtsPath, "utf-8");
+  const banner = `// frida-mono-bridge - TypeScript bridge for Mono runtimes
+// https://github.com/doyaGu/frida-mono-bridge
+
+`;
+  writeFileSync(dtsPath, banner + dtsContent);
+
   console.log("  ✓ dist/index.d.ts created\n");
 } catch (error) {
   console.error("  ✗ Failed to generate declarations");
