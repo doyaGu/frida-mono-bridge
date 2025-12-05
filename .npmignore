@@ -25,6 +25,7 @@ scripts/
 
 # Documentation (internal/dev only)
 docs/
+CHANGELOG.md
 
 # Data files
 data/
