@@ -23,18 +23,26 @@
     "url": "https://github.com/doyaGu/frida-mono-bridge/issues"
   },
   "homepage": "https://github.com/doyaGu/frida-mono-bridge#readme",
-  "main": "dist/agent.js",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/agent.js",
-      "default": "./dist/agent.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "frida-gum": ">=19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "frida-gum": {
+      "optional": true
     }
   },
   "files": [
-    "dist/agent.js",
-    "dist/index.d.ts",
-    "src/**/*.ts",
+    "dist",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -46,7 +54,8 @@
   "scripts": {
     "prepublishOnly": "npm run clean && npm run build && npm run lint && node scripts/pre-publish.cjs",
     "prepack": "npm run build",
-    "build": "mkdir -p dist && frida-compile src/index.ts -o dist/agent.js",
+    "build": "node scripts/build.mjs",
+    "build:agent": "mkdir -p dist && frida-compile src/index.ts -o dist/agent.js",
     "watch": "frida-compile -w src/index.ts -o dist/agent.js",
     "lint": "eslint src/ && tsc --noEmit",
     "lint:fix": "eslint src/ --fix",
@@ -94,6 +103,7 @@
     "@eslint/js": "^9.16.0",
     "@types/frida-gum": "^19.0.1",
     "@types/node": "^24.10.1",
+    "esbuild": "^0.24.2",
     "eslint": "^9.16.0",
     "frida-compile": "^19.0.4",
     "prettier": "^3.4.2",

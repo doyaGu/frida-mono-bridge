@@ -12,17 +12,25 @@ console.log('Running pre-publish checks...\n');
 
 let hasErrors = false;
 
-// Check 1: Ensure dist/agent.js exists
-const agentPath = path.join(__dirname, '..', 'dist', 'agent.js');
-if (!fs.existsSync(agentPath)) {
-  console.error('[ERROR] dist/agent.js not found. Run `npm run build` first.');
+// Check 1: Ensure dist/index.js exists (library output)
+const distIndexPath = path.join(__dirname, '..', 'dist', 'index.js');
+if (!fs.existsSync(distIndexPath)) {
+  console.error('[ERROR] dist/index.js not found. Run `npm run build` first.');
   hasErrors = true;
 } else {
-  const stats = fs.statSync(agentPath);
-  console.log(`[OK] dist/agent.js exists (${(stats.size / 1024).toFixed(2)} KB)`);
+  console.log('[OK] dist/index.js exists (library entry point)');
 }
 
-// Check 2: Verify package.json fields
+// Check 2: Ensure dist/index.d.ts exists (type declarations)
+const distDtsPath = path.join(__dirname, '..', 'dist', 'index.d.ts');
+if (!fs.existsSync(distDtsPath)) {
+  console.error('[ERROR] dist/index.d.ts not found. Run `npm run build` first.');
+  hasErrors = true;
+} else {
+  console.log('[OK] dist/index.d.ts exists (type declarations)');
+}
+
+// Check 3: Verify package.json fields
 const pkgPath = path.join(__dirname, '..', 'package.json');
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
