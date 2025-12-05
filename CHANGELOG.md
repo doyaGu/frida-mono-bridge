@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2025-12-05
+
+### Changed
+- Replace `AnyNativeFunction` type alias with proper Frida type definitions (`NativeFunctionReturnValue`, `NativeFunctionArgumentValue[]`)
+- Build now produces single bundled type declaration file using `dts-bundle-generator`
+- Improved npm package structure with clean bundled outputs
+
+### Removed
+- Removed `tsconfig.build.json` (no longer needed with new build system)
+- Removed Mono Members Tests from the test suite
+
+## [0.2.1] - 2025-12-04
+
+### Changed
+- Migrated to esbuild-based bundling system for faster builds
+- Updated prepublish script and enhanced build process
+- Ensure `dist` directory is created before building
+
 ## [0.2.0] - 2025-12-04
 
 ### Added
