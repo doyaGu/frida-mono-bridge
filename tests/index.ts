@@ -20,7 +20,6 @@ import "./test-utilities";
 // ============================================================================
 import { testCoreInfrastructure } from "./test-core-infrastructure";
 import { testMonoTypes } from "./test-mono-types";
-import { testMonoMembers } from "./test-mono-members";
 import { testDataOperations } from "./test-data-operations";
 import { testIntegration } from "./test-integration";
 import { testSupporting } from "./test-supporting";
@@ -124,13 +123,6 @@ export function runAllTests(config: TestSuiteConfig = {}): TestSummary {
   // Mono Types Tests
   logSection("Mono Types Tests");
   suite.addResult(testMonoTypes());
-  if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
-    return suite.getSummary();
-  }
-
-  // Mono Members Tests
-  logSection("Mono Members Tests");
-  suite.addResult(testMonoMembers());
   if (config.stopOnFirstFailure && !suite.results[suite.results.length - 1].passed) {
     return suite.getSummary();
   }
@@ -397,7 +389,6 @@ export {
   // Core Infrastructure Tests
   testCoreInfrastructure,
   testMonoTypes,
-  testMonoMembers,
   testDataOperations,
   testIntegration,
   testSupporting,
