@@ -5,7 +5,6 @@ A TypeScript bridge that exposes the Mono runtime (Unity/Xamarin/embedded Mono) 
 [![npm version](https://img.shields.io/npm/v/frida-mono-bridge.svg)](https://www.npmjs.com/package/frida-mono-bridge)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](tsconfig.json)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)]()
 
 ## Features
 
@@ -15,8 +14,7 @@ A TypeScript bridge that exposes the Mono runtime (Unity/Xamarin/embedded Mono) 
 - **Performance**: LRU caching, native delegate thunks, optimized invocation paths
 - **Thread-Safe**: Automatic thread attachment with proper lifecycle management
 - **Resilient**: Graceful fallbacks for unhookable methods and lazy JIT compilation
-- **Well-Tested**: Comprehensive test suite across 37 test modules
-- **Well-Documented**: Comprehensive JSDoc and guides
+- **Well-Tested**: Comprehensive test suite across 30+ test modules
 
 ## Quick Start
 
@@ -71,7 +69,6 @@ frida-mono-bridge/
 │   ├── test-framework.ts   # Test framework with auto thread management
 │   └── index.ts            # Central export hub for test modules
 ├── docs/                   # Documentation
-├── unity-explorer/         # Unity scene exploration tool
 └── dist/                   # Compiled output
 ```
 
@@ -105,41 +102,21 @@ Mono.detachIfExiting(); // Only detaches if thread is exiting
 
 The Frida Mono Bridge includes a comprehensive test suite organized across **30+ test modules** in 7 categories. The test suite validates all aspects of the bridge from core infrastructure to advanced Unity integration.
 
-### Test Architecture
+### Test Categories
 
-The test suite is organized into **7 logical categories**:
-
-| Category                | Description                               | Test Files                                                                                                                                        |
-| ----------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Core Infrastructure** | Basic module setup, Mono detection        | `test-core-infrastructure`, `test-runtime-api`, `test-data-operations`, `test-integration`, `test-supporting`                                     |
-| **Utility Tests**       | Standalone tests without Mono dependency  | `test-mono-utils`, `test-mono-error-handling`                                                                                                     |
-| **Type System**         | Class, method, field, property operations | `test-mono-class`, `test-mono-method`, `test-mono-field`, `test-mono-property`, `test-mono-types`, `test-generic-types`, `test-custom-attributes` |
-| **Runtime Objects**     | String, array, delegate, object handling  | `test-mono-string`, `test-mono-array`, `test-mono-delegate`, `test-mono-object`, `test-mono-data`                                                 |
-| **Domain & Assembly**   | Domain, assembly, image, threading        | `test-mono-api`, `test-mono-domain`, `test-mono-threading`, `test-mono-module`, `test-mono-assembly`, `test-mono-image`                           |
-| **Advanced Features**   | GC tools, tracing, search utilities       | `test-find-tools`, `test-trace-tools`, `test-gc-tools`                                                                                            |
-| **Unity Integration**   | GameObject, components, engine modules    | `test-unity-gameobject`, `test-unity-components`, `test-unity-engine-modules`                                                                     |
+| Category                | Description                               |
+| ----------------------- | ----------------------------------------- |
+| **Core Infrastructure** | Basic module setup, Mono detection        |
+| **Utility Tests**       | Standalone tests without Mono dependency  |
+| **Type System**         | Class, method, field, property operations |
+| **Runtime Objects**     | String, array, delegate, object handling  |
+| **Domain & Assembly**   | Domain, assembly, image, threading        |
+| **Advanced Features**   | GC tools, tracing, search utilities       |
+| **Unity Integration**   | GameObject, components, engine modules    |
 
 ### Running Tests
 
-#### Complete Test Suite
-
-To approximate a complete run, execute all category runners sequentially against the same target process:
-
-```bash
-# Core Infrastructure
-npm run test:core-infrastructure
-frida -n "YourApp.exe" -l dist/test-core-infrastructure.js
-
-# Type System
-npm run test:mono-class
-frida -n "YourApp.exe" -l dist/test-mono-class.js
-
-# ...and so on for all categories
-```
-
-#### Individual Test Categories
-
-Run specific test categories independently for faster feedback and targeted testing:
+To run the tests, you can use the provided npm scripts. Ensure you have a target Mono application running.
 
 ```bash
 # Core Infrastructure Tests
@@ -162,164 +139,6 @@ frida -n "YourApp.exe" -l dist/test-gc-tools.js
 npm run test:unity-gameobject
 frida -n "YourUnityApp.exe" -l dist/test-unity-gameobject.js
 ```
-
-#### Run All Tests with Your Own Script
-
-You can create a custom PowerShell or Node.js script that sequentially loads each compiled test runner (e.g. `dist/test-mono-api.js`, `dist/test-mono-class.js`, etc.) against the same process.
-
-#### Available Test Categories
-
-**Core & Utility Tests:**
-
-- `test:core-infrastructure` - Core Mono runtime detection and API availability
-- `test:runtime-api` - Runtime API functionality
-- `test:mono-utils` - Utility functions and validation
-- `test:mono-error-handling` - Error scenarios and exception handling
-
-**Type System Tests:**
-
-- `test:mono-class` - Class discovery and metadata operations
-- `test:mono-method` - Method resolution and invocation
-- `test:mono-field` - Field access and operations
-- `test:mono-property` - Property discovery and operations
-- `test:mono-types` - Type system operations
-- `test:generic-types` - Generic type handling
-- `test:custom-attributes` - Custom Attributes
-
-**Runtime Object Tests:**
-
-- `test:mono-string` - String operations
-- `test:mono-array` - Array operations
-- `test:mono-delegate` - Delegate operations
-- `test:mono-object` - Object operations
-- `test:mono-data` - Data manipulation operations
-
-**Domain & Assembly Tests:**
-
-- `test:mono-api` - Low-level Mono API functionality
-- `test:mono-domain` - Domain management and operations
-- `test:mono-threading` - Thread management and synchronization
-- `test:mono-module` - Module loading and operations
-- `test:mono-assembly` - Assembly loading and enumeration
-- `test:mono-image` - Image metadata access
-
-**Advanced Feature Tests:**
-
-- `test:find-tools` - Search and discovery utilities
-- `test:trace-tools` - Method tracing and hooking
-- `test:gc-tools` - GC handle and memory management
-
-**Unity Tests:**
-
-- `test:unity-gameobject` - Unity GameObject operations
-- `test:unity-components` - Unity Component operations
-- `test:unity-engine-modules` - Unity Engine module access
-
-### Test Configuration
-
-Some runners support basic configuration through globals. For example, you can set `__monoTestConfig` / `__monoTestAutoRun` before loading a runner script in Frida to control verbosity or auto-run behavior.
-
-### Expected Test Output
-
-```
-===============================================================
-== Frida Mono Bridge - Comprehensive Test Suite ==
-===============================================================
-
--- Phase 1: Standalone Tests --
-  Core Infrastructure Tests: PASS
-  Mono Utils Tests: PASS
-  Error Handling Tests: PASS
-
--- Phase 2: Mono-Dependent Tests --
-  Type System Tests: PASS (MonoClass, MonoMethod, MonoField, MonoProperty)
-  Runtime Object Tests: PASS (MonoString, MonoArray, MonoDelegate)
-  Domain & Assembly Tests: PASS
-
--- Phase 3: Advanced Feature Tests --
-  Find Tools Tests: PASS
-  Trace Tools Tests: PASS
-  GC Tools Tests: PASS
-  Generic Types Tests: PASS
-  Custom Attributes Tests: PASS
-
-===============================================================
-TEST SUMMARY
-===============================================================
-Total Tests:    750+
-PASS:          750+ (100.0%)
-FAIL:           0 (0.0%)
-SKIP:           0 (0.0%)
-
-ALL TESTS PASSED!
-```
-
-### Performance Benchmarking
-
-The test suite includes built-in performance benchmarking:
-
-- **API Call Performance**: Measures speed of repeated API calls
-- **Memory Allocation**: Tracks memory usage patterns
-- **Cache Efficiency**: Validates caching strategies
-- **Large Dataset Handling**: Tests performance with big data
-- **Concurrent Operations**: Measures thread safety overhead
-
-### Troubleshooting
-
-#### Tests Fail to Compile
-
-```bash
-# Check for TypeScript errors
-npm run lint
-
-# Check specific file
-npx tsc --noEmit tests/test-myfile.ts
-```
-
-#### Tests Fail at Runtime
-
-**Common Issues:**
-
-1. **Target not using Mono** - Ensure the application uses Mono runtime
-2. **Application state** - App may need to be in a specific state
-3. **Missing assemblies** - Some tests require specific assemblies loaded
-
-**Check Mono availability:**
-
-```typescript
-try {
-  Mono.attachThread();
-  console.log("Mono runtime available");
-} catch (error) {
-  console.error("Mono runtime not available:", error);
-}
-```
-
-#### Version-Specific Failures
-
-Some Mono APIs may not be available in all versions:
-
-- `mono_domain_get` - Optional in some builds
-- `mono_domain_assembly_open` - Optional in some builds
-- `mono_table_info_get` - Optional in some builds
-
-Tests handle this gracefully by checking availability first.
-
-### Best Practices
-
-1. **Always attach thread** - Call `Mono.attachThread()` before API calls
-2. **Check feature flags** - Skip tests for unsupported features
-3. **Use assertions** - Validate assumptions explicitly
-4. **Handle errors** - Wrap risky operations in try-catch
-5. **Keep tests focused** - Each test should validate one thing
-6. **Add descriptive messages** - Make assertion failures clear
-7. **Follow dependency phases** - Run standalone tests before Mono-dependent tests
-8. **Use selective testing** - Run specific categories when debugging
-9. **Monitor performance** - Use built-in benchmarking to identify bottlenecks
-
-**Test Coverage**: 1,000+ tests across 30+ test files with 100% pass rate.
-
-See **[tests/README.md](tests/README.md)** for detailed documentation.
 
 ## Advanced Features
 
@@ -352,7 +171,6 @@ const assemblyAttrs = assembly?.getCustomAttributes();
 
 const klass = assembly?.image.class("Game", "Player");
 const classAttrs = klass?.getCustomAttributes();
-// Check for SerializableAttribute, ObsoleteAttribute, etc.
 
 const method = klass?.method("Update", 0);
 const methodAttrs = method?.getCustomAttributes();
@@ -377,11 +195,6 @@ const dictDef = Mono.domain.class("System.Collections.Generic.Dictionary`2");
 const intClass = Mono.domain.class("System.Int32");
 const dictOfStringInt = dictDef?.makeGenericType([stringClass!, intClass!]);
 // dictOfStringInt is now Dictionary<string, int>
-
-// Check generic type properties
-console.log(listDef?.isGenericTypeDefinition()); // true
-console.log(listOfString?.isConstructedGenericType()); // true
-console.log(listDef?.getGenericParameterCount()); // 1
 ```
 
 ### Search & Tracing
