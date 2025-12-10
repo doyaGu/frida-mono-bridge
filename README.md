@@ -66,10 +66,10 @@ frida-mono-bridge/
 │   ├── utils/              # Utilities: find, trace, gc, cache, logging
 │   ├── mono.ts             # MonoNamespace - Main fluent API entry point
 │   └── index.ts            # Global entry point and exports
-├── tests/                  # Test suite (37 test modules)
-│   ├── runners/            # Individual test runners (32 files)
+├── tests/                  # Test suite (30+ test modules)
+│   ├── runners/            # Individual test runners
 │   ├── test-framework.ts   # Test framework with auto thread management
-│   └── index.ts            # Test suite orchestrator
+│   └── index.ts            # Central export hub for test modules
 ├── docs/                   # Documentation
 ├── unity-explorer/         # Unity scene exploration tool
 └── dist/                   # Compiled output
@@ -98,42 +98,43 @@ Mono.perform(() => {
 });
 
 // Thread-safe cleanup (safe to call anytime)
-Mono.detachIfExiting();  // Only detaches if thread is exiting
+Mono.detachIfExiting(); // Only detaches if thread is exiting
 ```
 
 ## Testing
 
-The Frida Mono Bridge includes a comprehensive test suite organized across **37 test modules** in 7 categories. The test suite validates all aspects of the bridge from core infrastructure to advanced Unity integration.
+The Frida Mono Bridge includes a comprehensive test suite organized across **30+ test modules** in 7 categories. The test suite validates all aspects of the bridge from core infrastructure to advanced Unity integration.
 
 ### Test Architecture
 
 The test suite is organized into **7 logical categories**:
 
-| Category                | Description                               | Test Files                                                                                                              |
-| ----------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **Core Infrastructure** | Basic module setup, Mono detection        | `test-core-infrastructure`, `test-runtime-api`, `test-data-operations`, `test-integration`, `test-supporting`           |
-| **Utility Tests**       | Standalone tests without Mono dependency  | `test-mono-utils`, `test-mono-error-handling`                                                                           |
+| Category                | Description                               | Test Files                                                                                                                                        |
+| ----------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Core Infrastructure** | Basic module setup, Mono detection        | `test-core-infrastructure`, `test-runtime-api`, `test-data-operations`, `test-integration`, `test-supporting`                                     |
+| **Utility Tests**       | Standalone tests without Mono dependency  | `test-mono-utils`, `test-mono-error-handling`                                                                                                     |
 | **Type System**         | Class, method, field, property operations | `test-mono-class`, `test-mono-method`, `test-mono-field`, `test-mono-property`, `test-mono-types`, `test-generic-types`, `test-custom-attributes` |
-| **Runtime Objects**     | String, array, delegate, object handling  | `test-mono-string`, `test-mono-array`, `test-mono-delegate`, `test-mono-object`, `test-mono-data`                       |
-| **Domain & Assembly**   | Domain, assembly, image, threading        | `test-mono-api`, `test-mono-domain`, `test-mono-threading`, `test-mono-module`, `test-mono-assembly`, `test-mono-image` |
-| **Advanced Features**   | GC tools, tracing, search utilities       | `test-find-tools`, `test-trace-tools`, `test-gc-tools`                                                                  |
-| **Unity Integration**   | GameObject, components, engine modules    | `test-unity-gameobject`, `test-unity-components`, `test-unity-engine-modules`                                           |
+| **Runtime Objects**     | String, array, delegate, object handling  | `test-mono-string`, `test-mono-array`, `test-mono-delegate`, `test-mono-object`, `test-mono-data`                                                 |
+| **Domain & Assembly**   | Domain, assembly, image, threading        | `test-mono-api`, `test-mono-domain`, `test-mono-threading`, `test-mono-module`, `test-mono-assembly`, `test-mono-image`                           |
+| **Advanced Features**   | GC tools, tracing, search utilities       | `test-find-tools`, `test-trace-tools`, `test-gc-tools`                                                                                            |
+| **Unity Integration**   | GameObject, components, engine modules    | `test-unity-gameobject`, `test-unity-components`, `test-unity-engine-modules`                                                                     |
 
 ### Running Tests
 
 #### Complete Test Suite
 
-Run all tests together with comprehensive reporting:
+To approximate a complete run, execute all category runners sequentially against the same target process:
 
 ```bash
-# Build the complete test suite
-npm run test
+# Core Infrastructure
+npm run test:core-infrastructure
+frida -n "YourApp.exe" -l dist/test-core-infrastructure.js
 
-# Run against a Mono application
-frida -n "YourApp.exe" -l dist/tests.js
+# Type System
+npm run test:mono-class
+frida -n "YourApp.exe" -l dist/test-mono-class.js
 
-# Example with Unity game
-frida -n "Platformer.exe" -l dist/tests.js
+# ...and so on for all categories
 ```
 
 #### Individual Test Categories
@@ -162,12 +163,9 @@ npm run test:unity-gameobject
 frida -n "YourUnityApp.exe" -l dist/test-unity-gameobject.js
 ```
 
-#### Run All Tests with PowerShell Script
+#### Run All Tests with Your Own Script
 
-```powershell
-# Run all test categories against a process
-.\run-all-tests.ps1 -ProcessId <PID>
-```
+You can create a custom PowerShell or Node.js script that sequentially loads each compiled test runner (e.g. `dist/test-mono-api.js`, `dist/test-mono-class.js`, etc.) against the same process.
 
 #### Available Test Categories
 
@@ -219,20 +217,7 @@ frida -n "YourUnityApp.exe" -l dist/test-unity-gameobject.js
 
 ### Test Configuration
 
-The test suite supports various configuration options:
-
-```typescript
-// Configure test execution
-runAllTests({
-  skipSlowTests: false, // Skip tests that take a long time
-  skipAdvancedTests: false, // Skip advanced feature tests
-  skipUnityTests: false, // Skip Unity-specific tests
-  skipPerformanceTests: false, // Skip performance-intensive tests
-  verbose: true, // Show detailed output
-  stopOnFirstFailure: false, // Stop on first failing test
-  categories: ["core"], // Run specific categories only
-});
-```
+Some runners support basic configuration through globals. For example, you can set `__monoTestConfig` / `__monoTestAutoRun` before loading a runner script in Frida to control verbosity or auto-run behavior.
 
 ### Expected Test Output
 
@@ -332,7 +317,7 @@ Tests handle this gracefully by checking availability first.
 8. **Use selective testing** - Run specific categories when debugging
 9. **Monitor performance** - Use built-in benchmarking to identify bottlenecks
 
-**Test Coverage**: 750+ tests across 37 test files with 100% pass rate.
+**Test Coverage**: 1,000+ tests across 30+ test files with 100% pass rate.
 
 See **[tests/README.md](tests/README.md)** for detailed documentation.
 
@@ -351,13 +336,10 @@ batch.add(() => player.method("Render").invoke(player, []));
 const results = batch.executeAll();
 
 // Safe operations with built-in error handling
-const safeFn = withErrorHandling(
-  (damage: number) => {
-    const method = playerClass.method("TakeDamage", 1);
-    return method.invoke(instance, [damage]);
-  },
-  "player damage calculation"
-);
+const safeFn = withErrorHandling((damage: number) => {
+  const method = playerClass.method("TakeDamage", 1);
+  return method.invoke(instance, [damage]);
+}, "player damage calculation");
 const result = safeFn(100);
 ```
 
