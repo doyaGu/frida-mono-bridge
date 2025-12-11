@@ -5,10 +5,10 @@
  * Uses esbuild to bundle the library for npm distribution
  */
 
-import * as esbuild from "esbuild";
 import { execSync } from "child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "fs";
-import { resolve, dirname } from "path";
+import * as esbuild from "esbuild";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,18 +42,15 @@ await esbuild.build({
     js: "// frida-mono-bridge - TypeScript bridge for Mono runtimes\n// https://github.com/doyaGu/frida-mono-bridge\n",
   },
 });
-console.log("  ✓ dist/index.js created\n");
+console.log("  [OK] dist/index.js created\n");
 
 // Step 2: Generate bundled TypeScript declarations
 console.log("[2/2] Generating TypeScript declarations...");
 try {
-  execSync(
-    "npx dts-bundle-generator -o dist/index.d.ts src/index.ts --no-check --no-banner",
-    {
-      cwd: rootDir,
-      stdio: "inherit",
-    }
-  );
+  execSync("npx dts-bundle-generator -o dist/index.d.ts src/index.ts --no-check --no-banner", {
+    cwd: rootDir,
+    stdio: "inherit",
+  });
 
   // Add banner to the generated .d.ts file
   const dtsPath = resolve(distDir, "index.d.ts");
@@ -64,9 +61,9 @@ try {
 `;
   writeFileSync(dtsPath, banner + dtsContent);
 
-  console.log("  ✓ dist/index.d.ts created\n");
+  console.log("  [OK] dist/index.d.ts created\n");
 } catch (error) {
-  console.error("  ✗ Failed to generate declarations");
+  console.error("  [ERROR] Failed to generate declarations");
   process.exit(1);
 }
 
