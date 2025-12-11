@@ -63,6 +63,20 @@ frida -n "UnityGame.exe" -l dist/agent.js
 - **Frida**: >= 19.0.0 (peer dependency)
 - **Target**: Any process with Mono runtime (Unity games, Xamarin apps, embedded Mono)
 
+### Installing Frida
+
+You need the Frida command-line tools available on your development machine:
+
+```bash
+# Install Frida tools via pip (recommended)
+pip install frida-tools
+
+# Verify installation
+frida --version
+```
+
+For platform-specific installation options (Linux, macOS, Windows, Android, iOS), see the official Frida documentation: https://frida.re/docs/home/
+
 ## Architecture
 
 The library is organized into three main layers:
