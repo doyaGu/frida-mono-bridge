@@ -1,13 +1,37 @@
+/**
+ * Runtime API - Core interface to Mono C API with intelligent caching and thread management.
+ *
+ * Provides:
+ * - Automatic thread attachment/detachment for Mono API calls
+ * - LRU caching for frequently accessed functions and addresses
+ * - Exception handling with detailed error extraction
+ * - Resource lifecycle management
+ * - Delegate thunk management
+ *
+ * @module runtime/api
+ */
+
 import { LruCache } from "../utils/cache";
+import { MonoErrorCodes, MonoThreadError, raise } from "../utils/errors";
 import { allocPointerArray, pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
 import { MonoModuleInfo } from "./module";
 import { ALL_MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./signatures";
 import type { ThreadManager } from "./thread";
 
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+/**
+ * Basic argument type for Mono native function calls.
+ */
 export type MonoArg = NativePointer | number | boolean | string | null | undefined;
 
-/** Argument types that can be passed to method/delegate invocation */
+/**
+ * Argument types that can be passed to method/delegate invocation.
+ * Supports both direct values and objects with pointer properties.
+ */
 export type InvocationArgument =
   | { pointer: NativePointer }
   | NativePointer
@@ -18,76 +42,134 @@ export type InvocationArgument =
   | null
   | undefined;
 
+/**
+ * Native function wrapper type for Mono API functions.
+ * Uses any for flexibility with Frida's dynamic native function system.
+ */
+export type MonoNativeFunction = (...args: MonoArg[]) => any;
+
+/**
+ * Bindings for all Mono native functions.
+ * Provides typed access to Mono C API with automatic thread management.
+ */
 export type MonoNativeBindings = {
-  [Name in MonoApiName]: (...args: MonoArg[]) => any;
+  [Name in MonoApiName]: MonoNativeFunction;
 };
 
-export class MonoFunctionResolutionError extends Error {
-  constructor(
-    public readonly exportName: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = "MonoFunctionResolutionError";
-  }
+/**
+ * Information about a delegate's invoke method and unmanaged thunk.
+ */
+export interface DelegateThunkInfo {
+  /** Pointer to the delegate's Invoke method */
+  invoke: NativePointer;
+  /** Pointer to the unmanaged thunk for direct invocation */
+  thunk: NativePointer;
 }
 
 /**
- * Error thrown when a managed exception occurs during mono_runtime_invoke.
- * Contains the raw exception object pointer and extracted details when available.
+ * Details extracted from a managed exception.
  */
-export class MonoManagedExceptionError extends Error {
-  constructor(
-    public readonly exception: NativePointer,
-    public readonly exceptionType?: string,
-    public readonly exceptionMessage?: string,
-  ) {
-    const details = exceptionMessage ? `: ${exceptionMessage}` : "";
-    const type = exceptionType ? ` (${exceptionType})` : "";
-    super(`Managed exception thrown${type}${details}`);
-    this.name = "MonoManagedExceptionError";
-  }
+export interface ExceptionDetails {
+  /** Full type name of the exception */
+  type?: string;
+  /** Exception message */
+  message?: string;
 }
 
-export interface DelegateThunkInfo {
-  invoke: NativePointer;
-  thunk: NativePointer;
-}
+// ============================================================================
+// CONFIGURATION CONSTANTS
+// ============================================================================
 
 /**
  * Maximum cache sizes for LRU caches to prevent unbounded memory growth.
  */
 const CACHE_LIMITS = {
+  /** Maximum number of cached native functions */
   FUNCTION_CACHE: 256,
+  /** Maximum number of cached export addresses */
   ADDRESS_CACHE: 512,
+  /** Maximum number of cached delegate thunks */
   DELEGATE_THUNK_CACHE: 128,
-};
+} as const;
+
+/**
+ * Default timeouts and intervals for runtime operations.
+ */
+const DEFAULT_TIMEOUTS = {
+  /** Default timeout for waiting for root domain (ms) */
+  ROOT_DOMAIN_WAIT: 30_000,
+  /** Time to wait before warning about slow initialization (ms) */
+  WARN_AFTER: 10_000,
+  /** Polling interval for checking root domain readiness (ms) */
+  POLL_INTERVAL: 50,
+} as const;
+
+// ============================================================================
+// MAIN API CLASS
+// ============================================================================
 
 /**
  * Core API wrapper for Mono runtime functions.
- * Provides high-level access to Mono C API with automatic thread attachment,
- * exception handling, and intelligent caching with LRU eviction.
+ *
+ * Provides high-level access to Mono C API with:
+ * - Automatic thread attachment/detachment via ThreadManager
+ * - Intelligent LRU caching for functions, addresses, and delegate thunks
+ * - Managed exception handling with detailed error extraction
+ * - Resource lifecycle management and cleanup
+ * - Type-safe native function bindings
+ *
+ * @example
+ * ```typescript
+ * const api = createMonoApi(moduleInfo);
+ *
+ * // Wait for runtime to be ready
+ * await api.waitForRootDomainReady(30000);
+ *
+ * // Use native bindings (automatically handles threads)
+ * const domain = api.native.mono_get_root_domain();
+ *
+ * // Clean up when done
+ * api.dispose();
+ * ```
  */
 export class MonoApi {
+  // ===== CACHES =====
+
+  /** LRU cache for native function wrappers */
   private readonly functionCache = new LruCache<
     MonoApiName,
     NativeFunction<NativeFunctionReturnValue, NativeFunctionArgumentValue[]>
   >(CACHE_LIMITS.FUNCTION_CACHE);
+
+  /** LRU cache for export addresses */
   private readonly addressCache = new LruCache<MonoApiName, NativePointer>(CACHE_LIMITS.ADDRESS_CACHE);
+
+  /** LRU cache for delegate thunk information */
   private readonly delegateThunkCache = new LruCache<string, DelegateThunkInfo>(CACHE_LIMITS.DELEGATE_THUNK_CACHE);
+
+  // ===== RUNTIME STATE =====
 
   /**
    * Exception slot for mono_runtime_invoke exception handling.
    * Allocated once and reused for session lifetime (pointer size: ~8 bytes).
    */
   private exceptionSlot: NativePointer | null = null;
+
+  /** Cached root domain pointer */
   private rootDomain: NativePointer | null = null;
 
-  /**
-   * Track allocated resources for proper cleanup
-   */
+  /** Cached module handle */
+  private moduleHandle: Module | null = null;
+
+  // ===== RESOURCE TRACKING =====
+
+  /** Track allocated resources for proper cleanup */
   private allocatedResources: NativePointer[] = [];
+
+  /** Disposal flag to prevent use-after-dispose */
   private disposed = false;
+
+  // ===== PUBLIC API =====
 
   /**
    * Thread manager for this API instance.
@@ -95,38 +177,217 @@ export class MonoApi {
    */
   public _threadManager!: ThreadManager;
 
-  // Lazily bound invokers keyed by Mono export name.
+  /**
+   * Lazily bound native function invokers.
+   * All calls automatically handle thread attachment via ThreadManager.
+   */
   public readonly native: MonoNativeBindings = this.createNativeBindings();
-
-  private moduleHandle: Module | null = null;
 
   constructor(private readonly module: MonoModuleInfo) {}
 
+  // ============================================================================
+  // THREAD MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Try to attach the current thread to the Mono runtime without throwing.
+   * @returns Thread handle if successful, null if failed
+   *
+   * @example
+   * ```typescript
+   * const thread = api.tryAttachThread();
+   * if (thread) {
+   *   // Thread attached successfully
+   *   api.detachThread(thread);
+   * }
+   * ```
+   */
+  tryAttachThread(): NativePointer | null {
+    try {
+      const rootDomain = this.tryGetRootDomain();
+      if (!rootDomain) {
+        return null;
+      }
+      const thread = this.native.mono_thread_attach(rootDomain);
+      if (pointerIsNull(thread)) {
+        return null;
+      }
+      return thread;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Attach the current thread to the Mono runtime.
+   * @throws MonoThreadError if attachment fails
+   */
   attachThread(): NativePointer {
     const rootDomain = this.getRootDomain();
     const thread = this.native.mono_thread_attach(rootDomain);
     if (pointerIsNull(thread)) {
-      throw new Error("mono_thread_attach returned NULL; ensure the Mono runtime is initialised");
+      throw new MonoThreadError(
+        "mono_thread_attach returned NULL. Ensure the Mono runtime is initialised before attaching threads",
+      );
     }
     return thread;
   }
 
+  /**
+   * Detach a thread from the Mono runtime.
+   * @param thread Thread handle returned from attachThread() or tryAttachThread()
+   */
   detachThread(thread: NativePointer): void {
     this.native.mono_thread_detach(thread);
   }
 
+  // ============================================================================
+  // ROOT DOMAIN ACCESS
+  // ============================================================================
+
+  /**
+   * Get the root domain, throwing if not available.
+   *
+   * @returns Root domain pointer
+   * @throws {MonoRuntimeNotReadyError} if root domain is NULL
+   *
+   * @example
+   * ```typescript
+   * const domain = api.getRootDomain();
+   * ```
+   */
   getRootDomain(): NativePointer {
     if (this.rootDomain && !pointerIsNull(this.rootDomain)) {
       return this.rootDomain;
     }
     const domain = this.native.mono_get_root_domain();
     if (pointerIsNull(domain)) {
-      throw new Error("mono_get_root_domain returned NULL. Mono may not be initialised in this process");
+      raise(
+        MonoErrorCodes.RUNTIME_NOT_READY,
+        "mono_get_root_domain returned NULL",
+        "Mono may not be initialized. Try injecting later or use Mono.initialize() to wait",
+      );
     }
     this.rootDomain = domain;
     return domain;
   }
 
+  /**
+   * Attempts to retrieve the root domain without throwing.
+   * Useful for initialization flows that need to wait until Mono is ready.
+   */
+  tryGetRootDomain(): NativePointer | null {
+    try {
+      if (this.rootDomain && !pointerIsNull(this.rootDomain)) {
+        return this.rootDomain;
+      }
+      const domain = this.native.mono_get_root_domain();
+      if (pointerIsNull(domain)) {
+        return null;
+      }
+      this.rootDomain = domain;
+      return domain;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Try to wait for root domain to become ready without throwing.
+   *
+   * @param timeoutMs Maximum time to wait for root domain (ms)
+   * @param warnAfterMs Time to wait before logging a warning (ms)
+   * @param pollIntervalMs Interval between checks (ms)
+   * @returns Root domain pointer if ready within timeout, null on timeout
+   *
+   * @example
+   * ```typescript
+   * // Wait up to 30 seconds
+   * const domain = await api.tryWaitForRootDomainReady(30000);
+   * if (domain) {
+   *   console.log('Mono runtime is ready');
+   * } else {
+   *   console.log('Timeout waiting for Mono');
+   * }
+   * ```
+   */
+  async tryWaitForRootDomainReady(
+    timeoutMs: number,
+    warnAfterMs: number = DEFAULT_TIMEOUTS.WARN_AFTER,
+    pollIntervalMs: number = DEFAULT_TIMEOUTS.POLL_INTERVAL,
+  ): Promise<NativePointer | null> {
+    const deadline = Date.now() + timeoutMs;
+    const warnAt = Date.now() + warnAfterMs;
+    let didWarn = false;
+
+    while (Date.now() < deadline) {
+      const domain = this.tryGetRootDomain();
+      if (domain && !pointerIsNull(domain)) {
+        return domain;
+      }
+
+      if (!didWarn && Date.now() >= warnAt) {
+        didWarn = true;
+        console.warn("[Mono] Waiting for Mono runtime to become ready (root domain is NULL)...");
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    }
+
+    return null;
+  }
+
+  /**
+   * Wait for root domain to become ready, throwing on timeout.
+   *
+   * @param timeoutMs Maximum time to wait for root domain (ms)
+   * @param warnAfterMs Time to wait before logging a warning (ms)
+   * @param pollIntervalMs Interval between checks (ms)
+   * @returns Root domain pointer
+   * @throws {MonoRuntimeNotReadyError} if root domain not ready within timeout
+   *
+   * @example
+   * ```typescript
+   * try {
+   *   const domain = await api.waitForRootDomainReady(30000);
+   *   console.log('Mono runtime is ready');
+   * } catch (error) {
+   *   console.error('Failed to initialize Mono:', error);
+   * }
+   * ```
+   */
+  async waitForRootDomainReady(
+    timeoutMs: number,
+    warnAfterMs: number = DEFAULT_TIMEOUTS.WARN_AFTER,
+    pollIntervalMs: number = DEFAULT_TIMEOUTS.POLL_INTERVAL,
+  ): Promise<NativePointer> {
+    const domain = await this.tryWaitForRootDomainReady(timeoutMs, warnAfterMs, pollIntervalMs);
+    if (domain) {
+      return domain;
+    }
+
+    raise(
+      MonoErrorCodes.RUNTIME_NOT_READY,
+      `Timed out waiting for Mono runtime to become ready (mono_get_root_domain stayed NULL after ${timeoutMs}ms)`,
+      "Try injecting later or increase Mono.config.initializeTimeoutMs",
+    );
+  }
+
+  // ============================================================================
+  // STRING AND INVOCATION UTILITIES
+  // ============================================================================
+
+  /**
+   * Create a new MonoString from a JavaScript string.
+   *
+   * @param text String to convert
+   * @returns Pointer to MonoString
+   *
+   * @example
+   * ```typescript
+   * const monoStr = api.stringNew('Hello, Mono!');
+   * ```
+   */
   stringNew(text: string): NativePointer {
     const domain = this.getRootDomain();
     const data = Memory.allocUtf8String(text);
@@ -134,14 +395,14 @@ export class MonoApi {
   }
 
   /**
-   * Invokes a managed method with exception handling and detail extraction.
+   * Invoke a managed method with exception handling and detail extraction.
    * Automatically attaches exception slot and extracts exception type/message on error.
    *
    * @param method Pointer to MonoMethod
    * @param instance Instance pointer (NULL for static methods)
    * @param args Array of argument pointers
    * @returns Result pointer from the invocation
-   * @throws MonoManagedExceptionError with extracted exception details
+   * @throws {MonoManagedExceptionError} with extracted exception details
    */
   runtimeInvoke(method: NativePointer, instance: NativePointer | null, args: NativePointer[]): NativePointer {
     const invoke = this.native.mono_runtime_invoke;
@@ -152,7 +413,8 @@ export class MonoApi {
     const exception = exceptionSlot.readPointer();
     if (!pointerIsNull(exception)) {
       const details = this.extractExceptionDetails(exception);
-      throw new MonoManagedExceptionError(exception, details.type, details.message);
+      const message = details.message || `Managed exception thrown: ${details.type || "Unknown"}`;
+      raise(MonoErrorCodes.MANAGED_EXCEPTION, message, details.type ? `Exception type: ${details.type}` : undefined);
     }
     return result;
   }
@@ -164,7 +426,7 @@ export class MonoApi {
    * @param exception Pointer to managed exception object
    * @returns Object with optional type and message strings
    */
-  private extractExceptionDetails(exception: NativePointer): { type?: string; message?: string } {
+  private extractExceptionDetails(exception: NativePointer): ExceptionDetails {
     try {
       const klass = this.native.mono_object_get_class(exception);
       if (pointerIsNull(klass)) {
@@ -258,12 +520,12 @@ export class MonoApi {
   }
 
   /**
-   * Prepare an argument for managed method/delegate invocation
-   * Converts JS values to appropriate Mono pointers
+   * Prepare an argument for managed method/delegate invocation.
+   * Converts JS values to appropriate Mono pointers.
    *
    * @param arg The argument to prepare
    * @returns NativePointer suitable for passing to mono_runtime_invoke
-   * @throws Error if primitive types need manual boxing
+   * @throws {MonoValidationError} if primitive types need manual boxing
    */
   prepareInvocationArgument(arg: InvocationArgument): NativePointer {
     if (arg === null || arg === undefined) {
@@ -279,11 +541,32 @@ export class MonoApi {
       return this.stringNew(arg);
     }
     if (typeof arg === "number" || typeof arg === "boolean" || typeof arg === "bigint") {
-      throw new Error("Primitive arguments need manual boxing before invocation");
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        "Primitive arguments need manual boxing before invocation",
+        "Use MonoObject.box() to wrap primitive values",
+      );
     }
     return arg as NativePointer;
   }
 
+  // ============================================================================
+  // DELEGATE AND INTERNAL CALL MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Get or create cached delegate thunk information.
+   *
+   * @param delegateClass Pointer to delegate class
+   * @returns Delegate thunk info with invoke method and unmanaged thunk
+   * @throws {MonoError} if delegate class is invalid or thunk creation fails
+   *
+   * @example
+   * ```typescript
+   * const thunkInfo = api.getDelegateThunk(delegateClassPtr);
+   * // Use thunkInfo.invoke or thunkInfo.thunk
+   * ```
+   */
   getDelegateThunk(delegateClass: NativePointer): DelegateThunkInfo {
     this.ensureNotDisposed();
 
@@ -291,12 +574,18 @@ export class MonoApi {
     return this.delegateThunkCache.getOrCreate(key, () => {
       const invoke = this.native.mono_get_delegate_invoke(delegateClass);
       if (pointerIsNull(invoke)) {
-        throw new Error("Delegate invoke method not available for provided class");
+        raise(
+          MonoErrorCodes.METHOD_NOT_FOUND,
+          "Delegate invoke method not available for provided class",
+          "Ensure the class is a valid delegate type",
+        );
       }
       const thunk = this.native.mono_method_get_unmanaged_thunk(invoke);
       if (pointerIsNull(thunk)) {
-        throw new Error(
-          "mono_method_get_unmanaged_thunk returned NULL. This Mono build may not support unmanaged thunks",
+        raise(
+          MonoErrorCodes.NOT_SUPPORTED,
+          "mono_method_get_unmanaged_thunk returned NULL",
+          "This Mono build may not support unmanaged thunks",
         );
       }
       return { invoke, thunk };
@@ -304,22 +593,34 @@ export class MonoApi {
   }
 
   /**
-   * Registers an internal call (native function callable from managed code).
+   * Register an internal call (native function callable from managed code).
    *
    * @param name Fully qualified method name (e.g., "Namespace.Class::MethodName")
    * @param callback Native function pointer to invoke
-   * @throws Error if name is empty or callback is null
+   * @throws {MonoValidationError} if name is empty or callback is null
    */
   addInternalCall(name: string, callback: NativePointer): void {
     if (!name || name.trim().length === 0) {
-      throw new Error("Internal call name must be a non-empty string");
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        "Internal call name must be a non-empty string",
+        "Provide a valid fully qualified method name",
+      );
     }
     if (pointerIsNull(callback)) {
-      throw new Error("Internal call callback must not be NULL");
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        "Internal call callback must not be NULL",
+        "Provide a valid NativePointer to the callback function",
+      );
     }
     const namePtr = Memory.allocUtf8String(name);
     this.native.mono_add_internal_call(namePtr, callback);
   }
+
+  // ============================================================================
+  // RESOURCE MANAGEMENT AND CLEANUP
+  // ============================================================================
 
   /**
    * Cleans up resources associated with this MonoApi instance.
@@ -374,7 +675,11 @@ export class MonoApi {
    */
   private ensureNotDisposed(): void {
     if (this.disposed) {
-      throw new Error("MonoApi has been disposed");
+      raise(
+        MonoErrorCodes.DISPOSED,
+        "MonoApi has been disposed",
+        "Create a new MonoApi instance or avoid using after disposal",
+      );
     }
   }
 
@@ -386,6 +691,18 @@ export class MonoApi {
     return ptr;
   }
 
+  // ============================================================================
+  // UTILITY METHODS
+  // ============================================================================
+
+  /**
+   * Call a native function by name with type parameter.
+   *
+   * @typeParam T Return type
+   * @param name Mono API function name
+   * @param args Function arguments
+   * @returns Function result
+   */
   call<T = NativePointer>(name: MonoApiName, ...args: MonoArg[]): T {
     const fn = this.native[name] as (...fnArgs: MonoArg[]) => T;
     return fn(...args);
@@ -404,23 +721,59 @@ export class MonoApi {
     // This is acceptable for short-lived scripts
   }
 
+  // ============================================================================
+  // EXPORT RESOLUTION AND MODULE ACCESS
+  // ============================================================================
+
+  /**
+   * Check if a Mono export is available.
+   *
+   * @param name Export name to check
+   * @returns True if export exists, false otherwise
+   */
   hasExport(name: MonoApiName): boolean {
-    try {
-      const address = this.resolveAddress(name, false);
-      return !pointerIsNull(address);
-    } catch (_error) {
-      return false;
-    }
+    return this.tryResolveAddress(name) !== null;
   }
 
-  getNativeFunction(
+  /**
+   * Try to get a native function without throwing.
+   * @returns NativeFunction if export found, null otherwise
+   */
+  tryGetNativeFunction(
     name: MonoApiName,
-  ): NativeFunction<NativeFunctionReturnValue, NativeFunctionArgumentValue[]> {
+  ): NativeFunction<NativeFunctionReturnValue, NativeFunctionArgumentValue[]> | null {
+    this.ensureNotDisposed();
+
+    const cached = this.functionCache.get(name);
+    if (cached) {
+      return cached;
+    }
+
+    const address = this.tryResolveAddress(name);
+    if (!address) {
+      return null;
+    }
+
+    const signature = getSignature(name);
+    const fn = new NativeFunction(
+      address,
+      signature.retType as NativeFunctionReturnType,
+      signature.argTypes as NativeFunctionArgumentType[],
+    );
+    this.functionCache.set(name, fn);
+    return fn;
+  }
+
+  /**
+   * Get a native function, throwing if not found.
+   * @throws MonoExportNotFoundError if export not found
+   */
+  getNativeFunction(name: MonoApiName): NativeFunction<NativeFunctionReturnValue, NativeFunctionArgumentValue[]> {
     this.ensureNotDisposed();
 
     return this.functionCache.getOrCreate(name, () => {
       const signature = getSignature(name);
-      const address = this.resolveAddress(name, true, signature);
+      const address = this.resolveAddress(name, signature);
       return new NativeFunction(
         address,
         signature.retType as NativeFunctionReturnType,
@@ -429,6 +782,106 @@ export class MonoApi {
     });
   }
 
+  /**
+   * Try to resolve an export address without throwing.
+   * @returns Address if found, null otherwise
+   */
+  tryResolveAddress(name: MonoApiName, signature: MonoExportSignature = getSignature(name)): NativePointer | null {
+    this.ensureNotDisposed();
+
+    const cached = this.addressCache.get(name);
+    if (cached) {
+      return cached;
+    }
+
+    const moduleHandle = this.tryGetModuleHandle();
+    if (!moduleHandle) {
+      return null;
+    }
+
+    const exportNames = [signature.name, ...(signature.aliases ?? [])];
+    for (const exportName of exportNames) {
+      const address = moduleHandle.findExportByName(exportName);
+      if (address) {
+        this.addressCache.set(name, address);
+        return address;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Resolve an export address, throwing if not found.
+   * @throws MonoExportNotFoundError if export not found
+   */
+  resolveAddress(name: MonoApiName, signature: MonoExportSignature = getSignature(name)): NativePointer {
+    const address = this.tryResolveAddress(name, signature);
+    if (address) {
+      return address;
+    }
+
+    raise(
+      MonoErrorCodes.EXPORT_NOT_FOUND,
+      `Unable to resolve Mono export ${signature.name} in ${this.module.name}`,
+      "Consider adding an alias in manual.ts",
+    );
+  }
+
+  /**
+   * Get the resolved address for an export by name.
+   * This is a public accessor for building the Mono.exports proxy.
+   *
+   * @param name Export name
+   * @returns Resolved address or null if not found
+   */
+  getExportAddress(name: MonoApiName): NativePointer | null {
+    return this.tryResolveAddress(name);
+  }
+
+  /**
+   * Try to get the module handle without throwing.
+   * @returns Module if found, null otherwise
+   */
+  tryGetModuleHandle(): Module | null {
+    if (this.moduleHandle) {
+      return this.moduleHandle;
+    }
+
+    const handle = Process.findModuleByName(this.module.name);
+    if (handle === null) {
+      return null;
+    }
+    this.moduleHandle = handle;
+    return handle;
+  }
+
+  /**
+   * Get the module handle, throwing if not loaded.
+   * @returns Module handle
+   * @throws {MonoModuleNotFoundError} if module not loaded
+   */
+  getModuleHandle(): Module {
+    const handle = this.tryGetModuleHandle();
+    if (handle) {
+      return handle;
+    }
+
+    raise(
+      MonoErrorCodes.MODULE_NOT_FOUND,
+      `Module ${this.module.name} is not loaded in the current process`,
+      "Ensure the Mono runtime has been initialized and the module is loaded",
+    );
+  }
+
+  // ============================================================================
+  // INTERNAL IMPLEMENTATION
+  // ============================================================================
+
+  /**
+   * Create native bindings with automatic thread management.
+   * Uses lazy property getters to initialize functions on first access.
+   */
   private createNativeBindings(): MonoNativeBindings {
     const bindings: Partial<MonoNativeBindings> = {};
     const target = bindings as Record<MonoApiName, (...args: MonoArg[]) => any>;
@@ -478,55 +931,16 @@ export class MonoApi {
     this.exceptionSlot = this.trackAllocation(Memory.alloc(Process.pointerSize));
     return this.exceptionSlot;
   }
-
-  private resolveAddress(
-    name: MonoApiName,
-    throwOnMissing: boolean,
-    signature: MonoExportSignature = getSignature(name),
-  ): NativePointer {
-    this.ensureNotDisposed();
-
-    const cached = this.addressCache.get(name);
-    if (cached) {
-      return cached;
-    }
-
-    const exportNames = [signature.name, ...(signature.aliases ?? [])];
-    for (const exportName of exportNames) {
-      const address = this.getModuleHandle().findExportByName(exportName);
-      if (address) {
-        this.addressCache.set(name, address);
-        return address;
-      }
-    }
-
-    if (throwOnMissing) {
-      throw new MonoFunctionResolutionError(
-        signature.name,
-        `Unable to resolve Mono export ${signature.name} in ${this.module.name}. Consider adding an alias in manual.ts.`,
-      );
-    }
-
-    return NULL;
-  }
-
-  private getModuleHandle(): Module {
-    if (this.moduleHandle) {
-      return this.moduleHandle;
-    }
-
-    const handle = Process.findModuleByName(this.module.name);
-    if (handle === null) {
-      throw new MonoFunctionResolutionError(
-        this.module.name,
-        `Module ${this.module.name} is not loaded in the current process`,
-      );
-    }
-    this.moduleHandle = handle;
-    return handle;
-  }
 }
 
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Normalize arguments for native function calls.
+ * Converts null/undefined to NULL pointer and booleans to integers.
+ */
 function normalizeArg(arg: MonoArg): any {
   if (arg === null || arg === undefined) {
     return NULL;
@@ -537,6 +951,19 @@ function normalizeArg(arg: MonoArg): any {
   return arg;
 }
 
+/**
+ * Create a new MonoApi instance for the given module.
+ *
+ * @param module Module information for the Mono runtime
+ * @returns Configured MonoApi instance
+ *
+ * @example
+ * ```typescript
+ * const moduleInfo = { name: 'mono.dll', base: moduleBase };
+ * const api = createMonoApi(moduleInfo);
+ * await api.waitForRootDomainReady(30000);
+ * ```
+ */
 export function createMonoApi(module: MonoModuleInfo): MonoApi {
   return new MonoApi(module);
 }

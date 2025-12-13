@@ -1,8 +1,11 @@
 import { TypeAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
+import { lazy } from "../utils/cache";
+import { MonoErrorCodes, raise } from "../utils/errors";
 import { Logger } from "../utils/log";
 import { enumerateMonoHandles, pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { CustomAttribute, MonoHandle, parseCustomAttributes } from "./base";
+import { CustomAttribute, MonoHandle } from "./base";
+import { createClassAttributeContext, getCustomAttributes } from "./custom-attributes";
 import { MonoDomain } from "./domain";
 import { MonoField } from "./field";
 import { MonoImage } from "./image";
@@ -53,233 +56,88 @@ const TYPE_DESCRIBED_FLAGS: Record<string, number> = {
  * Represents a Mono class
  */
 export class MonoClass extends MonoHandle {
-  #name: string | null = null;
-  #namespace: string | null = null;
-  #fullName: string | null = null;
-  #flags: number | null = null;
-  #parent: MonoClass | null | undefined = undefined;
-  #type: MonoType | null = null;
-  #methods: MonoMethod[] | null = null;
-  #fields: MonoField[] | null = null;
-  #properties: MonoProperty[] | null = null;
-  #interfaces: MonoClass[] | null = null;
-  #nestedTypes: MonoClass[] | null = null;
   #initialized = false;
-  #isGenericTypeDefinition: boolean | null = null;
-  #isGenericInstance: boolean | null = null;
-  #genericParameterCount: number | null = null;
+
+  // ===== CORE PROPERTIES =====
 
   /**
    * Get class name
    */
+  @lazy
   get name(): string {
-    return this.getName();
+    const namePtr = this.native.mono_class_get_name(this.pointer);
+    return readUtf8String(namePtr);
   }
 
   /**
    * Get class namespace
    */
+  @lazy
   get namespace(): string {
-    return this.getNamespace();
+    const namespacePtr = this.native.mono_class_get_namespace(this.pointer);
+    return readUtf8String(namespacePtr);
   }
 
   /**
    * Get full class name (namespace.name)
    */
+  @lazy
   get fullName(): string {
-    return this.getFullName();
+    return this.namespace ? `${this.namespace}.${this.name}` : this.name;
   }
 
   /**
-   * Get all methods in this class
+   * Get the image containing this class
    */
-  get methods(): MonoMethod[] {
-    return this.getMethods();
-  }
-
-  /**
-   * Get all fields in this class
-   */
-  get fields(): MonoField[] {
-    return this.getFields();
-  }
-
-  /**
-   * Get all properties in this class
-   */
-  get properties(): MonoProperty[] {
-    return this.getProperties();
-  }
-
-  /**
-   * Get parent class
-   */
-  get parent(): MonoClass | null {
-    return this.getParent();
-  }
-
-  /**
-   * Get interfaces implemented by this class
-   */
-  get interfaces(): MonoClass[] {
-    return this.getInterfaces();
-  }
-
-  /**
-   * Get nested types in this class
-   */
-  get nestedTypes(): MonoClass[] {
-    return this.getNestedTypes();
-  }
-
-  /**
-   * Find a method by name
-   * @param name Method name
-   * @param paramCount Parameter count (-1 to match any)
-   * @returns Method if found, null otherwise
-   */
-  method(name: string, paramCount = -1): MonoMethod | null {
-    return this.tryGetMethod(name, paramCount);
-  }
-
-  /**
-   * Find a field by name
-   * @param name Field name
-   * @returns Field if found, null otherwise
-   */
-  field(name: string): MonoField | null {
-    return this.tryGetField(name);
-  }
-
-  /**
-   * Find a property by name
-   * @param name Property name
-   * @returns Property if found, null otherwise
-   */
-  property(name: string): MonoProperty | null {
-    return this.tryGetProperty(name);
-  }
-
-  /**
-   * Allocate a new instance of this class
-   * @param initialise Whether to call the default constructor
-   * @returns New object instance
-   */
-  alloc(initialise = true): MonoObject {
-    return this.newObject(initialise);
-  }
-
-  getName(): string {
-    if (this.#name !== null) {
-      return this.#name;
-    }
-    const namePtr = this.native.mono_class_get_name(this.pointer);
-    this.#name = readUtf8String(namePtr);
-    return this.#name;
-  }
-
-  getNamespace(): string {
-    if (this.#namespace !== null) {
-      return this.#namespace;
-    }
-    const namespacePtr = this.native.mono_class_get_namespace(this.pointer);
-    this.#namespace = readUtf8String(namespacePtr);
-    return this.#namespace;
-  }
-
-  getFullName(): string {
-    if (this.#fullName !== null) {
-      return this.#fullName;
-    }
-    const namespace = this.getNamespace();
-    const name = this.getName();
-    this.#fullName = namespace ? `${namespace}.${name}` : name;
-    return this.#fullName;
-  }
-
-  getImage(): MonoImage {
+  @lazy
+  get image(): MonoImage {
     const imagePtr = this.native.mono_class_get_image(this.pointer);
     return new MonoImage(this.api, imagePtr);
   }
 
-  getParent(): MonoClass | null {
-    if (this.#parent !== undefined) {
-      return this.#parent;
-    }
-    const parentPtr = this.native.mono_class_get_parent(this.pointer);
-    this.#parent = pointerIsNull(parentPtr) ? null : new MonoClass(this.api, parentPtr);
-    return this.#parent;
+  /**
+   * Get class flags
+   */
+  @lazy
+  get flags(): number {
+    return this.native.mono_class_get_flags(this.pointer) as number;
   }
 
-  getFlags(): number {
-    if (this.#flags !== null) {
-      return this.#flags;
-    }
-    this.#flags = this.native.mono_class_get_flags(this.pointer) as number;
-    return this.#flags;
-  }
-
-  getTypeToken(): number {
+  /**
+   * Get the type token
+   */
+  @lazy
+  get typeToken(): number {
     return this.native.mono_class_get_type_token(this.pointer) as number;
   }
 
-  getType(): MonoType {
-    if (this.#type) {
-      return this.#type;
-    }
+  /**
+   * Get the MonoType for this class
+   */
+  @lazy
+  get type(): MonoType {
     const typePtr = this.native.mono_class_get_type(this.pointer);
-    this.#type = new MonoType(this.api, typePtr);
-    return this.#type;
+    return new MonoType(this.api, typePtr);
   }
 
-  ensureInitialized(): void {
-    if (this.#initialized) {
-      return;
-    }
-    const result = this.native.mono_class_init(this.pointer);
-    if (pointerIsNull(result)) {
-      throw new Error(`mono_class_init returned NULL for ${this.getFullName()}`);
-    }
-    this.#initialized = true;
+  /**
+   * Get the instance size of this class in bytes.
+   */
+  @lazy
+  get instanceSize(): number {
+    return this.native.mono_class_instance_size(this.pointer) as number;
   }
 
-  getVTable(domain: MonoDomain | NativePointer | null = null): NativePointer {
-    const domainPtr = domain instanceof MonoDomain ? domain.pointer : (domain ?? this.api.getRootDomain());
-    this.ensureInitialized();
-    const vtable = this.native.mono_class_vtable(domainPtr, this.pointer);
-    if (pointerIsNull(vtable)) {
-      throw new Error(`mono_class_vtable returned NULL for ${this.getFullName()}`);
-    }
-    return vtable;
-  }
-
-  isEnum(): boolean {
-    return (this.native.mono_class_is_enum(this.pointer) as number) !== 0;
-  }
-
-  isValueType(): boolean {
-    return (this.native.mono_class_is_valuetype(this.pointer) as number) !== 0;
-  }
-
-  isDelegate(): boolean {
-    return (this.native.mono_class_is_delegate(this.pointer) as number) !== 0;
-  }
-
-  isInterface(): boolean {
-    const semantics = getMaskedValue(this.getFlags(), TypeAttribute.ClassSemanticsMask);
-    return semantics === TypeAttribute.Interface;
-  }
-
-  isAbstract(): boolean {
-    return hasFlag(this.getFlags(), TypeAttribute.Abstract);
-  }
-
-  isSealed(): boolean {
-    return hasFlag(this.getFlags(), TypeAttribute.Sealed);
-  }
-
-  isBeforeFieldInit(): boolean {
-    return hasFlag(this.getFlags(), TypeAttribute.BeforeFieldInit);
+  /**
+   * Get the value size and alignment of this class.
+   * @returns Object with size and alignment in bytes
+   */
+  @lazy
+  get valueSize(): { size: number; alignment: number } {
+    const alignmentPtr = Memory.alloc(4);
+    const size = this.native.mono_class_value_size(this.pointer, alignmentPtr) as number;
+    const alignment = alignmentPtr.readU32();
+    return { size, alignment };
   }
 
   /**
@@ -287,25 +145,380 @@ export class MonoClass extends MonoHandle {
    * Uses mono_custom_attrs_from_class API to retrieve attribute metadata.
    * @returns Array of CustomAttribute objects with attribute type information
    */
-  getCustomAttributes(): CustomAttribute[] {
-    if (!this.api.hasExport("mono_custom_attrs_from_class")) {
-      return [];
-    }
-
-    try {
-      const customAttrInfoPtr = this.native.mono_custom_attrs_from_class(this.pointer);
-      return parseCustomAttributes(
-        this.api,
-        customAttrInfoPtr,
-        ptr => new MonoClass(this.api, ptr).getName(),
-        ptr => new MonoClass(this.api, ptr).getFullName(),
-      );
-    } catch {
-      return [];
-    }
+  @lazy
+  get customAttributes(): CustomAttribute[] {
+    return getCustomAttributes(
+      createClassAttributeContext(this.api, this.pointer, this.native),
+      ptr => new MonoClass(this.api, ptr).name,
+      ptr => new MonoClass(this.api, ptr).fullName,
+    );
   }
 
-  // ===== GENERIC TYPE SUPPORT (Standard Mono API) =====
+  // ===== TYPE CHECKS =====
+
+  @lazy
+  get isEnum(): boolean {
+    return (this.native.mono_class_is_enum(this.pointer) as number) !== 0;
+  }
+
+  @lazy
+  get isValueType(): boolean {
+    return (this.native.mono_class_is_valuetype(this.pointer) as number) !== 0;
+  }
+
+  @lazy
+  get isDelegate(): boolean {
+    return (this.native.mono_class_is_delegate(this.pointer) as number) !== 0;
+  }
+
+  @lazy
+  get isInterface(): boolean {
+    const semantics = getMaskedValue(this.flags, TypeAttribute.ClassSemanticsMask);
+    return semantics === TypeAttribute.Interface;
+  }
+
+  @lazy
+  get isAbstract(): boolean {
+    return hasFlag(this.flags, TypeAttribute.Abstract);
+  }
+
+  @lazy
+  get isSealed(): boolean {
+    return hasFlag(this.flags, TypeAttribute.Sealed);
+  }
+
+  @lazy
+  get isBeforeFieldInit(): boolean {
+    return hasFlag(this.flags, TypeAttribute.BeforeFieldInit);
+  }
+
+  // ===== MEMBER ACCESS (COLLECTIONS) =====
+
+  /**
+   * Get all methods in this class
+   */
+  @lazy
+  get methods(): MonoMethod[] {
+    return enumerateMonoHandles(
+      iter => this.native.mono_class_get_methods(this.pointer, iter),
+      ptr => new MonoMethod(this.api, ptr),
+    );
+  }
+
+  /**
+   * Get all fields in this class
+   */
+  @lazy
+  get fields(): MonoField[] {
+    return enumerateMonoHandles(
+      iter => this.native.mono_class_get_fields(this.pointer, iter),
+      ptr => new MonoField(this.api, ptr),
+    );
+  }
+
+  /**
+   * Get all properties in this class
+   */
+  @lazy
+  get properties(): MonoProperty[] {
+    return enumerateMonoHandles(
+      iter => this.native.mono_class_get_properties(this.pointer, iter),
+      ptr => new MonoProperty(this.api, ptr),
+    );
+  }
+
+  // ===== MEMBER LOOKUP (INDIVIDUAL) =====
+
+  /**
+   * Find a method by name, throwing if not found.
+   * @param name Method name
+   * @param paramCount Parameter count (-1 to match any)
+   * @returns MonoMethod
+   * @throws {MonoMethodNotFoundError} if method not found
+   */
+  method(name: string, paramCount = -1): MonoMethod {
+    const m = this.tryMethod(name, paramCount);
+    if (m) {
+      return m;
+    }
+    const paramHint = paramCount >= 0 ? ` with ${paramCount} parameter(s)` : "";
+    raise(
+      MonoErrorCodes.METHOD_NOT_FOUND,
+      `Method '${name}'${paramHint} not found on class '${this.fullName}'`,
+      "Use tryMethod() to avoid throwing",
+    );
+  }
+
+  /**
+   * Try to find a method by name without throwing.
+   * @param name Method name
+   * @param paramCount Parameter count (-1 to match any)
+   * @returns Method if found, null otherwise
+   */
+  tryMethod(name: string, paramCount = -1): MonoMethod | null {
+    const namePtr = Memory.allocUtf8String(name);
+    const methodPtr = this.native.mono_class_get_method_from_name(this.pointer, namePtr, paramCount);
+    return pointerIsNull(methodPtr) ? null : new MonoMethod(this.api, methodPtr);
+  }
+
+  /**
+   * Check if this class has a method with the given name.
+   * @param name Method name
+   * @param paramCount Parameter count (-1 to match any)
+   * @returns True if method exists
+   */
+  hasMethod(name: string, paramCount = -1): boolean {
+    return this.tryMethod(name, paramCount) !== null;
+  }
+
+  /**
+   * Find a field by name, throwing if not found.
+   * @param name Field name
+   * @returns MonoField
+   * @throws {MonoFieldNotFoundError} if field not found
+   */
+  field(name: string): MonoField {
+    const f = this.tryField(name);
+    if (f) {
+      return f;
+    }
+    raise(
+      MonoErrorCodes.FIELD_NOT_FOUND,
+      `Field '${name}' not found on class '${this.fullName}'`,
+      "Use tryField() to avoid throwing",
+    );
+  }
+
+  /**
+   * Try to find a field by name without throwing.
+   * @param name Field name
+   * @returns Field if found, null otherwise
+   */
+  tryField(name: string): MonoField | null {
+    const namePtr = Memory.allocUtf8String(name);
+    const fieldPtr = this.native.mono_class_get_field_from_name(this.pointer, namePtr);
+    return pointerIsNull(fieldPtr) ? null : new MonoField(this.api, fieldPtr);
+  }
+
+  /**
+   * Check if this class has a field with the given name.
+   * @param name Field name
+   * @returns True if field exists
+   */
+  hasField(name: string): boolean {
+    return this.tryField(name) !== null;
+  }
+
+  /**
+   * Find a property by name, throwing if not found.
+   * @param name Property name
+   * @returns MonoProperty
+   * @throws {MonoPropertyNotFoundError} if property not found
+   */
+  property(name: string): MonoProperty {
+    const p = this.tryProperty(name);
+    if (p) {
+      return p;
+    }
+    raise(
+      MonoErrorCodes.PROPERTY_NOT_FOUND,
+      `Property '${name}' not found on class '${this.fullName}'`,
+      "Use tryProperty() to avoid throwing",
+    );
+  }
+
+  /**
+   * Try to find a property by name without throwing.
+   * @param name Property name
+   * @returns Property if found, null otherwise
+   */
+  tryProperty(name: string): MonoProperty | null {
+    const namePtr = Memory.allocUtf8String(name);
+    const propertyPtr = this.native.mono_class_get_property_from_name(this.pointer, namePtr);
+    return pointerIsNull(propertyPtr) ? null : new MonoProperty(this.api, propertyPtr);
+  }
+
+  /**
+   * Check if this class has a property with the given name.
+   * @param name Property name
+   * @returns True if property exists
+   */
+  hasProperty(name: string): boolean {
+    return this.tryProperty(name) !== null;
+  }
+
+  /**
+   * Find a nested type by name, throwing if not found.
+   * @param name Nested type name
+   * @returns MonoClass
+   * @throws {MonoClassNotFoundError} if nested type not found
+   */
+  nestedType(name: string): MonoClass {
+    const nested = this.tryNestedType(name);
+    if (nested) {
+      return nested;
+    }
+    raise(
+      MonoErrorCodes.CLASS_NOT_FOUND,
+      `Nested type '${name}' not found in class '${this.fullName}'`,
+      "Use tryNestedType() to avoid throwing",
+    );
+  }
+
+  /**
+   * Try to find a nested type by name without throwing.
+   * @param name Nested type name
+   * @returns Nested type if found, null otherwise
+   */
+  tryNestedType(name: string): MonoClass | null {
+    for (const nested of this.nestedTypes) {
+      if (nested.name === name) {
+        return nested;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if this class has a nested type with the given name.
+   * @param name Nested type name
+   * @returns True if nested type exists
+   */
+  hasNestedType(name: string): boolean {
+    return this.tryNestedType(name) !== null;
+  }
+
+  // ===== CLASS RELATIONSHIPS =====
+
+  /**
+   * Get parent class
+   */
+  @lazy
+  get parent(): MonoClass | null {
+    const parentPtr = this.native.mono_class_get_parent(this.pointer);
+    return pointerIsNull(parentPtr) ? null : new MonoClass(this.api, parentPtr);
+  }
+
+  /**
+   * Get interfaces implemented by this class
+   */
+  @lazy
+  get interfaces(): MonoClass[] {
+    return enumerateMonoHandles(
+      iter => this.native.mono_class_get_interfaces(this.pointer, iter),
+      ptr => new MonoClass(this.api, ptr),
+    );
+  }
+
+  /**
+   * Get nested types in this class
+   */
+  @lazy
+  get nestedTypes(): MonoClass[] {
+    return enumerateMonoHandles(
+      iter => this.native.mono_class_get_nested_types(this.pointer, iter),
+      ptr => new MonoClass(this.api, ptr),
+    );
+  }
+
+  /**
+   * Check if this class is a subclass of the target class.
+   * @param target The potential base class
+   * @param checkInterfaces Whether to also check if target is an interface implemented by this class
+   * @returns True if this class derives from target
+   */
+  isSubclassOf(target: MonoClass, checkInterfaces = false): boolean {
+    return (
+      (this.native.mono_class_is_subclass_of(this.pointer, target.pointer, checkInterfaces ? 1 : 0) as number) !== 0
+    );
+  }
+
+  /**
+   * Check if this class is assignable from another class.
+   * @param other The source class
+   * @returns True if an instance of 'other' can be assigned to this class
+   */
+  isAssignableFrom(other: MonoClass): boolean {
+    return (this.native.mono_class_is_assignable_from(this.pointer, other.pointer) as number) !== 0;
+  }
+
+  /**
+   * Check if this class implements a specific interface.
+   * @param iface The interface class to check
+   * @returns True if this class implements the interface
+   */
+  implementsInterface(iface: MonoClass): boolean {
+    return (this.native.mono_class_implements_interface(this.pointer, iface.pointer) as number) !== 0;
+  }
+
+  // ===== OBJECT CREATION AND INITIALIZATION =====
+
+  /**
+   * Create a new instance of this class.
+   * @param initialise Whether to call the default constructor (default: true)
+   * @returns New MonoObject instance
+   */
+  newObject(initialise = true): MonoObject {
+    this.ensureInitialized();
+    const domain = this.api.getRootDomain();
+    const objectPtr = this.native.mono_object_new(domain, this.pointer);
+    if (initialise) {
+      this.native.mono_runtime_object_init(objectPtr);
+    }
+    return new MonoObject(this.api, objectPtr);
+  }
+
+  /**
+   * Allocate a new instance of this class.
+   * Alias for newObject() for convenience.
+   * @param initialise Whether to call the default constructor (default: true)
+   * @returns New MonoObject instance
+   */
+  alloc(initialise = true): MonoObject {
+    return this.newObject(initialise);
+  }
+
+  /**
+   * Ensure the class is initialized.
+   * Classes must be initialized before use. This is done automatically by most operations.
+   * @throws {MonoInitError} if initialization fails
+   */
+  ensureInitialized(): void {
+    if (this.#initialized) {
+      return;
+    }
+    const result = this.native.mono_class_init(this.pointer);
+    if (pointerIsNull(result)) {
+      raise(
+        MonoErrorCodes.INIT_FAILED,
+        `Failed to initialize class ${this.fullName}`,
+        "Check that the class definition is valid",
+      );
+    }
+    this.#initialized = true;
+  }
+
+  /**
+   * Get the VTable for this class in the specified domain.
+   * @param domain Domain to get VTable for (default: root domain)
+   * @returns VTable pointer
+   * @throws {MonoInitError} if VTable creation fails
+   */
+  getVTable(domain: MonoDomain | NativePointer | null = null): NativePointer {
+    const domainPtr = domain instanceof MonoDomain ? domain.pointer : (domain ?? this.api.getRootDomain());
+    this.ensureInitialized();
+    const vtable = this.native.mono_class_vtable(domainPtr, this.pointer);
+    if (pointerIsNull(vtable)) {
+      raise(
+        MonoErrorCodes.INIT_FAILED,
+        `Failed to get vtable for class ${this.fullName}`,
+        "Ensure the class is properly initialized in the specified domain",
+      );
+    }
+    return vtable;
+  }
+
+  // ===== GENERIC TYPE SUPPORT =====
 
   /**
    * Parse the generic parameter count from the class name.
@@ -313,7 +526,7 @@ export class MonoClass extends MonoHandle {
    * @returns The generic parameter count from the class name, or 0 if not a generic type.
    */
   private parseGenericParameterCountFromName(): number {
-    const name = this.getName();
+    const name = this.name;
     const backtickIndex = name.lastIndexOf("`");
     if (backtickIndex === -1) {
       return 0;
@@ -328,45 +541,34 @@ export class MonoClass extends MonoHandle {
    * Uses standard Mono API `mono_class_is_generic` if available, otherwise falls back to name parsing.
    * This is the unbound form that can be used with makeGenericType().
    */
-  isGenericTypeDefinition(): boolean {
-    if (this.#isGenericTypeDefinition !== null) {
-      return this.#isGenericTypeDefinition;
-    }
-
+  @lazy
+  get isGenericTypeDefinition(): boolean {
     // Try mono_class_is_generic first (standard Mono API)
     if (this.api.hasExport("mono_class_is_generic")) {
       try {
         const result = this.native.mono_class_is_generic(this.pointer);
-        this.#isGenericTypeDefinition = Number(result) !== 0;
-        return this.#isGenericTypeDefinition;
+        return Number(result) !== 0;
       } catch {
         // Fall through to name-based detection
       }
     }
 
     // Fall back to name-based detection (backtick notation)
-    this.#isGenericTypeDefinition = this.parseGenericParameterCountFromName() > 0;
-    return this.#isGenericTypeDefinition;
+    return this.parseGenericParameterCountFromName() > 0;
   }
 
   /**
    * Check if this is a constructed generic type (closed generic like `List<int>`).
    * Uses standard Mono API via MonoType to detect MONO_TYPE_GENERICINST.
    */
-  isConstructedGenericType(): boolean {
-    if (this.#isGenericInstance !== null) {
-      return this.#isGenericInstance;
-    }
-
+  @lazy
+  get isConstructedGenericType(): boolean {
     try {
-      const monoType = this.getType();
       // MonoTypeKind.GenericInstance corresponds to MONO_TYPE_GENERICINST (0x15)
-      this.#isGenericInstance = monoType.getKind() === 0x15; // MONO_TYPE_GENERICINST
+      return this.type.kind === 0x15; // MONO_TYPE_GENERICINST
     } catch {
-      this.#isGenericInstance = false;
+      return false;
     }
-
-    return this.#isGenericInstance;
   }
 
   /**
@@ -374,8 +576,9 @@ export class MonoClass extends MonoHandle {
    * An open generic type has unbound type parameters (e.g., `List<T>`).
    * A closed generic type has all type parameters bound (e.g., `List<int>`).
    */
-  isGenericType(): boolean {
-    return this.isGenericTypeDefinition() || this.isConstructedGenericType();
+  @lazy
+  get isGenericType(): boolean {
+    return this.isGenericTypeDefinition || this.isConstructedGenericType;
   }
 
   /**
@@ -383,19 +586,14 @@ export class MonoClass extends MonoHandle {
    * Parsed from the class name using backtick notation (e.g., `List\`1` returns 1).
    * Returns 0 for non-generic types or constructed generic types.
    */
-  getGenericParameterCount(): number {
-    if (this.#genericParameterCount !== null) {
-      return this.#genericParameterCount;
-    }
-
+  @lazy
+  get genericParameterCount(): number {
     // Only generic type definitions have parameters
-    if (!this.isGenericTypeDefinition()) {
-      this.#genericParameterCount = 0;
+    if (!this.isGenericTypeDefinition) {
       return 0;
     }
 
-    this.#genericParameterCount = this.parseGenericParameterCountFromName();
-    return this.#genericParameterCount;
+    return this.parseGenericParameterCountFromName();
   }
 
   /**
@@ -403,9 +601,10 @@ export class MonoClass extends MonoHandle {
    * For now, uses Unity API if available, otherwise returns 0.
    * Returns 0 for non-generic types or open generic type definitions.
    */
-  getGenericArgumentCount(): number {
+  @lazy
+  get genericArgumentCount(): number {
     // For constructed generic types, try Unity API if available
-    if (this.isConstructedGenericType()) {
+    if (this.isConstructedGenericType) {
       if (this.api.hasExport("mono_unity_class_get_generic_argument_count")) {
         try {
           const count = this.native.mono_unity_class_get_generic_argument_count(this.pointer);
@@ -428,14 +627,15 @@ export class MonoClass extends MonoHandle {
    * Note: This currently requires Unity-specific API for full implementation.
    * Without it, returns an empty array.
    */
-  getGenericArguments(): MonoClass[] {
+  @lazy
+  get genericArguments(): MonoClass[] {
     // This requires Unity API to enumerate actual type arguments
     if (!this.api.hasExport("mono_unity_class_get_generic_argument_at")) {
       return [];
     }
 
     try {
-      const count = this.getGenericArgumentCount();
+      const count = this.genericArgumentCount;
       const args: MonoClass[] = [];
       for (let i = 0; i < count; i++) {
         const argPtr = this.native.mono_unity_class_get_generic_argument_at(this.pointer, i);
@@ -456,9 +656,10 @@ export class MonoClass extends MonoHandle {
    *
    * Note: This currently requires Unity-specific API for full implementation.
    */
-  getGenericTypeDefinition(): MonoClass | null {
+  @lazy
+  get genericTypeDefinition(): MonoClass | null {
     // Only constructed generic types have a type definition
-    if (!this.isConstructedGenericType()) {
+    if (!this.isConstructedGenericType) {
       return null;
     }
 
@@ -494,15 +695,20 @@ export class MonoClass extends MonoHandle {
    * // stringListType is now List<string>
    */
   makeGenericType(typeArguments: MonoClass[]): MonoClass | null {
-    if (!this.isGenericTypeDefinition()) {
-      throw new Error(`${this.getFullName()} is not a generic type definition`);
+    if (!this.isGenericTypeDefinition) {
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Cannot make generic type from ${this.fullName}`,
+        "The class must be a generic type definition (e.g., List<T>, not List<int>)",
+      );
     }
 
-    const paramCount = this.getGenericParameterCount();
+    const paramCount = this.genericParameterCount;
     if (typeArguments.length !== paramCount) {
-      throw new Error(
-        `Type argument count mismatch: ${this.getFullName()} requires ${paramCount} ` +
-          `arguments but ${typeArguments.length} were provided`,
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Type argument count mismatch: ${this.fullName} requires ${paramCount} arguments but ${typeArguments.length} were provided`,
+        "Ensure the number of type arguments matches the generic parameter count",
       );
     }
 
@@ -524,7 +730,7 @@ export class MonoClass extends MonoHandle {
 
     // Cannot create generic type - log warning
     classLogger.warn(
-      `makeGenericType: Cannot create ${this.getFullName()}<${typeArguments.map(t => t.getFullName()).join(", ")}>. ` +
+      `makeGenericType: Cannot create ${this.fullName}<${typeArguments.map(t => t.fullName).join(", ")}>. ` +
         `Neither mono_reflection_type_from_name nor Unity-specific APIs are available or successful.`,
     );
     return null;
@@ -535,13 +741,13 @@ export class MonoClass extends MonoHandle {
    * Format: Namespace.TypeName`N[[ArgType1, Assembly1],[ArgType2, Assembly2]]
    */
   private buildGenericTypeName(typeArguments: MonoClass[]): string {
-    const baseName = this.getFullName();
+    const baseName = this.fullName;
 
     // Build type argument strings with assembly qualification
     const argStrings = typeArguments.map(arg => {
-      const argFullName = arg.getFullName();
-      const argImage = arg.getImage();
-      const argAssemblyName = argImage.getName();
+      const argFullName = arg.fullName;
+      const argImage = arg.image;
+      const argAssemblyName = argImage.name;
 
       // Format: [TypeName, AssemblyName]
       return `[${argFullName}, ${argAssemblyName}]`;
@@ -559,10 +765,10 @@ export class MonoClass extends MonoHandle {
     try {
       const typeName = this.buildGenericTypeName(typeArguments);
       const typeNamePtr = Memory.allocUtf8String(typeName);
-      const image = this.getImage();
+      const currentImage = this.image;
 
       // mono_reflection_type_from_name(name, image) -> MonoType*
-      const monoType = this.native.mono_reflection_type_from_name(typeNamePtr, image.pointer);
+      const monoType = this.native.mono_reflection_type_from_name(typeNamePtr, currentImage.pointer);
 
       if (pointerIsNull(monoType)) {
         // Try with null image (search all assemblies)
@@ -609,196 +815,64 @@ export class MonoClass extends MonoHandle {
 
   // ===== END GENERIC TYPE SUPPORT =====
 
-  isSubclassOf(target: MonoClass, checkInterfaces = false): boolean {
-    return (
-      (this.native.mono_class_is_subclass_of(this.pointer, target.pointer, checkInterfaces ? 1 : 0) as number) !== 0
-    );
-  }
-
-  isAssignableFrom(other: MonoClass): boolean {
-    return (this.native.mono_class_is_assignable_from(this.pointer, other.pointer) as number) !== 0;
-  }
-
-  implementsInterface(iface: MonoClass): boolean {
-    return (this.native.mono_class_implements_interface(this.pointer, iface.pointer) as number) !== 0;
-  }
-
-  getMethod(name: string, paramCount = -1): MonoMethod {
-    const method = this.tryGetMethod(name, paramCount);
-    if (!method) {
-      throw new Error(`Method ${name}(${paramCount}) not found on class ${this.getFullName()}.`);
-    }
-    return method;
-  }
-
-  tryGetMethod(name: string, paramCount = -1): MonoMethod | null {
-    const namePtr = Memory.allocUtf8String(name);
-    const methodPtr = this.native.mono_class_get_method_from_name(this.pointer, namePtr, paramCount);
-    return pointerIsNull(methodPtr) ? null : new MonoMethod(this.api, methodPtr);
-  }
-
-  getMethods(refreshCache = false): MonoMethod[] {
-    if (!refreshCache && this.#methods) {
-      return this.#methods.slice();
-    }
-    const methods = enumerateMonoHandles(
-      iter => this.native.mono_class_get_methods(this.pointer, iter),
-      ptr => new MonoMethod(this.api, ptr),
-    );
-    this.#methods = methods;
-    return methods.slice();
-  }
-
-  getField(name: string): MonoField {
-    const field = this.tryGetField(name);
-    if (!field) {
-      throw new Error(`Field ${name} not found on class ${this.getFullName()}.`);
-    }
-    return field;
-  }
-
-  tryGetField(name: string): MonoField | null {
-    const namePtr = Memory.allocUtf8String(name);
-    const fieldPtr = this.native.mono_class_get_field_from_name(this.pointer, namePtr);
-    return pointerIsNull(fieldPtr) ? null : new MonoField(this.api, fieldPtr);
-  }
-
-  getFields(refreshCache = false): MonoField[] {
-    if (!refreshCache && this.#fields) {
-      return this.#fields.slice();
-    }
-    const fields = enumerateMonoHandles(
-      iter => this.native.mono_class_get_fields(this.pointer, iter),
-      ptr => new MonoField(this.api, ptr),
-    );
-    this.#fields = fields;
-    return fields.slice();
-  }
-
-  getProperty(name: string): MonoProperty {
-    const property = this.tryGetProperty(name);
-    if (!property) {
-      throw new Error(`Property ${name} not found on class ${this.getFullName()}.`);
-    }
-    return property;
-  }
-
-  tryGetProperty(name: string): MonoProperty | null {
-    const namePtr = Memory.allocUtf8String(name);
-    const propertyPtr = this.native.mono_class_get_property_from_name(this.pointer, namePtr);
-    return pointerIsNull(propertyPtr) ? null : new MonoProperty(this.api, propertyPtr);
-  }
-
-  getProperties(refreshCache = false): MonoProperty[] {
-    if (!refreshCache && this.#properties) {
-      return this.#properties.slice();
-    }
-    const properties = enumerateMonoHandles(
-      iter => this.native.mono_class_get_properties(this.pointer, iter),
-      ptr => new MonoProperty(this.api, ptr),
-    );
-    this.#properties = properties;
-    return properties.slice();
-  }
-
-  getInterfaces(refreshCache = false): MonoClass[] {
-    if (!refreshCache && this.#interfaces) {
-      return this.#interfaces.slice();
-    }
-    const interfaces = enumerateMonoHandles(
-      iter => this.native.mono_class_get_interfaces(this.pointer, iter),
-      ptr => new MonoClass(this.api, ptr),
-    );
-    this.#interfaces = interfaces;
-    return interfaces.slice();
-  }
-
-  getNestedTypes(refreshCache = false): MonoClass[] {
-    if (!refreshCache && this.#nestedTypes) {
-      return this.#nestedTypes.slice();
-    }
-    const nested = enumerateMonoHandles(
-      iter => this.native.mono_class_get_nested_types(this.pointer, iter),
-      ptr => new MonoClass(this.api, ptr),
-    );
-    this.#nestedTypes = nested;
-    return nested.slice();
-  }
-
-  getInstanceSize(): number {
-    return this.native.mono_class_instance_size(this.pointer) as number;
-  }
-
-  getValueSize(): { size: number; alignment: number } {
-    const alignmentPtr = Memory.alloc(4);
-    const size = this.native.mono_class_value_size(this.pointer, alignmentPtr) as number;
-    const alignment = alignmentPtr.readU32();
-    return { size, alignment };
-  }
-
-  describe(): MonoClassSummary {
-    const flags = this.getFlags();
-    const parent = this.getParent();
-    return {
-      name: this.getName(),
-      namespace: this.getNamespace(),
-      fullName: this.getFullName(),
-      flags,
-      flagNames: pickFlags(flags, TYPE_DESCRIBED_FLAGS),
-      isInterface: this.isInterface(),
-      isAbstract: this.isAbstract(),
-      isSealed: this.isSealed(),
-      isValueType: this.isValueType(),
-      isEnum: this.isEnum(),
-      isDelegate: this.isDelegate(),
-      isGenericType: this.isGenericType(),
-      isGenericTypeDefinition: this.isGenericTypeDefinition(),
-      genericArgumentCount: this.getGenericArgumentCount(),
-      genericParameterCount: this.getGenericParameterCount(),
-      parent: parent ? parent.getFullName() : null,
-      methodCount: this.getMethods().length,
-      fieldCount: this.getFields().length,
-      propertyCount: this.getProperties().length,
-      typeToken: this.getTypeToken(),
-      type: this.getType()?.getSummary(),
-    };
-  }
-
-  newObject(initialise = true): MonoObject {
-    this.ensureInitialized();
-    const domain = this.api.getRootDomain();
-    const objectPtr = this.native.mono_object_new(domain, this.pointer);
-    if (initialise) {
-      this.native.mono_runtime_object_init(objectPtr);
-    }
-    return new MonoObject(this.api, objectPtr);
-  }
-
-  // ===== CONSISTENT API PATTERNS =====
+  // ===== UTILITY METHODS =====
 
   /**
    * Get a human-readable description of this class
    */
-  getDescription(): string {
-    const name = this.getName();
-    const namespace = this.getNamespace();
+  @lazy
+  get description(): string {
+    const currentName = this.name;
+    const currentNamespace = this.namespace;
 
     const modifiers = [];
-    if (this.isInterface()) modifiers.push("interface");
-    if (this.isAbstract()) modifiers.push("abstract");
-    if (this.isSealed()) modifiers.push("sealed");
-    if (this.isValueType()) modifiers.push("struct");
-    if (this.isEnum()) modifiers.push("enum");
-    if (this.isDelegate()) modifiers.push("delegate");
+    if (this.isInterface) modifiers.push("interface");
+    if (this.isAbstract) modifiers.push("abstract");
+    if (this.isSealed) modifiers.push("sealed");
+    if (this.isValueType) modifiers.push("struct");
+    if (this.isEnum) modifiers.push("enum");
+    if (this.isDelegate) modifiers.push("delegate");
 
     const modifierStr = modifiers.length > 0 ? `${modifiers.join(" ")} ` : "";
-    const namespaceStr = namespace ? `${namespace}.` : "";
+    const namespaceStr = currentNamespace ? `${currentNamespace}.` : "";
 
-    return `${modifierStr}class ${namespaceStr}${name}`;
+    return `${modifierStr}class ${namespaceStr}${currentName}`;
+  }
+
+  /**
+   * Get a comprehensive summary of this class.
+   * @returns Object with detailed class information
+   */
+  describe(): MonoClassSummary {
+    return {
+      name: this.name,
+      namespace: this.namespace,
+      fullName: this.fullName,
+      flags: this.flags,
+      flagNames: pickFlags(this.flags, TYPE_DESCRIBED_FLAGS),
+      isInterface: this.isInterface,
+      isAbstract: this.isAbstract,
+      isSealed: this.isSealed,
+      isValueType: this.isValueType,
+      isEnum: this.isEnum,
+      isDelegate: this.isDelegate,
+      isGenericType: this.isGenericType,
+      isGenericTypeDefinition: this.isGenericTypeDefinition,
+      genericArgumentCount: this.genericArgumentCount,
+      genericParameterCount: this.genericParameterCount,
+      parent: this.parent ? this.parent.fullName : null,
+      methodCount: this.methods.length,
+      fieldCount: this.fields.length,
+      propertyCount: this.properties.length,
+      typeToken: this.typeToken,
+      type: this.type?.getSummary(),
+    };
   }
 
   /**
    * Validate if an object is an instance of this class
+   * @param obj Object to validate (MonoObject or NativePointer)
+   * @returns Validation result with errors if any
    */
   validateInstance(obj: MonoObject | NativePointer | null): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
@@ -812,16 +886,16 @@ export class MonoClass extends MonoHandle {
       let objectClass: MonoClass;
 
       if (obj instanceof MonoObject) {
-        objectClass = obj.getClass();
+        objectClass = obj.class;
       } else {
         // Assume it's a native pointer to an object
         const monoObj = new MonoObject(this.api, obj);
-        objectClass = monoObj.getClass();
+        objectClass = monoObj.class;
       }
 
       // Check if object is assignable to this class
       if (!this.isAssignableFrom(objectClass)) {
-        errors.push(`Object of type ${objectClass.getFullName()} is not compatible with ${this.getFullName()}`);
+        errors.push(`Object of type ${objectClass.fullName} is not compatible with ${this.fullName}`);
       }
     } catch (error) {
       errors.push(`Failed to validate object: ${error}`);
@@ -831,5 +905,79 @@ export class MonoClass extends MonoHandle {
       isValid: errors.length === 0,
       errors,
     };
+  }
+
+  // ===== ITERATION SUPPORT =====
+
+  /**
+   * Iterate over all methods in this class.
+   * Makes MonoClass directly iterable with for...of.
+   *
+   * @example
+   * ```typescript
+   * for (const method of klass) {
+   *   console.log(method.name);
+   * }
+   * ```
+   */
+  *[Symbol.iterator](): IterableIterator<MonoMethod> {
+    yield* this.methods;
+  }
+
+  /**
+   * Iterate over methods with their indices.
+   */
+  *methodEntries(): IterableIterator<[number, MonoMethod]> {
+    const methods = this.methods;
+    for (let i = 0; i < methods.length; i++) {
+      yield [i, methods[i]];
+    }
+  }
+
+  /**
+   * Iterate over fields with their indices.
+   */
+  *fieldEntries(): IterableIterator<[number, MonoField]> {
+    const fields = this.fields;
+    for (let i = 0; i < fields.length; i++) {
+      yield [i, fields[i]];
+    }
+  }
+
+  /**
+   * Iterate over properties with their indices.
+   */
+  *propertyEntries(): IterableIterator<[number, MonoProperty]> {
+    const properties = this.properties;
+    for (let i = 0; i < properties.length; i++) {
+      yield [i, properties[i]];
+    }
+  }
+
+  /**
+   * Find all methods matching a predicate.
+   * @param predicate Filter function
+   * @returns Array of matching methods
+   */
+  findMethods(predicate: (method: MonoMethod) => boolean): MonoMethod[] {
+    return this.methods.filter(predicate);
+  }
+
+  /**
+   * Find all fields matching a predicate.
+   * @param predicate Filter function
+   * @returns Array of matching fields
+   */
+  findFields(predicate: (field: MonoField) => boolean): MonoField[] {
+    return this.fields.filter(predicate);
+  }
+
+  /**
+   * Find all properties matching a predicate.
+   * @param predicate Filter function
+   * @returns Array of matching properties
+   */
+  findProperties(predicate: (property: MonoProperty) => boolean): MonoProperty[] {
+    return this.properties.filter(predicate);
   }
 }

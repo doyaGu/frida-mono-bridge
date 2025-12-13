@@ -1,4 +1,4 @@
-import type { MonoSignatureMap, MonoSignatureOverrides } from "./types";
+import type { MonoSignatureMap, MonoSignatureOverrides } from "./signatures-types";
 
 /**
  * Manual API signature additions for Mono runtime.

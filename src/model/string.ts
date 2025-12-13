@@ -1,6 +1,8 @@
 import { MonoApi } from "../runtime/api";
-import { readUtf16String, readUtf8String } from "../utils/string";
+import { lazy } from "../utils/cache";
+import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
+import { readUtf16String, readUtf8String } from "../utils/string";
 import { MonoObject } from "./object";
 
 /**
@@ -29,273 +31,586 @@ export interface MonoStringSummary {
 }
 
 /**
- * Represents a Mono string object (System.String)
+ * Represents a Mono string object (System.String).
+ *
+ * Implements `Iterable<string>` for character-by-character iteration,
+ * enabling use with `for...of` loops and spread operator.
+ *
+ * @example
+ * ```typescript
+ * const str = MonoString.new(api, "Hello");
+ *
+ * // Basic usage
+ * console.log(str.length);    // 5
+ * console.log(str.content);   // "Hello"
+ *
+ * // Iterate over characters
+ * for (const char of str) {
+ *   console.log(char);
+ * }
+ *
+ * // Use spread operator
+ * const chars = [...str]; // ['H', 'e', 'l', 'l', 'o']
+ *
+ * // String manipulation
+ * console.log(str.toUpperCase()); // "HELLO"
+ * console.log(str.includes("ell")); // true
+ * ```
  */
-export class MonoString extends MonoObject {
-  private _cachedString: string | null = null;
+export class MonoString extends MonoObject implements Iterable<string> {
+  // ===== CORE PROPERTIES =====
 
   /**
-   * Get the length of the string in characters
+   * Get the length of the string in characters.
+   * Uses mono_string_length if available, otherwise gets from converted string.
+   * Value is cached on first access.
    */
+  @lazy
   get length(): number {
-    return this.getLength();
-  }
-
-  /**
-   * Get the length of the string in characters
-   * Uses mono_string_length if available, otherwise gets from converted string
-   */
-  getLength(): number {
     if (this.api.hasExport("mono_string_length")) {
       return this.native.mono_string_length(this.pointer) as number;
     }
     // Fallback: get length from string conversion
-    return this.toString().length;
+    return this.content.length;
   }
 
   /**
-   * Get the character at a specific index
-   * @param index Character index
+   * Get the string content as a JavaScript string.
+   * Uses mono_string_to_utf8 or mono_string_to_utf16.
+   * Value is cached on first access.
+   */
+  @lazy
+  get content(): string {
+    // Try mono_string_to_utf8 first (most reliable for Unity Mono)
+    if (this.api.hasExport("mono_string_to_utf8")) {
+      const utf8Ptr = this.native.mono_string_to_utf8(this.pointer);
+      if (!pointerIsNull(utf8Ptr)) {
+        const result = readUtf8String(utf8Ptr);
+        this.api.tryFree(utf8Ptr);
+        return result;
+      }
+    }
+
+    // Fallback: Try mono_string_to_utf16
+    if (this.api.hasExport("mono_string_to_utf16")) {
+      const utf16Ptr = this.native.mono_string_to_utf16(this.pointer);
+      if (!pointerIsNull(utf16Ptr)) {
+        return readUtf16String(utf16Ptr);
+      }
+    }
+
+    // Last resort: Try mono_string_chars + mono_string_length
+    if (this.api.hasExport("mono_string_chars") && this.api.hasExport("mono_string_length")) {
+      const chars = this.native.mono_string_chars(this.pointer);
+      const len = this.native.mono_string_length(this.pointer) as number;
+      return readUtf16String(chars, len);
+    }
+
+    return "";
+  }
+
+  // ===== TYPE CHECKS =====
+
+  /**
+   * Check if the string is empty (length === 0).
+   */
+  @lazy
+  get isEmpty(): boolean {
+    return this.length === 0;
+  }
+
+  /**
+   * Check if the string is not empty (length > 0).
+   */
+  @lazy
+  get isNotEmpty(): boolean {
+    return this.length > 0;
+  }
+
+  /**
+   * Check if the string is null or whitespace only.
+   */
+  @lazy
+  get isNullOrWhitespace(): boolean {
+    return this.trim() === "";
+  }
+
+  // ===== CHARACTER ACCESS =====
+
+  /**
+   * Get the character at a specific index.
+   * @param index Character index (0-based)
    * @returns Character at the index
+   * @throws {MonoValidationError} If index is out of bounds
+   *
+   * @example
+   * ```typescript
+   * const str = MonoString.new(api, "Hello");
+   * console.log(str.charAt(0)); // "H"
+   * console.log(str.charAt(4)); // "o"
+   * ```
    */
   charAt(index: number): string {
-    const str = this.toString();
+    const str = this.content;
     if (index < 0 || index >= str.length) {
-      throw new RangeError(`Index ${index} out of range [0, ${str.length})`);
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Index ${index} out of range [0, ${str.length})`,
+        "Use a valid index within the string bounds",
+      );
     }
     return str.charAt(index);
   }
 
   /**
-   * Get a substring
-   * @param start Start index
-   * @param length Length (optional, defaults to end of string)
-   * @returns Substring
+   * Try to get the character at a specific index without throwing.
+   * @param index Character index (0-based)
+   * @returns Character at the index, or undefined if out of bounds
+   *
+   * @example
+   * ```typescript
+   * const char = str.tryCharAt(10);
+   * if (char !== undefined) {
+   *   console.log(char);
+   * }
+   * ```
    */
-  substring(start: number, length?: number): string {
-    const fullStr = this.toString();
-    const actualLength = length ?? fullStr.length - start;
-    return fullStr.substr(start, actualLength);
+  tryCharAt(index: number): string | undefined {
+    const str = this.content;
+    if (index < 0 || index >= str.length) {
+      return undefined;
+    }
+    return str.charAt(index);
   }
 
   /**
-   * Check if the string contains a substring
+   * Get the UTF-16 code unit at a specific index.
+   * @param index Character index (0-based)
+   * @returns UTF-16 code unit value
+   *
+   * @example
+   * ```typescript
+   * console.log(str.charCodeAt(0)); // 72 for 'H'
+   * ```
+   */
+  charCodeAt(index: number): number {
+    return this.content.charCodeAt(index);
+  }
+
+  /**
+   * Get the Unicode code point at a specific index.
+   * @param index Character index (0-based)
+   * @returns Unicode code point, or undefined if out of bounds
+   *
+   * @example
+   * ```typescript
+   * console.log(str.codePointAt(0)); // 72 for 'H'
+   * ```
+   */
+  codePointAt(index: number): number | undefined {
+    return this.content.codePointAt(index);
+  }
+
+  // ===== SEARCH METHODS =====
+
+  /**
+   * Check if the string contains a substring.
    * @param search Substring to search for
    * @returns True if found
+   *
+   * @example
+   * ```typescript
+   * str.contains("ell"); // true for "Hello"
+   * ```
    */
   contains(search: string): boolean {
-    return this.toString().includes(search);
+    return this.content.includes(search);
   }
 
   /**
-   * Check if the string starts with a prefix
+   * Alias for contains() - check if string includes a substring.
+   * @param search Substring to search for
+   * @param position Optional position to start searching from
+   * @returns True if found
+   */
+  includes(search: string, position?: number): boolean {
+    return this.content.includes(search, position);
+  }
+
+  /**
+   * Check if the string starts with a prefix.
    * @param prefix Prefix to check
+   * @param position Optional position to start checking from
    * @returns True if starts with prefix
    */
-  startsWith(prefix: string): boolean {
-    return this.toString().startsWith(prefix);
+  startsWith(prefix: string, position?: number): boolean {
+    return this.content.startsWith(prefix, position);
   }
 
   /**
-   * Check if the string ends with a suffix
+   * Check if the string ends with a suffix.
    * @param suffix Suffix to check
+   * @param endPosition Optional end position
    * @returns True if ends with suffix
    */
-  endsWith(suffix: string): boolean {
-    return this.toString().endsWith(suffix);
+  endsWith(suffix: string, endPosition?: number): boolean {
+    return this.content.endsWith(suffix, endPosition);
   }
 
-  // ===== NEW STRING METHODS =====
-
   /**
-   * Find the index of the first occurrence of a substring
+   * Find the index of the first occurrence of a substring.
    * @param search Substring to search for
-   * @param start Optional start index
+   * @param position Optional start position
    * @returns Index of first occurrence, or -1 if not found
    */
-  indexOf(search: string, start?: number): number {
-    return this.toString().indexOf(search, start);
+  indexOf(search: string, position?: number): number {
+    return this.content.indexOf(search, position);
   }
 
   /**
-   * Find the index of the last occurrence of a substring
+   * Find the index of the last occurrence of a substring.
    * @param search Substring to search for
-   * @param start Optional start index to search backwards from
+   * @param position Optional position to search backwards from
    * @returns Index of last occurrence, or -1 if not found
    */
-  lastIndexOf(search: string, start?: number): number {
-    return this.toString().lastIndexOf(search, start);
+  lastIndexOf(search: string, position?: number): number {
+    return this.content.lastIndexOf(search, position);
   }
 
   /**
-   * Convert the string to lowercase
+   * Check if the string matches a regular expression.
+   * @param pattern RegExp pattern to match
+   * @returns Match result or null
+   */
+  match(pattern: RegExp): RegExpMatchArray | null {
+    return this.content.match(pattern);
+  }
+
+  /**
+   * Match all occurrences of a regular expression.
+   * @param pattern RegExp pattern with global flag
+   * @returns Iterator of all matches
+   */
+  matchAll(pattern: RegExp): IterableIterator<RegExpMatchArray> {
+    return this.content.matchAll(pattern);
+  }
+
+  /**
+   * Search for a match using a regular expression.
+   * @param pattern RegExp pattern to search for
+   * @returns Index of first match, or -1 if not found
+   */
+  search(pattern: RegExp): number {
+    return this.content.search(pattern);
+  }
+
+  // ===== TRANSFORMATION METHODS =====
+
+  /**
+   * Convert the string to lowercase.
    * @returns Lowercase string
    */
   toLowerCase(): string {
-    return this.toString().toLowerCase();
+    return this.content.toLowerCase();
   }
 
   /**
-   * Convert the string to uppercase
+   * Convert the string to uppercase.
    * @returns Uppercase string
    */
   toUpperCase(): string {
-    return this.toString().toUpperCase();
+    return this.content.toUpperCase();
   }
 
   /**
-   * Remove whitespace from both ends of the string
+   * Convert the string to locale-aware lowercase.
+   * @param locales Optional locale(s)
+   * @returns Lowercase string
+   */
+  toLocaleLowerCase(locales?: string | string[]): string {
+    return this.content.toLocaleLowerCase(locales);
+  }
+
+  /**
+   * Convert the string to locale-aware uppercase.
+   * @param locales Optional locale(s)
+   * @returns Uppercase string
+   */
+  toLocaleUpperCase(locales?: string | string[]): string {
+    return this.content.toLocaleUpperCase(locales);
+  }
+
+  /**
+   * Remove whitespace from both ends of the string.
    * @returns Trimmed string
    */
   trim(): string {
-    return this.toString().trim();
+    return this.content.trim();
   }
 
   /**
-   * Remove whitespace from the start of the string
+   * Remove whitespace from the start of the string.
    * @returns String with leading whitespace removed
    */
   trimStart(): string {
-    return this.toString().trimStart();
+    return this.content.trimStart();
   }
 
   /**
-   * Remove whitespace from the end of the string
+   * Remove whitespace from the end of the string.
    * @returns String with trailing whitespace removed
    */
   trimEnd(): string {
-    return this.toString().trimEnd();
+    return this.content.trimEnd();
   }
 
   /**
-   * Split the string by a separator
-   * @param separator String or RegExp to split by
-   * @param limit Maximum number of splits
-   * @returns Array of substrings
-   */
-  split(separator: string | RegExp, limit?: number): string[] {
-    return this.toString().split(separator, limit);
-  }
-
-  /**
-   * Replace occurrences of a search string or pattern
-   * @param search String or RegExp to search for
-   * @param replacement Replacement string
-   * @returns String with replacements made
-   */
-  replace(search: string | RegExp, replacement: string): string {
-    return this.toString().replace(search, replacement);
-  }
-
-  /**
-   * Replace all occurrences of a search string
-   * @param search String to search for
-   * @param replacement Replacement string
-   * @returns String with all occurrences replaced
-   */
-  replaceAll(search: string, replacement: string): string {
-    return this.toString().split(search).join(replacement);
-  }
-
-  /**
-   * Pad the start of the string to reach a target length
+   * Pad the start of the string to reach a target length.
    * @param targetLength Target length
    * @param padString String to pad with (default: space)
    * @returns Padded string
    */
   padStart(targetLength: number, padString?: string): string {
-    return this.toString().padStart(targetLength, padString);
+    return this.content.padStart(targetLength, padString);
   }
 
   /**
-   * Pad the end of the string to reach a target length
+   * Pad the end of the string to reach a target length.
    * @param targetLength Target length
    * @param padString String to pad with (default: space)
    * @returns Padded string
    */
   padEnd(targetLength: number, padString?: string): string {
-    return this.toString().padEnd(targetLength, padString);
+    return this.content.padEnd(targetLength, padString);
   }
 
   /**
-   * Repeat the string a specified number of times
+   * Repeat the string a specified number of times.
    * @param count Number of times to repeat
    * @returns Repeated string
    */
   repeat(count: number): string {
-    return this.toString().repeat(count);
+    return this.content.repeat(count);
   }
 
   /**
-   * Normalize the string to a specified Unicode form
+   * Normalize the string to a specified Unicode form.
    * @param form Normalization form (NFC, NFD, NFKC, NFKD)
    * @returns Normalized string
    */
   normalize(form?: "NFC" | "NFD" | "NFKC" | "NFKD"): string {
-    return this.toString().normalize(form);
+    return this.content.normalize(form);
   }
 
+  // ===== EXTRACTION METHODS =====
+
   /**
-   * Check if the string matches a regular expression
-   * @param pattern RegExp pattern to match
-   * @returns Match result or null
+   * Get a substring.
+   * @param start Start index
+   * @param end End index (optional, defaults to end of string)
+   * @returns Substring
    */
-  match(pattern: RegExp): RegExpMatchArray | null {
-    return this.toString().match(pattern);
+  substring(start: number, end?: number): string {
+    return this.content.substring(start, end);
   }
 
   /**
-   * Search for a match using a regular expression
-   * @param pattern RegExp pattern to search for
-   * @returns Index of first match, or -1 if not found
+   * Extract a section of the string (supports negative indices).
+   * @param start Start index (can be negative)
+   * @param end End index (optional, can be negative)
+   * @returns Extracted section
    */
-  search(pattern: RegExp): number {
-    return this.toString().search(pattern);
+  slice(start?: number, end?: number): string {
+    return this.content.slice(start, end);
   }
 
   /**
-   * Get the character code at a specific index
-   * @param index Character index
-   * @returns UTF-16 code unit
+   * Split the string by a separator.
+   * @param separator String or RegExp to split by
+   * @param limit Maximum number of splits
+   * @returns Array of substrings
    */
-  charCodeAt(index: number): number {
-    return this.toString().charCodeAt(index);
+  split(separator: string | RegExp, limit?: number): string[] {
+    return this.content.split(separator, limit);
   }
 
+  // ===== REPLACEMENT METHODS =====
+
   /**
-   * Get the Unicode code point at a specific index
-   * @param index Character index
-   * @returns Unicode code point
+   * Replace the first occurrence of a search string or pattern.
+   * @param search String or RegExp to search for
+   * @param replacement Replacement string
+   * @returns String with replacement made
    */
-  codePointAt(index: number): number | undefined {
-    return this.toString().codePointAt(index);
+  replace(search: string | RegExp, replacement: string): string {
+    return this.content.replace(search, replacement);
   }
 
   /**
-   * Compare this string with another for sorting
+   * Replace all occurrences of a search string.
+   * @param search String to search for
+   * @param replacement Replacement string
+   * @returns String with all occurrences replaced
+   */
+  replaceAll(search: string, replacement: string): string {
+    return this.content.split(search).join(replacement);
+  }
+
+  // ===== COMPARISON METHODS =====
+
+  /**
+   * Compare this string with another for sorting.
    * @param other String to compare with
    * @param locales Optional locale(s)
    * @param options Optional comparison options
    * @returns Negative if this < other, positive if this > other, 0 if equal
    */
   localeCompare(other: string, locales?: string | string[], options?: Intl.CollatorOptions): number {
-    return this.toString().localeCompare(other, locales, options);
+    return this.content.localeCompare(other, locales, options);
   }
 
   /**
-   * Check if the string is empty
-   * @returns True if the string has length 0
+   * Compare two strings for equality.
+   * @param other Another MonoString or JavaScript string to compare with
+   * @returns true if both strings have the same content
+   *
+   * @example
+   * ```typescript
+   * if (str1.stringEquals(str2)) {
+   *   console.log("Strings are equal");
+   * }
+   * ```
    */
-  isEmpty(): boolean {
-    return this.getLength() === 0;
+  stringEquals(other: MonoString | string | null): boolean {
+    if (other === null) return false;
+    const otherContent = other instanceof MonoString ? other.content : other;
+    return this.content === otherContent;
   }
 
   /**
-   * Check if the string is null or whitespace only
-   * @returns True if the string is empty or contains only whitespace
+   * Compare two strings for equality (case-insensitive).
+   * @param other Another MonoString or JavaScript string to compare with
+   * @returns true if both strings have the same content (ignoring case)
    */
-  isNullOrWhitespace(): boolean {
-    return this.trim() === "";
+  equalsIgnoreCase(other: MonoString | string | null): boolean {
+    if (other === null) return false;
+    const otherContent = other instanceof MonoString ? other.content : other;
+    return this.content.toLowerCase() === otherContent.toLowerCase();
+  }
+
+  // ===== CONCATENATION =====
+
+  /**
+   * Concatenate this string with other strings.
+   * @param strings Strings to concatenate
+   * @returns Concatenated string
+   */
+  concat(...strings: string[]): string {
+    return this.content.concat(...strings);
+  }
+
+  // ===== ITERATION SUPPORT =====
+
+  /**
+   * Make the string iterable character by character.
+   *
+   * Enables use with `for...of` loops and spread operator.
+   *
+   * @yields Each character in the string
+   *
+   * @example
+   * ```typescript
+   * // Iterate over characters
+   * for (const char of str) {
+   *   console.log(char);
+   * }
+   *
+   * // Convert to character array
+   * const chars = [...str];
+   *
+   * // Use with Array.from
+   * const charArray = Array.from(str);
+   * ```
+   */
+  *[Symbol.iterator](): IterableIterator<string> {
+    const content = this.content;
+    for (let i = 0; i < content.length; i++) {
+      yield content[i];
+    }
+  }
+
+  /**
+   * Returns an iterator over the character indices.
+   * @yields Each index in the string (0 to length-1)
+   *
+   * @example
+   * ```typescript
+   * for (const index of str.keys()) {
+   *   console.log(index, str.charAt(index));
+   * }
+   * ```
+   */
+  *keys(): IterableIterator<number> {
+    for (let i = 0; i < this.length; i++) {
+      yield i;
+    }
+  }
+
+  /**
+   * Returns an iterator over the characters.
+   * @yields Each character in the string
+   */
+  *values(): IterableIterator<string> {
+    yield* this[Symbol.iterator]();
+  }
+
+  /**
+   * Returns an iterator over [index, character] pairs.
+   * @yields Each [index, character] pair
+   *
+   * @example
+   * ```typescript
+   * for (const [index, char] of str.entries()) {
+   *   console.log(`${index}: ${char}`);
+   * }
+   * ```
+   */
+  *entries(): IterableIterator<[number, string]> {
+    const content = this.content;
+    for (let i = 0; i < content.length; i++) {
+      yield [i, content[i]];
+    }
+  }
+
+  // ===== CONVERSION METHODS =====
+
+  /**
+   * Convert to a character array.
+   * @returns Array of single characters
+   *
+   * @example
+   * ```typescript
+   * const chars = str.toCharArray(); // ['H', 'e', 'l', 'l', 'o']
+   * ```
+   */
+  toCharArray(): string[] {
+    return [...this];
+  }
+
+  /**
+   * Returns the primitive string value.
+   * Enables implicit string conversion.
+   */
+  valueOf(): string {
+    return this.content;
+  }
+
+  /**
+   * Get a JSON-friendly representation of this string.
+   * @returns The string content
+   */
+  toJSON(): string {
+    return this.content;
   }
 
   // ===== SUMMARY AND DESCRIPTION METHODS =====
@@ -316,7 +631,7 @@ export class MonoString extends MonoObject {
    * ```
    */
   getSummary(): MonoStringSummary {
-    const value = this.toString();
+    const value = this.content;
     const length = value.length;
     const isEmpty = length === 0;
     const isWhitespace = value.trim() === "";
@@ -352,7 +667,7 @@ export class MonoString extends MonoObject {
    * ```
    */
   describe(): string {
-    const value = this.toString();
+    const value = this.content;
     const length = value.length;
 
     // Escape special characters for display
@@ -371,68 +686,28 @@ export class MonoString extends MonoObject {
     return lines.join("\n");
   }
 
-  /**
-   * Compare two strings for equality.
-   *
-   * @param other Another MonoString to compare with
-   * @returns true if both strings have the same content
-   *
-   * @example
-   * ```typescript
-   * if (str1.equals(str2)) {
-   *   console.log("Strings are equal");
-   * }
-   * ```
-   */
-  stringEquals(other: MonoString | null): boolean {
-    if (!other) return false;
-    return this.toString() === other.toString();
-  }
+  // ===== UTILITY METHODS =====
 
   /**
-   * Convert the Mono string to a JavaScript string
-   * Uses mono_string_to_utf8 or mono_string_to_utf16, with caching
+   * Convert the Mono string to a JavaScript string.
+   * Delegates to the cached content property.
    */
   override toString(): string {
-    if (this._cachedString !== null) {
-      return this._cachedString;
-    }
-
-    // Try mono_string_to_utf8 first (most reliable for Unity Mono)
-    if (this.api.hasExport("mono_string_to_utf8")) {
-      const utf8Ptr = this.native.mono_string_to_utf8(this.pointer);
-      if (!pointerIsNull(utf8Ptr)) {
-        this._cachedString = readUtf8String(utf8Ptr);
-        this.api.tryFree(utf8Ptr);
-        return this._cachedString;
-      }
-    }
-
-    // Fallback: Try mono_string_to_utf16
-    if (this.api.hasExport("mono_string_to_utf16")) {
-      const utf16Ptr = this.native.mono_string_to_utf16(this.pointer);
-      if (!pointerIsNull(utf16Ptr)) {
-        this._cachedString = readUtf16String(utf16Ptr);
-        return this._cachedString;
-      }
-    }
-
-    // Last resort: Try mono_string_chars + mono_string_length
-    if (this.api.hasExport("mono_string_chars") && this.api.hasExport("mono_string_length")) {
-      const chars = this.native.mono_string_chars(this.pointer);
-      const length = this.native.mono_string_length(this.pointer) as number;
-      this._cachedString = readUtf16String(chars, length);
-      return this._cachedString;
-    }
-
-    return "";
+    return this.content;
   }
 
+  // ===== STATIC FACTORY METHODS =====
+
   /**
-   * Create a new Mono string from a JavaScript string
+   * Create a new Mono string from a JavaScript string.
    * @param api Mono API instance
    * @param value String value
    * @returns New MonoString instance
+   *
+   * @example
+   * ```typescript
+   * const str = MonoString.new(api, "Hello World");
+   * ```
    */
   static new(api: MonoApi, value: string): MonoString {
     const pointer = api.stringNew(value);

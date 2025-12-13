@@ -1,14 +1,18 @@
-import { MonoApi, MonoManagedExceptionError } from "../runtime/api";
+import { MonoApi } from "../runtime/api";
 import { MethodAttribute, MethodImplAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
+import { lazy } from "../utils/cache";
+import { MonoErrorCodes, MonoManagedExceptionError, raise } from "../utils/errors";
 import { Logger } from "../utils/log";
 import { pointerIsNull, unwrapInstance } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { CustomAttribute, MemberAccessibility, MethodArgument, MonoHandle, parseCustomAttributes } from "./base";
+import { CustomAttribute, MemberAccessibility, MethodArgument, MonoHandle } from "./base";
 import { MonoClass } from "./class";
+import { createMethodAttributeContext, getCustomAttributes } from "./custom-attributes";
 import { MonoImage } from "./image";
 import { MonoMethodSignature, MonoParameterInfo } from "./method-signature";
 import { MonoObject } from "./object";
 import { MonoType, MonoTypeKind, MonoTypeSummary, isPointerLikeKind, readPrimitiveValue } from "./type";
+import { allocPrimitiveValue, resolveUnderlyingPrimitive } from "./value-conversion";
 
 export interface InvokeOptions {
   throwOnManagedException?: boolean;
@@ -124,21 +128,25 @@ const METHOD_IMPL_FLAGS: Record<string, number> = {
 const methodLogger = new Logger({ tag: "MonoMethod" });
 
 export class MonoMethod extends MonoHandle {
-  #name: string | null = null;
-  #signature: MonoMethodSignature | null = null;
-  #declaringClass: MonoClass | null = null;
-  #flagCache: { flags: number; implementationFlags: number } | null = null;
+  // ===== STATIC FACTORY METHODS =====
 
-  static find(api: MonoApi, image: MonoImage, descriptor: string): MonoMethod {
+  /**
+   * Try to find a method by descriptor without throwing.
+   * @param api MonoApi instance
+   * @param image Image to search in
+   * @param descriptor Method descriptor (e.g., "Namespace.Class:MethodName")
+   * @returns MonoMethod if found, null otherwise
+   */
+  static tryFind(api: MonoApi, image: MonoImage, descriptor: string): MonoMethod | null {
     const descPtr = Memory.allocUtf8String(descriptor);
     const methodDesc = api.native.mono_method_desc_new(descPtr, 1);
     if (pointerIsNull(methodDesc)) {
-      throw new Error(`mono_method_desc_new failed for descriptor ${descriptor}`);
+      return null;
     }
     try {
       const methodPtr = api.native.mono_method_desc_search_in_image(methodDesc, image.pointer);
       if (pointerIsNull(methodPtr)) {
-        throw new Error(`Method ${descriptor} not found in image.`);
+        return null;
       }
       return new MonoMethod(api, methodPtr);
     } finally {
@@ -146,137 +154,184 @@ export class MonoMethod extends MonoHandle {
     }
   }
 
-  getName(): string {
-    if (this.#name !== null) {
-      return this.#name;
+  /**
+   * Find a method by descriptor, throwing if not found.
+   * @param api MonoApi instance
+   * @param image Image to search in
+   * @param descriptor Method descriptor (e.g., "Namespace.Class:MethodName")
+   * @returns MonoMethod
+   * @throws {MonoValidationError} if descriptor is invalid
+   * @throws {MonoMethodNotFoundError} if method not found
+   */
+  static find(api: MonoApi, image: MonoImage, descriptor: string): MonoMethod {
+    const descPtr = Memory.allocUtf8String(descriptor);
+    const methodDesc = api.native.mono_method_desc_new(descPtr, 1);
+    if (pointerIsNull(methodDesc)) {
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Invalid method descriptor '${descriptor}'`,
+        "Use format 'Namespace.Class:MethodName'",
+      );
     }
+    try {
+      const methodPtr = api.native.mono_method_desc_search_in_image(methodDesc, image.pointer);
+      if (pointerIsNull(methodPtr)) {
+        raise(
+          MonoErrorCodes.METHOD_NOT_FOUND,
+          `Method '${descriptor}' not found in image '${image.name}'`,
+          "Use tryFind() to avoid throwing",
+        );
+      }
+      return new MonoMethod(api, methodPtr);
+    } finally {
+      api.native.mono_method_desc_free(methodDesc);
+    }
+  }
+
+  // ===== CORE PROPERTIES =====
+
+  /** Gets the name of this method. */
+  @lazy
+  get name(): string {
     const namePtr = this.native.mono_method_get_name(this.pointer);
-    this.#name = readUtf8String(namePtr);
-    return this.#name;
+    return readUtf8String(namePtr);
   }
 
-  getSignature(): MonoMethodSignature {
-    if (this.#signature) {
-      return this.#signature;
-    }
+  /** Gets the signature of this method. */
+  @lazy
+  get signature(): MonoMethodSignature {
     const signaturePtr = this.native.mono_method_signature(this.pointer);
-    this.#signature = new MonoMethodSignature(this.api, signaturePtr);
-    return this.#signature;
+    return new MonoMethodSignature(this.api, signaturePtr);
   }
 
-  getParameterCount(): number {
-    return this.getSignature().getParameterCount();
-  }
-
-  getParamCount(): number {
-    return this.getParameterCount();
-  }
-
-  getParameterTypes(): MonoType[] {
-    return this.getSignature().getParameterTypes();
-  }
-
-  getParameters(): MonoParameterInfo[] {
-    return this.getSignature().getParameters();
-  }
-
-  getReturnType(): MonoType {
-    return this.getSignature().getReturnType();
-  }
-
-  getCallConvention(): number {
-    return this.getSignature().getCallConvention();
-  }
-
-  isInstanceMethod(): boolean {
-    return this.getSignature().isInstanceMethod();
-  }
-
-  isStatic(): boolean {
-    return hasFlag(this.getFlagValues().flags, MethodAttribute.Static);
-  }
-
-  isVirtual(): boolean {
-    return hasFlag(this.getFlagValues().flags, MethodAttribute.Virtual);
-  }
-
-  isAbstract(): boolean {
-    return hasFlag(this.getFlagValues().flags, MethodAttribute.Abstract);
-  }
-
-  /**
-   * Check if this method is an internal call (implemented in native code).
-   * InternalCall methods may require special handling when hooking.
-   */
-  isInternalCall(): boolean {
-    return hasFlag(this.getFlagValues().implementationFlags, MethodImplAttribute.InternalCall);
-  }
-
-  /**
-   * Check if this method uses P/Invoke to call native code.
-   */
-  isPInvoke(): boolean {
-    return hasFlag(this.getFlagValues().flags, MethodAttribute.PInvokeImpl);
-  }
-
-  /**
-   * Check if this method is implemented in native code (Runtime code type).
-   */
-  isRuntimeImplemented(): boolean {
-    const codeType = getMaskedValue(this.getFlagValues().implementationFlags, MethodImplAttribute.CodeTypeMask);
-    return codeType === MethodImplAttribute.Runtime;
-  }
-
-  /**
-   * Check if this method can potentially be hooked using Interceptor.
-   * Returns false for abstract methods, InternalCall, P/Invoke, and Runtime-implemented methods
-   * that may not have hookable native code addresses.
-   */
-  canBeHooked(): boolean {
-    // Abstract methods have no implementation
-    if (this.isAbstract()) return false;
-    // InternalCall methods are implemented in native runtime, may not be hookable in all cases
-    if (this.isInternalCall()) return false;
-    // PInvoke methods might work but can have complications
-    if (this.isPInvoke()) return false;
-    // Runtime-implemented methods (like generic instantiations) may not be hookable
-    if (this.isRuntimeImplemented()) return false;
-    return true;
-  }
-
-  isConstructor(): boolean {
-    const flags = this.getFlagValues().flags;
-    return hasFlag(flags, MethodAttribute.RTSpecialName) && this.getName() === ".ctor";
-  }
-
-  getDeclaringClass(): MonoClass {
-    if (this.#declaringClass) {
-      return this.#declaringClass;
-    }
+  /** Gets the class that declares this method. */
+  @lazy
+  get declaringClass(): MonoClass {
     const klassPtr = this.native.mono_method_get_class(this.pointer);
-    this.#declaringClass = new MonoClass(this.api, klassPtr);
-    return this.#declaringClass;
+    return new MonoClass(this.api, klassPtr);
   }
 
-  getToken(): number {
+  /** Gets the flags of this method. */
+  @lazy
+  get flags(): number {
+    return this.native.mono_method_get_flags(this.pointer, NULL) as number;
+  }
+
+  /** Gets the implementation flags of this method. */
+  @lazy
+  get implementationFlags(): number {
+    const implPtr = Memory.alloc(4);
+    this.native.mono_method_get_flags(this.pointer, implPtr);
+    return implPtr.readU32();
+  }
+
+  /** Gets the metadata token of this method. */
+  @lazy
+  get token(): number {
     return this.native.mono_method_get_token(this.pointer) as number;
   }
 
-  getFlags(): { flags: number; implementationFlags: number } {
-    return { ...this.getFlagValues() };
+  /** Gets the number of parameters. */
+  get parameterCount(): number {
+    return this.signature.parameterCount;
   }
 
-  getAccessibility(): MethodAccessibility {
-    const mask = getMaskedValue(this.getFlagValues().flags, MethodAttribute.MemberAccessMask);
+  /** Gets the parameter types. */
+  get parameterTypes(): MonoType[] {
+    return this.signature.parameterTypes;
+  }
+
+  /** Gets the parameters. */
+  get parameters(): MonoParameterInfo[] {
+    return this.signature.parameters;
+  }
+
+  /** Gets the return type. */
+  get returnType(): MonoType {
+    return this.signature.returnType;
+  }
+
+  /** Gets the calling convention. */
+  get callConvention(): number {
+    return this.signature.callConvention;
+  }
+
+  /** Determines whether this is an instance method. */
+  get isInstanceMethod(): boolean {
+    return this.signature.isInstanceMethod;
+  }
+
+  // ===== TYPE CHECKS =====
+
+  /** Determines whether this method is static. */
+  @lazy
+  get isStatic(): boolean {
+    return hasFlag(this.flags, MethodAttribute.Static);
+  }
+
+  /** Determines whether this method is virtual. */
+  @lazy
+  get isVirtual(): boolean {
+    return hasFlag(this.flags, MethodAttribute.Virtual);
+  }
+
+  /** Determines whether this method is abstract. */
+  @lazy
+  get isAbstract(): boolean {
+    return hasFlag(this.flags, MethodAttribute.Abstract);
+  }
+
+  /** Determines whether this method is an internal call (implemented in native code). */
+  @lazy
+  get isInternalCall(): boolean {
+    return hasFlag(this.implementationFlags, MethodImplAttribute.InternalCall);
+  }
+
+  /** Determines whether this method uses P/Invoke. */
+  @lazy
+  get isPInvoke(): boolean {
+    return hasFlag(this.flags, MethodAttribute.PInvokeImpl);
+  }
+
+  /** Determines whether this method is implemented in native code (Runtime code type). */
+  @lazy
+  get isRuntimeImplemented(): boolean {
+    const codeType = getMaskedValue(this.implementationFlags, MethodImplAttribute.CodeTypeMask);
+    return codeType === MethodImplAttribute.Runtime;
+  }
+
+  /** Determines whether this method can potentially be hooked using Interceptor. */
+  get canBeHooked(): boolean {
+    if (this.isAbstract) return false;
+    if (this.isInternalCall) return false;
+    if (this.isPInvoke) return false;
+    if (this.isRuntimeImplemented) return false;
+    return true;
+  }
+
+  /** Determines whether this method is a constructor. */
+  @lazy
+  get isConstructor(): boolean {
+    return hasFlag(this.flags, MethodAttribute.RTSpecialName) && this.name === ".ctor";
+  }
+
+  // ===== ACCESSIBILITY AND ATTRIBUTES =====
+
+  /** Gets the access modifier of this method. */
+  @lazy
+  get accessibility(): MethodAccessibility {
+    const mask = getMaskedValue(this.flags, MethodAttribute.MemberAccessMask);
     return METHOD_ACCESS_NAMES[mask] ?? "private";
   }
 
-  getAttributeNames(): string[] {
-    return pickFlags(this.getFlagValues().flags, METHOD_DESCRIBED_FLAGS);
+  /** Gets the attribute names of this method. */
+  get attributeNames(): string[] {
+    return pickFlags(this.flags, METHOD_DESCRIBED_FLAGS);
   }
 
-  getImplementationAttributeNames(): string[] {
-    return pickFlags(this.getFlagValues().implementationFlags, METHOD_IMPL_FLAGS);
+  /** Gets the implementation attribute names of this method. */
+  get implementationAttributeNames(): string[] {
+    return pickFlags(this.implementationFlags, METHOD_IMPL_FLAGS);
   }
 
   /**
@@ -284,28 +339,23 @@ export class MonoMethod extends MonoHandle {
    * Uses mono_custom_attrs_from_method API to retrieve attribute metadata.
    * @returns Array of CustomAttribute objects with attribute type information
    */
-  getCustomAttributes(): CustomAttribute[] {
-    if (!this.api.hasExport("mono_custom_attrs_from_method")) {
-      return [];
-    }
-
-    try {
-      const customAttrInfoPtr = this.native.mono_custom_attrs_from_method(this.pointer);
-      return parseCustomAttributes(
-        this.api,
-        customAttrInfoPtr,
-        ptr => new MonoClass(this.api, ptr).getName(),
-        ptr => new MonoClass(this.api, ptr).getFullName(),
-      );
-    } catch {
-      return [];
-    }
+  @lazy get customAttributes(): CustomAttribute[] {
+    return getCustomAttributes(
+      createMethodAttributeContext(this.api, this.pointer, this.native),
+      ptr => new MonoClass(this.api, ptr).name,
+      ptr => new MonoClass(this.api, ptr).fullName,
+    );
   }
 
+  /**
+   * Get the full name of this method.
+   * @param includeSignature Whether to include parameter types in the name
+   * @returns Full method name with optional signature
+   */
   getFullName(includeSignature = true): string {
     const namePtr = this.native.mono_method_full_name(this.pointer, includeSignature ? 1 : 0);
     if (pointerIsNull(namePtr)) {
-      return this.getName();
+      return this.name;
     }
     try {
       return readUtf8String(namePtr);
@@ -314,34 +364,37 @@ export class MonoMethod extends MonoHandle {
     }
   }
 
+  /**
+   * Get a comprehensive summary of this method.
+   * @returns MonoMethodSummary with all method information
+   */
   describe(): MonoMethodSummary {
-    const flagValues = this.getFlagValues();
-    const parameters = this.getParameters().map(param => ({
+    const params = this.parameters.map(param => ({
       index: param.index,
       isOut: param.isOut,
       type: param.type.getSummary(),
     }));
-    const returnType = this.getReturnType().getSummary();
+    const retType = this.returnType.getSummary();
     return {
-      name: this.getName(),
+      name: this.name,
       fullName: this.getFullName(),
-      declaringType: this.getDeclaringClass().getFullName(),
-      attributes: flagValues.flags,
-      attributeNames: this.getAttributeNames(),
-      implementationAttributes: flagValues.implementationFlags,
-      implementationAttributeNames: this.getImplementationAttributeNames(),
-      accessibility: this.getAccessibility(),
-      isStatic: this.isStatic(),
-      isVirtual: this.isVirtual(),
-      isAbstract: this.isAbstract(),
-      isConstructor: this.isConstructor(),
-      isGenericMethod: this.isGenericMethod(),
-      genericArgumentCount: this.getGenericArgumentCount(),
-      callConvention: this.getCallConvention(),
-      parameterCount: parameters.length,
-      parameters,
-      returnType,
-      token: this.getToken(),
+      declaringType: this.declaringClass.fullName,
+      attributes: this.flags,
+      attributeNames: this.attributeNames,
+      implementationAttributes: this.implementationFlags,
+      implementationAttributeNames: this.implementationAttributeNames,
+      accessibility: this.accessibility,
+      isStatic: this.isStatic,
+      isVirtual: this.isVirtual,
+      isAbstract: this.isAbstract,
+      isConstructor: this.isConstructor,
+      isGenericMethod: this.isGenericMethod,
+      genericArgumentCount: this.genericArgumentCount,
+      callConvention: this.callConvention,
+      parameterCount: params.length,
+      parameters: params,
+      returnType: retType,
+      token: this.token,
     };
   }
 
@@ -350,11 +403,9 @@ export class MonoMethod extends MonoHandle {
   /**
    * Check if this method is a generic method (has generic type parameters).
    * For example, `void Swap<T>(ref T a, ref T b)` is a generic method.
-   *
-   * This uses the Unity API if available, otherwise falls back to checking
-   * the method name for the generic arity marker (backtick notation).
    */
-  isGenericMethod(): boolean {
+  @lazy
+  get isGenericMethod(): boolean {
     // Try Unity API first
     if (this.api.hasExport("mono_unity_method_is_generic")) {
       try {
@@ -366,9 +417,7 @@ export class MonoMethod extends MonoHandle {
     }
 
     // Fall back to checking method full name for generic markers
-    // Generic methods in mono are marked with backtick notation in their full name
     const fullName = this.getFullName(true);
-    // Generic methods will have <T> or similar in their signature
     return fullName.includes("<") && fullName.includes(">");
   }
 
@@ -376,19 +425,12 @@ export class MonoMethod extends MonoHandle {
    * Check if this is a generic method definition (open generic method).
    * A generic method definition has unbound type parameters.
    */
-  isGenericMethodDefinition(): boolean {
-    // If it's a generic method, we need to check if it's the definition
-    // or an instantiated version
-    if (!this.isGenericMethod()) {
+  @lazy
+  get isGenericMethodDefinition(): boolean {
+    if (!this.isGenericMethod) {
       return false;
     }
-
-    // For now, assume all generic methods we find are definitions
-    // Full implementation would need mono_method_is_generic_sharable_full
-    // or mono_method_is_inflated checks
     const fullName = this.getFullName(true);
-    // Generic method definitions typically have unbound parameters like <T, U>
-    // while instantiated methods have concrete types like <System.String>
     const hasUnboundParams = /\[[A-Z][a-zA-Z0-9_,\s]*\]/.test(fullName) || /<[A-Z][a-zA-Z0-9_,\s]*>/.test(fullName);
     return hasUnboundParams;
   }
@@ -400,7 +442,8 @@ export class MonoMethod extends MonoHandle {
    * Note: This parses the method name to determine the count since
    * `mono_unity_method_get_generic_argument_count` does NOT exist in any known Mono version.
    */
-  getGenericArgumentCount(): number {
+  @lazy
+  get genericArgumentCount(): number {
     // Parse from method name - generic methods are marked like MethodName`2 or in full name <T, U>
     const fullName = this.getFullName(true);
 
@@ -415,7 +458,7 @@ export class MonoMethod extends MonoHandle {
     }
 
     // Check for backtick notation in method name
-    const nameMatch = this.getName().match(/`(\d+)/);
+    const nameMatch = this.name.match(/`(\d+)/);
     if (nameMatch) {
       return parseInt(nameMatch[1], 10);
     }
@@ -433,7 +476,7 @@ export class MonoMethod extends MonoHandle {
    * Returns an empty array for now - future implementations could use reflection
    * or parse method signatures.
    */
-  getGenericArguments(): MonoClass[] {
+  @lazy get genericArguments(): MonoClass[] {
     // APIs for getting generic method arguments don't exist in known Mono versions:
     // - mono_unity_method_get_generic_argument_at: NOT exported
     // - mono_unity_method_get_generic_argument_count: NOT exported
@@ -460,15 +503,16 @@ export class MonoMethod extends MonoHandle {
    * const maxInt = maxMethod?.makeGenericMethod([intClass]);
    */
   makeGenericMethod(typeArguments: MonoClass[]): MonoMethod | null {
-    if (!this.isGenericMethodDefinition()) {
+    if (!this.isGenericMethodDefinition) {
       return null;
     }
 
-    const expectedCount = this.getGenericArgumentCount();
+    const expectedCount = this.genericArgumentCount;
     if (typeArguments.length !== expectedCount) {
-      throw new Error(
-        `Generic method ${this.getName()} expects ${expectedCount} type arguments, ` +
-          `but ${typeArguments.length} were provided`,
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Generic method ${this.name} expects ${expectedCount} type arguments, but ${typeArguments.length} were provided`,
+        "Ensure the number of type arguments matches the generic parameter count",
       );
     }
 
@@ -489,7 +533,7 @@ export class MonoMethod extends MonoHandle {
     // Log warning if all approaches fail
     methodLogger.warn(
       `makeGenericMethod: Cannot instantiate ${this.getFullName()} with ` +
-        `[${typeArguments.map(t => t.getFullName()).join(", ")}]. ` +
+        `[${typeArguments.map(t => t.fullName).join(", ")}]. ` +
         `No suitable API available.`,
     );
     return null;
@@ -536,7 +580,7 @@ export class MonoMethod extends MonoHandle {
       const typeArgv = Memory.alloc(Process.pointerSize * typeCount);
 
       for (let i = 0; i < typeCount; i++) {
-        const monoType = typeArguments[i].getType().pointer;
+        const monoType = typeArguments[i].type.pointer;
         typeArgv.add(i * Process.pointerSize).writePointer(monoType);
       }
 
@@ -569,7 +613,7 @@ export class MonoMethod extends MonoHandle {
 
       // Write type_argv pointers
       for (let i = 0; i < typeCount; i++) {
-        const monoType = typeArguments[i].getType().pointer;
+        const monoType = typeArguments[i].type.pointer;
         methodInst.add(headerSize + i * Process.pointerSize).writePointer(monoType);
       }
 
@@ -699,7 +743,7 @@ export class MonoMethod extends MonoHandle {
 
       // Fill the array with Type objects for each MonoClass
       for (let i = 0; i < typeArguments.length; i++) {
-        const monoType = typeArguments[i].getType().pointer;
+        const monoType = typeArguments[i].type.pointer;
         const typeObj = this.native.mono_type_get_object(domain, monoType);
 
         if (pointerIsNull(typeObj)) {
@@ -776,12 +820,16 @@ export class MonoMethod extends MonoHandle {
    * issues in some Mono builds. Consider using `tryCompile()` for safer operation.
    *
    * @returns Native code address for this method
-   * @throws Error if compilation fails or returns NULL
+   * @throws {MonoJitError} if compilation fails or returns NULL
    */
   compile(): NativePointer {
     const result = this.tryCompile();
     if (result === null) {
-      throw new Error(`Failed to compile method: ${this.getFullName()}`);
+      raise(
+        MonoErrorCodes.JIT_FAILED,
+        `Failed to compile method ${this.getFullName()}`,
+        "Use tryCompile() to handle compilation failures gracefully",
+      );
     }
     return result;
   }
@@ -814,13 +862,13 @@ export class MonoMethod extends MonoHandle {
    */
   tryCompile(): NativePointer | null {
     // Check if method can potentially be compiled
-    if (this.isAbstract()) {
+    if (this.isAbstract) {
       methodLogger.debug(`Cannot compile abstract method: ${this.getFullName()}`);
       return null;
     }
 
     // InternalCall and Runtime methods may not have JIT-able code
-    if (this.isInternalCall()) {
+    if (this.isInternalCall) {
       methodLogger.debug(`Method is InternalCall: ${this.getFullName()}`);
       // InternalCall methods might still have an address via different mechanism
       // but mono_compile_method typically won't work for them
@@ -858,6 +906,16 @@ export class MonoMethod extends MonoHandle {
     return this.tryCompile() !== null;
   }
 
+  // ===== METHOD INVOCATION =====
+
+  /**
+   * Invoke this method with the given arguments.
+   * @param instance Object instance (null for static methods)
+   * @param args Method arguments
+   * @param options Invocation options
+   * @returns Raw result pointer from mono_runtime_invoke
+   * @throws {MonoManagedExceptionError} if method throws and throwOnManagedException is true
+   */
   invoke(
     instance: MonoObject | NativePointer | null,
     args: MethodArgument[] = [],
@@ -920,29 +978,33 @@ export class MonoMethod extends MonoHandle {
     options: InvokeOptions = {},
   ): InvokeResult<T> {
     const rawResult = this.invoke(instance, args, options);
-    const returnType = this.getReturnType();
+    const retType = this.returnType;
     const isNull = pointerIsNull(rawResult);
 
     return {
       raw: rawResult,
       isNull,
       value: isNull ? (null as unknown as T) : this.unboxResult<T>(rawResult, options),
-      type: returnType,
+      type: retType,
     };
   }
+
+  // ===== PRIVATE HELPER METHODS =====
 
   /**
    * Unbox the raw result pointer based on the return type.
    * Handles value types, strings, and reference types automatically.
+   * @param rawResult Raw pointer from mono_runtime_invoke
    * @param options Include returnBigInt to preserve Int64/UInt64 precision
+   * @returns Unboxed value of type T
    */
   private unboxResult<T>(rawResult: NativePointer, options: InvokeOptions = {}): T {
     if (pointerIsNull(rawResult)) {
       return null as unknown as T;
     }
 
-    const returnType = this.getReturnType();
-    const kind = returnType.getKind();
+    const retType = this.returnType;
+    const kind = retType.kind;
 
     // Handle void
     if (kind === MonoTypeKind.Void) {
@@ -955,7 +1017,7 @@ export class MonoMethod extends MonoHandle {
     }
 
     // Handle value types (need to unbox)
-    if (returnType.isValueType()) {
+    if (retType.valueType) {
       return this.unboxValue(rawResult, kind, options) as unknown as T;
     }
 
@@ -964,8 +1026,11 @@ export class MonoMethod extends MonoHandle {
   }
 
   /**
-   * Unbox a value type from a boxed MonoObject pointer
+   * Unbox a value type from a boxed MonoObject pointer.
+   * @param boxedPtr Pointer to boxed MonoObject
+   * @param kind MonoTypeKind of the value
    * @param options Include returnBigInt to preserve Int64/UInt64 as bigint
+   * @returns Unboxed primitive value
    */
   private unboxValue(boxedPtr: NativePointer, kind: MonoTypeKind, options: InvokeOptions = {}): any {
     const unboxed = this.api.native.mono_object_unbox(boxedPtr);
@@ -980,9 +1045,9 @@ export class MonoMethod extends MonoHandle {
     switch (kind) {
       case MonoTypeKind.Enum:
         // For enums, get underlying type and unbox recursively
-        const underlying = this.getReturnType().getUnderlyingType();
+        const underlying = this.returnType.underlyingType;
         if (underlying) {
-          return this.unboxValue(boxedPtr, underlying.getKind(), options);
+          return this.unboxValue(boxedPtr, underlying.kind, options);
         }
         // Default to int32 for unknown enums
         return unboxed.readS32();
@@ -996,15 +1061,22 @@ export class MonoMethod extends MonoHandle {
   }
 
   /**
-   * Read a MonoString pointer as a JavaScript string
+   * Read a MonoString pointer as a JavaScript string.
+   * @param strPtr Pointer to MonoString
+   * @returns JavaScript string
    */
   private readMonoString(strPtr: NativePointer): string {
     return this.api.readMonoString(strPtr, false);
   }
 
+  /**
+   * Prepare method arguments for invocation.
+   * @param args Array of raw arguments
+   * @returns Array of prepared NativePointers
+   */
   private prepareArguments(args: MethodArgument[]): NativePointer[] {
-    const signature = this.getSignature();
-    const types = signature.getParameterTypes();
+    const sig = this.signature;
+    const types = sig.parameterTypes;
     const prepared: NativePointer[] = [];
     for (let index = 0; index < types.length; index += 1) {
       const type = types[index];
@@ -1014,6 +1086,14 @@ export class MonoMethod extends MonoHandle {
     return prepared;
   }
 
+  /**
+   * Prepare a single argument for a specific parameter type.
+   * @param type Expected MonoType of the parameter
+   * @param value Argument value to prepare
+   * @param index Parameter index (for error messages)
+   * @returns Prepared NativePointer
+   * @throws {MonoTypeMismatchError} if value type is incompatible
+   */
   private prepareArgumentForType(type: MonoType, value: MethodArgument | undefined, index: number): NativePointer {
     if (value === null || value === undefined) {
       return NULL;
@@ -1025,96 +1105,17 @@ export class MonoMethod extends MonoHandle {
       return this.api.stringNew(value);
     }
     if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
-      if (type.isByRef() || isPointerLikeKind(type.getKind())) {
-        throw new Error(
-          `Parameter ${index} on ${this.getFullName()} expects a pointer or reference; received primitive value.`,
+      if (type.byRef || isPointerLikeKind(type.kind)) {
+        raise(
+          MonoErrorCodes.TYPE_MISMATCH,
+          `Parameter ${index} on ${this.getFullName()} expects a pointer or reference; received primitive value`,
+          "Pass a NativePointer instead of a primitive value",
         );
       }
-      // Use allocPrimitiveArg which returns raw value pointer, NOT boxed object
-      return this.allocPrimitiveArg(type, value);
+      // Use shared allocPrimitiveValue which returns raw value pointer, NOT boxed object
+      return allocPrimitiveValue(type, value);
     }
     return value as NativePointer;
-  }
-
-  /**
-   * Allocate and write a primitive value to memory for use as a method argument.
-   *
-   * IMPORTANT: mono_runtime_invoke expects a pointer to the raw value for value types,
-   * NOT a boxed MonoObject*. This method returns the raw storage pointer.
-   *
-   * @param type The MonoType of the parameter
-   * @param value The primitive value to write
-   * @returns Pointer to the allocated memory containing the raw value
-   */
-  private allocPrimitiveArg(type: MonoType, value: number | boolean | bigint): NativePointer {
-    const effectiveType = this.resolveUnderlyingPrimitive(type);
-    const kind = effectiveType.getKind();
-    const { size } = effectiveType.getValueSize();
-    const storageSize = Math.max(size, Process.pointerSize);
-    const storage = Memory.alloc(storageSize);
-
-    switch (kind) {
-      case MonoTypeKind.Boolean:
-        storage.writeU8(value ? 1 : 0);
-        break;
-      case MonoTypeKind.I1:
-        storage.writeS8(Number(value));
-        break;
-      case MonoTypeKind.U1:
-        storage.writeU8(Number(value));
-        break;
-      case MonoTypeKind.I2:
-        storage.writeS16(Number(value));
-        break;
-      case MonoTypeKind.U2:
-        storage.writeU16(Number(value));
-        break;
-      case MonoTypeKind.Char:
-        storage.writeU16(typeof value === "number" ? value : Number(value));
-        break;
-      case MonoTypeKind.I4:
-        storage.writeS32(Number(value));
-        break;
-      case MonoTypeKind.U4:
-        storage.writeU32(Number(value));
-        break;
-      case MonoTypeKind.R4:
-        storage.writeFloat(Number(value));
-        break;
-      case MonoTypeKind.R8:
-        storage.writeDouble(Number(value));
-        break;
-      case MonoTypeKind.I8:
-        // Support 64-bit signed integers using Frida's Int64
-        if (typeof value === "bigint") {
-          storage.writeS64(int64(value.toString()));
-        } else if (typeof value === "number") {
-          storage.writeS64(int64(value.toString()));
-        } else {
-          // Assume it's already an Int64 or compatible type
-          storage.writeS64(value as any);
-        }
-        break;
-      case MonoTypeKind.U8:
-        // Support 64-bit unsigned integers using Frida's UInt64
-        if (typeof value === "bigint") {
-          storage.writeU64(uint64(value.toString()));
-        } else if (typeof value === "number") {
-          storage.writeU64(uint64(value.toString()));
-        } else {
-          // Assume it's already a UInt64 or compatible type
-          storage.writeU64(value as any);
-        }
-        break;
-      default:
-        throw new Error(
-          `Primitive argument allocation is not supported for parameter type ${effectiveType.getFullName()} on ${this.getFullName()}`,
-        );
-    }
-
-    // Return the raw storage pointer, NOT a boxed object
-    // mono_runtime_invoke expects raw value pointers for value type arguments
-    return storage;
   }
 
   /**
@@ -1127,10 +1128,10 @@ export class MonoMethod extends MonoHandle {
    * @returns Pointer to the boxed MonoObject
    */
   boxPrimitive(type: MonoType, value: number | boolean | bigint): NativePointer {
-    const effectiveType = this.resolveUnderlyingPrimitive(type);
-    const storage = this.allocPrimitiveArg(type, value);
+    const effectiveType = resolveUnderlyingPrimitive(type);
+    const storage = allocPrimitiveValue(type, value);
 
-    let klass = effectiveType.getClass();
+    let klass = effectiveType.class;
     if (!klass) {
       const klassPtr = this.api.native.mono_class_from_mono_type(effectiveType.pointer);
       if (!pointerIsNull(klassPtr)) {
@@ -1138,8 +1139,10 @@ export class MonoMethod extends MonoHandle {
       }
     }
     if (!klass) {
-      throw new Error(
-        `Unable to resolve class for parameter type ${effectiveType.getFullName()} on ${this.getFullName()}`,
+      raise(
+        MonoErrorCodes.CLASS_NOT_FOUND,
+        `Unable to resolve class for parameter type ${effectiveType.fullName} on ${this.getFullName()}`,
+        "Ensure the type is properly defined in the Mono runtime",
       );
     }
     klass.ensureInitialized();
@@ -1147,108 +1150,65 @@ export class MonoMethod extends MonoHandle {
     return this.api.native.mono_value_box(domain, klass.pointer, storage);
   }
 
-  private resolveUnderlyingPrimitive(type: MonoType): MonoType {
-    if (type.getKind() === MonoTypeKind.Enum) {
-      const underlying = type.getUnderlyingType();
-      if (underlying) {
-        return underlying;
-      }
-    }
-    return type;
-  }
-
-  private getFlagValues(): { flags: number; implementationFlags: number } {
-    if (this.#flagCache) {
-      return this.#flagCache;
-    }
-    const implPtr = Memory.alloc(4);
-    const flags = this.native.mono_method_get_flags(this.pointer, implPtr) as number;
-    const implementationFlags = implPtr.readU32();
-    const result = { flags, implementationFlags };
-    this.#flagCache = result;
-    return result;
-  }
-
-  // ===== CONSISTENT API PATTERNS =====
+  // ===== VALIDATION AND INSPECTION =====
 
   /**
-   * Get method name (property accessor)
+   * Get a human-readable description of this method.
+   * @returns Description string with modifiers, return type, name, and parameters
    */
-  get name(): string {
-    return this.getName();
-  }
-
-  /**
-   * Get declaring class (property accessor)
-   */
-  get declaringClass(): MonoClass {
-    return this.getDeclaringClass();
-  }
-
-  /**
-   * Get a human-readable description of this method
-   */
-  getDescription(): string {
-    const returnType = this.getReturnType().getName();
-    const methodName = this.getName();
-    const parameters = this.getParameters()
-      .map(param => `${param.type.getName()} param${param.index}`)
-      .join(", ");
-
+  @lazy get description(): string {
     const modifiers = [];
-    if (this.isStatic()) modifiers.push("static");
-    if (this.isVirtual()) modifiers.push("virtual");
-    if (this.isAbstract()) modifiers.push("abstract");
-    if (this.isConstructor()) modifiers.push("constructor");
+    if (this.isStatic) modifiers.push("static");
+    if (this.isVirtual) modifiers.push("virtual");
+    if (this.isAbstract) modifiers.push("abstract");
+    if (this.isConstructor) modifiers.push("constructor");
 
     const modifierStr = modifiers.length > 0 ? `${modifiers.join(" ")} ` : "";
-    return `${modifierStr}${returnType} ${methodName}(${parameters})`;
+    const params = this.parameters.map(param => `${param.type.name} param${param.index}`).join(", ");
+    return `${modifierStr}${this.returnType.name} ${this.name}(${params})`;
   }
 
   /**
-   * Validate method arguments before invocation
+   * Validate method arguments before invocation.
+   * @param args Array of arguments to validate
+   * @returns Validation result with isValid flag and error messages
    */
   validateArguments(args: any[]): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
-    const expectedCount = this.getParameterCount();
+    const expectedCount = this.parameterCount;
     const actualCount = args.length;
 
     if (expectedCount !== actualCount) {
       errors.push(`Expected ${expectedCount} arguments, got ${actualCount}`);
     }
 
-    const paramTypes = this.getParameterTypes();
-    const parameters = this.getParameters();
-
-    for (let i = 0; i < Math.min(actualCount, paramTypes.length); i++) {
-      const expectedType = paramTypes[i];
-      const paramInfo = parameters[i];
+    for (let i = 0; i < Math.min(actualCount, this.parameterTypes.length); i++) {
+      const expectedType = this.parameterTypes[i];
+      const paramInfo = this.parameters[i];
       const actualValue = args[i];
 
       // Basic null/undefined validation
       if (actualValue === null || actualValue === undefined) {
-        if (expectedType.isValueType()) {
-          errors.push(`Argument ${i} cannot be null for value type ${expectedType.getName()}`);
+        if (expectedType.valueType) {
+          errors.push(`Argument ${i} cannot be null for value type ${expectedType.name}`);
         }
         continue;
       }
 
       // Type validation for value types
-      if (expectedType.isValueType()) {
+      if (expectedType.valueType) {
         const valueType = typeof actualValue;
         // Basic type validation - enum and primitive checks could be enhanced
         if (!this.isCompatiblePrimitiveType(valueType, expectedType)) {
-          errors.push(`Argument ${i} type mismatch: expected ${expectedType.getName()}, got ${valueType}`);
+          errors.push(`Argument ${i} type mismatch: expected ${expectedType.name}, got ${valueType}`);
         }
       }
 
       // Reference type validation
-      if (!expectedType.isValueType() && actualValue instanceof MonoObject) {
-        const actualClass = actualValue.getClass();
+      if (!expectedType.valueType && actualValue instanceof MonoObject) {
+        const actualClass = actualValue.class;
         if (!this.isTypeCompatible(expectedType, actualClass)) {
-          errors.push(
-            `Argument ${i} type mismatch: expected ${expectedType.getName()}, got ${actualClass.getFullName()}`,
-          );
+          errors.push(`Argument ${i} type mismatch: expected ${expectedType.name}, got ${actualClass.fullName}`);
         }
       }
 
@@ -1267,7 +1227,9 @@ export class MonoMethod extends MonoHandle {
   }
 
   /**
-   * Validate method accessibility in current context
+   * Validate method accessibility in current context.
+   * @param context Context information including static flag and instance type
+   * @returns Validation result with isValid flag and error messages
    */
   validateAccessibility(context?: { isStatic?: boolean; instanceType?: MonoClass }): {
     isValid: boolean;
@@ -1276,27 +1238,25 @@ export class MonoMethod extends MonoHandle {
     const errors: string[] = [];
 
     // Check if method is static but being called on instance
-    if (this.isStatic() && context?.isStatic === false) {
-      errors.push(`Static method ${this.getName()} cannot be called on instance`);
+    if (this.isStatic && context?.isStatic === false) {
+      errors.push(`Static method ${this.name} cannot be called on instance`);
     }
 
     // Check if instance method is being called without instance
-    if (!this.isStatic() && context?.isStatic !== false && !context?.instanceType) {
-      errors.push(`Instance method ${this.getName()} requires an object instance`);
+    if (!this.isStatic && context?.isStatic !== false && !context?.instanceType) {
+      errors.push(`Instance method ${this.name} requires an object instance`);
     }
 
     // Check if method is abstract
-    if (this.isAbstract()) {
-      errors.push(`Abstract method ${this.getName()} cannot be called directly`);
+    if (this.isAbstract) {
+      errors.push(`Abstract method ${this.name} cannot be called directly`);
     }
 
     // Check instance type compatibility
-    if (!this.isStatic() && context?.instanceType) {
-      const declaringClass = this.getDeclaringClass();
-      if (!declaringClass.isAssignableFrom(context.instanceType)) {
-        errors.push(
-          `Method ${this.getName()} cannot be called on instance of type ${context.instanceType.getFullName()}`,
-        );
+    if (!this.isStatic && context?.instanceType) {
+      const declClass = this.declaringClass;
+      if (!declClass.isAssignableFrom(context.instanceType)) {
+        errors.push(`Method ${this.name} cannot be called on instance of type ${context.instanceType.fullName}`);
       }
     }
 
@@ -1307,7 +1267,8 @@ export class MonoMethod extends MonoHandle {
   }
 
   /**
-   * Validate method metadata integrity
+   * Validate method metadata integrity.
+   * @returns Validation result with isValid flag, errors, and warnings
    */
   validateMetadata(): { isValid: boolean; errors: string[]; warnings: string[] } {
     const errors: string[] = [];
@@ -1315,43 +1276,43 @@ export class MonoMethod extends MonoHandle {
 
     try {
       // Check if method has a valid name
-      if (!this.getName() || this.getName().trim() === "") {
+      if (!this.name || this.name.trim() === "") {
         errors.push("Method has invalid name");
       }
 
       // Check if declaring class is accessible
-      const declaringClass = this.getDeclaringClass();
-      if (!declaringClass) {
+      const declClass = this.declaringClass;
+      if (!declClass) {
         errors.push("Unable to determine declaring class");
       }
 
       // Check signature validity
-      const signature = this.getSignature();
-      if (!signature) {
+      const sig = this.signature;
+      if (!sig) {
         errors.push("Unable to get method signature");
       }
 
       // Check return type
-      const returnType = this.getReturnType();
-      if (!returnType) {
+      const retType = this.returnType;
+      if (!retType) {
         errors.push("Unable to determine return type");
       }
 
       // Warnings for unusual patterns
-      if (this.isStatic() && this.isVirtual()) {
+      if (this.isStatic && this.isVirtual) {
         warnings.push("Method is both static and virtual (unusual pattern)");
       }
 
-      if (this.isAbstract() && this.isStatic()) {
+      if (this.isAbstract && this.isStatic) {
         warnings.push("Method is both abstract and static (unusual pattern)");
       }
 
       // Check parameter count consistency
-      const paramCount = this.getParameterCount();
-      const paramTypes = this.getParameterTypes();
+      const paramCount = this.parameterCount;
+      const paramTypes = this.parameterTypes;
       if (paramCount !== paramTypes.length) {
         errors.push(
-          `Parameter count mismatch: getParameterCount()=${paramCount}, getParameterTypes().length=${paramTypes.length}`,
+          `Parameter count mismatch: parameterCount=${paramCount}, parameterTypes.length=${paramTypes.length}`,
         );
       }
     } catch (error) {
@@ -1365,13 +1326,14 @@ export class MonoMethod extends MonoHandle {
     };
   }
 
-  // ===== PRIVATE HELPER METHODS =====
-
   /**
-   * Check if a JavaScript type is compatible with a Mono primitive type
+   * Check if a JavaScript type is compatible with a Mono primitive type.
+   * @param jsType JavaScript type name ("number", "boolean", "string")
+   * @param monoType Mono type to check against
+   * @returns True if types are compatible
    */
   private isCompatiblePrimitiveType(jsType: string, monoType: MonoType): boolean {
-    const typeName = monoType.getName().toLowerCase();
+    const typeName = monoType.name.toLowerCase();
 
     switch (jsType) {
       case "number":
@@ -1386,10 +1348,13 @@ export class MonoMethod extends MonoHandle {
   }
 
   /**
-   * Check if two Mono types are compatible
+   * Check if two Mono types are compatible.
+   * @param expectedType Expected MonoType
+   * @param actualType Actual MonoClass
+   * @returns True if types are compatible
    */
   private isTypeCompatible(expectedType: MonoType, actualType: MonoClass): boolean {
-    const expectedClass = expectedType.getClass();
+    const expectedClass = expectedType.class;
     if (!expectedClass) return false;
     return expectedClass.isAssignableFrom(actualType);
   }
@@ -1458,8 +1423,8 @@ export class MethodInvocation {
    * Get context description for error logging
    */
   private getContextDescription(): string {
-    const methodName = this.method.getName();
-    const className = this.method.getDeclaringClass().getName();
+    const methodName = this.method.name;
+    const className = this.method.declaringClass.name;
     const instanceDesc = this.instance ? `on instance` : "static";
     return `${className}.${methodName} ${instanceDesc}`;
   }
@@ -1467,7 +1432,7 @@ export class MethodInvocation {
   /**
    * Create a new MethodInvocation instance
    */
-  static create(
+  static new(
     method: MonoMethod,
     instance: MonoObject | NativePointer | null = null,
     args: MethodArgument[] = [],
@@ -1486,5 +1451,5 @@ export function createMethodInvocation(
   args?: MethodArgument[],
   options?: InvokeOptions,
 ): MethodInvocation {
-  return MethodInvocation.create(method, instance, args, options);
+  return MethodInvocation.new(method, instance, args, options);
 }

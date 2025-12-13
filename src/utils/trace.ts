@@ -7,6 +7,7 @@ import { MonoField } from "../model/field";
 import { MonoMethod } from "../model/method";
 import { MonoProperty } from "../model/property";
 import { MonoApi } from "../runtime/api";
+import { MonoErrorCodes, raise } from "./errors";
 import * as Find from "./find";
 import { Logger } from "./log";
 
@@ -57,8 +58,8 @@ export interface AccessTraceInfo {
  */
 function extractMethodArgs(method: MonoMethod, args: InvocationArguments): NativePointer[] {
   const monoArgs: NativePointer[] = [];
-  const paramCount = method.getParameterCount();
-  const isInstance = method.isInstanceMethod();
+  const paramCount = method.parameterCount;
+  const isInstance = method.isInstanceMethod;
   const startIdx = isInstance ? 1 : 0;
 
   for (let i = 0; i < paramCount; i++) {
@@ -221,7 +222,7 @@ export function replaceReturnValue(
 
   const listener = Interceptor.attach(impl, {
     onEnter(args) {
-      const isInstance = monoMethod.isInstanceMethod();
+      const isInstance = monoMethod.isInstanceMethod;
       (this as any).thisPtr = isInstance ? args[0] : ptr(0);
       (this as any).methodArgs = extractMethodArgs(monoMethod, args);
     },
@@ -255,7 +256,7 @@ export function tryReplaceReturnValue(
   try {
     const listener = Interceptor.attach(impl, {
       onEnter(args) {
-        const isInstance = monoMethod.isInstanceMethod();
+        const isInstance = monoMethod.isInstanceMethod;
         (this as any).thisPtr = isInstance ? args[0] : ptr(0);
         (this as any).methodArgs = extractMethodArgs(monoMethod, args);
       },
@@ -282,7 +283,7 @@ export function tryReplaceReturnValue(
  * @returns Detach function
  */
 export function classAll(klass: MonoClass, callbacks: MethodCallbacks): () => void {
-  const methods = klass.getMethods();
+  const methods = klass.methods;
   const detachers: Array<() => void> = [];
 
   for (const m of methods) {
@@ -407,14 +408,12 @@ export function field(monoField: MonoField, callbacks: FieldAccessCallbacks): ((
   // Direct field access at the memory level is hard to intercept
   // We can try to find associated property accessors or use memory watches
 
-  const klass = monoField.getParent();
-  const fieldName = monoField.getName();
+  const klass = monoField.parent;
+  const fieldName = monoField.name;
 
   // Try to find a property with the same name (common C# pattern)
   const property =
-    klass.tryGetProperty(fieldName) ||
-    klass.tryGetProperty(capitalize(fieldName)) ||
-    klass.tryGetProperty(`_${fieldName}`);
+    klass.tryProperty(fieldName) || klass.tryProperty(capitalize(fieldName)) || klass.tryProperty(`_${fieldName}`);
 
   if (property) {
     traceLogger.debug(`Using property accessors for field ${fieldName}`);
@@ -425,11 +424,11 @@ export function field(monoField: MonoField, callbacks: FieldAccessCallbacks): ((
   }
 
   // For static fields, we can potentially use memory watches
-  if (monoField.isStatic()) {
+  if (monoField.isStatic) {
     return traceStaticField(monoField, callbacks);
   }
 
-  traceLogger.warn(`Cannot trace field ${klass.getName()}.${fieldName} - no accessor methods found`);
+  traceLogger.warn(`Cannot trace field ${klass.name}.${fieldName} - no accessor methods found`);
   traceLogger.warn(`Consider using a memory watch or hooking methods that access this field`);
   return null;
 }
@@ -438,11 +437,11 @@ export function field(monoField: MonoField, callbacks: FieldAccessCallbacks): ((
  * Trace a static field using memory access monitoring
  */
 function traceStaticField(monoField: MonoField, _callbacks: FieldAccessCallbacks): (() => void) | null {
-  const klass = monoField.getParent();
+  const klass = monoField.parent;
   const vtable = klass.getVTable();
 
   if (!vtable || vtable.isNull()) {
-    traceLogger.warn(`Cannot get VTable for ${klass.getName()}`);
+    traceLogger.warn(`Cannot get VTable for ${klass.name}`);
     return null;
   }
 
@@ -451,8 +450,8 @@ function traceStaticField(monoField: MonoField, _callbacks: FieldAccessCallbacks
   traceLogger.warn(`Static field tracing via memory watch is experimental`);
 
   // Log the field info for manual debugging
-  const offset = monoField.getOffset();
-  traceLogger.debug(`Static field ${monoField.getName()} offset: ${offset}`);
+  const offset = monoField.offset;
+  traceLogger.debug(`Static field ${monoField.name} offset: ${offset}`);
 
   return null;
 }
@@ -510,7 +509,7 @@ export function fieldsByPattern(api: MonoApi, pattern: string, callbacks: FieldA
 export function propertyTrace(monoProperty: MonoProperty, callbacks: PropertyAccessCallbacks): () => void {
   const detachers: Array<() => void> = [];
   const propertyName = monoProperty.name;
-  const className = monoProperty.parent.getName();
+  const className = monoProperty.parent.name;
 
   // Hook the getter if available
   const getter = monoProperty.getter;
@@ -537,7 +536,7 @@ export function propertyTrace(monoProperty: MonoProperty, callbacks: PropertyAcc
       const detach = methodExtended(setter, {
         onEnter(args) {
           // Store the new value being set
-          const isInstance = setter.isInstanceMethod();
+          const isInstance = setter.isInstanceMethod;
           const newValueIdx = isInstance ? 1 : 0;
           (this as any).newValue = args.length > newValueIdx ? args[newValueIdx] : NULL;
         },
@@ -724,7 +723,11 @@ export function methodWithCallStack(monoMethod: MonoMethod, callbacks: MethodCal
   const impl = monoMethod.api.native.mono_compile_method(monoMethod.pointer);
 
   if (impl.isNull()) {
-    throw new Error(`Failed to compile method: ${monoMethod.getFullName()}`);
+    raise(
+      MonoErrorCodes.JIT_FAILED,
+      `Failed to compile method ${monoMethod.getFullName()}`,
+      "Use tryCompile() to handle compilation failures gracefully",
+    );
   }
 
   const listener = Interceptor.attach(impl, {

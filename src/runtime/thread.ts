@@ -1,19 +1,37 @@
+/**
+ * Thread Management - Mono thread attachment and execution context.
+ *
+ * Provides safe thread attachment for Mono runtime operations:
+ * - Automatic attachment when executing Mono API calls
+ * - Prevention of redundant nested attachments
+ * - Thread lifecycle tracking and statistics
+ * - Safe async operation support
+ *
+ * All Mono API calls must be made from an attached thread. This module
+ * handles attachment automatically via the run() method.
+ *
+ * @module runtime/thread
+ */
+
 import { MonoApi } from "./api";
 
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
 /**
- * Thread management helper for Mono runtime.
- * Tracks attached threads per MonoApi instance to avoid redundant attach/detach cycles.
+ * Options for thread-attached execution.
  */
 export interface ThreadRunOptions {
   /**
    * Skip ensuring the thread is attached before running.
-   * Only use this for operations that are already guaranteed to be in an attached context.
+   * Only use this for operations already in an attached context.
    */
   attachIfNeeded?: boolean;
 
   /**
    * Timeout in milliseconds for the operation.
-   * If exceeded, the operation will be interrupted if possible.
+   * If exceeded, the operation may be interrupted.
    */
   timeout?: number;
 }
@@ -32,22 +50,44 @@ export interface ThreadStats {
   attachedThreadIds: number[];
 }
 
+// ============================================================================
+// THREAD MANAGER CLASS
+// ============================================================================
+
+/**
+ * Manages thread attachment for Mono runtime operations.
+ *
+ * Tracks attached threads to avoid redundant attach/detach cycles
+ * and provides safe execution contexts for Mono API calls.
+ *
+ * **Ownership Model**:
+ * - Threads attached by the bridge are tracked as "bridge-owned"
+ * - Only bridge-owned threads can be detached via `detachBridgeOwned()`
+ * - External attachments (done before bridge interaction) are not touched
+ *
+ * @example
+ * ```typescript
+ * const manager = new ThreadManager(api);
+ *
+ * // Execute with automatic thread attachment
+ * const result = manager.run(() => {
+ *   return api.native.mono_get_root_domain();
+ * });
+ *
+ * // Check statistics
+ * console.log(manager.getStats());
+ * ```
+ */
 export class ThreadManager {
   private readonly attachedThreads = new Map<number, NativePointer>();
   private readonly activeAttachments = new Set<number>();
+  /** Threads that were attached by the bridge (not externally) */
+  private readonly bridgeOwnedThreads = new Set<number>();
   private totalAttachmentCount = 0;
 
   constructor(private readonly api: MonoApi) {}
 
-  /**
-   * Ensures the current thread is attached to the Mono runtime and executes the callback.
-   * Avoids nested attachments by tracking active attachment contexts.
-   * @param fn Callback to execute with thread attached
-   * @returns Result of the callback
-   */
-  withAttachedThread<T>(fn: () => T): T {
-    return this.run(fn);
-  }
+  // ===== EXECUTION METHODS =====
 
   /**
    * Preferred execution helper. Ensures the callback executes with the thread attached
@@ -142,6 +182,40 @@ export class ThreadManager {
   }
 
   /**
+   * Check if a specific thread was attached by the bridge (not externally).
+   * @param threadId Thread ID to check (defaults to current thread)
+   */
+  isBridgeOwned(threadId = getCurrentThreadId()): boolean {
+    return this.bridgeOwnedThreads.has(threadId);
+  }
+
+  /**
+   * Mark the current thread as bridge-owned.
+   * Call this after ensureAttached() when the bridge is responsible for the attachment.
+   * @param threadId Thread ID to mark (defaults to current thread)
+   */
+  markBridgeOwned(threadId = getCurrentThreadId()): void {
+    if (this.isAttached(threadId)) {
+      this.bridgeOwnedThreads.add(threadId);
+    }
+  }
+
+  /**
+   * Detach a bridge-owned thread from the Mono runtime.
+   * Only detaches if the thread was attached by the bridge (not externally).
+   *
+   * @param threadId Thread ID to detach (defaults to current thread)
+   * @returns True if thread was detached, false if not bridge-owned or not attached
+   */
+  detachBridgeOwned(threadId = getCurrentThreadId()): boolean {
+    if (!this.bridgeOwnedThreads.has(threadId)) {
+      // Not bridge-owned, don't touch it
+      return false;
+    }
+    return this.detach(threadId);
+  }
+
+  /**
    * Detach a specific thread from the Mono runtime.
    *
    * WARNING: Detaching the current thread during active script execution will
@@ -161,6 +235,7 @@ export class ThreadManager {
       this.api.detachThread(handle);
       this.attachedThreads.delete(threadId);
       this.activeAttachments.delete(threadId);
+      this.bridgeOwnedThreads.delete(threadId);
       return true;
     } catch {
       return false;
@@ -187,6 +262,7 @@ export class ThreadManager {
         const threadId = getCurrentThreadId();
         this.attachedThreads.delete(threadId);
         this.activeAttachments.delete(threadId);
+        this.bridgeOwnedThreads.delete(threadId);
       }
       return !!result;
     } catch {
@@ -217,6 +293,7 @@ export class ThreadManager {
       }
       this.attachedThreads.delete(threadId);
       this.activeAttachments.delete(threadId);
+      this.bridgeOwnedThreads.delete(threadId);
     }
   }
 
@@ -241,8 +318,25 @@ export class ThreadManager {
    * Note: Frida's JavaScript runtime is single-threaded, but this helps with
    * Promise-based code patterns.
    */
-  async runAsync<T>(fn: () => Promise<T>): Promise<T> {
-    return this.run(() => fn());
+  async runAsync<T>(fn: () => Promise<T>, options: ThreadRunOptions = {}): Promise<T> {
+    const { attachIfNeeded = true } = options;
+    const threadId = getCurrentThreadId();
+
+    if (this.activeAttachments.has(threadId)) {
+      return await fn();
+    }
+
+    if (!attachIfNeeded) {
+      return await fn();
+    }
+
+    this.activeAttachments.add(threadId);
+    try {
+      this.ensureAttached(threadId);
+      return await fn();
+    } finally {
+      this.activeAttachments.delete(threadId);
+    }
   }
 }
 

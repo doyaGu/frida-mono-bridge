@@ -1,4 +1,5 @@
 import { MonoEnums } from "../runtime/enums";
+import { lazy } from "../utils/cache";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
 import { MonoHandle } from "./base";
@@ -385,6 +386,8 @@ export interface MonoTypeSummary {
  * ```
  */
 export class MonoType extends MonoHandle {
+  // ===== CORE PROPERTIES =====
+
   /**
    * Get the type kind (classification).
    *
@@ -392,7 +395,7 @@ export class MonoType extends MonoHandle {
    *
    * @example
    * ```typescript
-   * const kind = type.getKind();
+   * const kind = type.kind;
    * switch (kind) {
    *   case MonoTypeKind.Class:
    *     console.log("Reference type");
@@ -403,22 +406,9 @@ export class MonoType extends MonoHandle {
    * }
    * ```
    */
-  getKind(): MonoTypeKind {
-    return this.native.mono_type_get_type(this.pointer) as MonoTypeKind;
-  }
-
-  /**
-   * Get the type kind (accessor property).
-   *
-   * @example
-   * ```typescript
-   * if (type.kind === MonoTypeKind.String) {
-   *   console.log("String type");
-   * }
-   * ```
-   */
+  @lazy
   get kind(): MonoTypeKind {
-    return this.getKind();
+    return this.native.mono_type_get_type(this.pointer) as MonoTypeKind;
   }
 
   /**
@@ -428,23 +418,12 @@ export class MonoType extends MonoHandle {
    *
    * @example
    * ```typescript
-   * console.log(type.getName()); // "Int32"
-   * ```
-   */
-  getName(): string {
-    return this.readNativeString(() => this.api.native.mono_type_get_name(this.pointer));
-  }
-
-  /**
-   * Get the short type name (accessor property).
-   *
-   * @example
-   * ```typescript
    * console.log(type.name); // "Int32"
    * ```
    */
+  @lazy
   get name(): string {
-    return this.getName();
+    return this.readNativeString(() => this.api.native.mono_type_get_name(this.pointer));
   }
 
   /**
@@ -455,7 +434,7 @@ export class MonoType extends MonoHandle {
    *
    * @example
    * ```typescript
-   * console.log(type.getFullName()); // "System.Int32"
+   * console.log(type.fullName); // "System.Int32"
    * console.log(type.getFullName(MonoTypeNameFormat.IL)); // "int32"
    * console.log(type.getFullName(MonoTypeNameFormat.AssemblyQualified));
    * // "System.Int32, mscorlib, Version=..."
@@ -466,16 +445,19 @@ export class MonoType extends MonoHandle {
   }
 
   /**
-   * Get the full type name (accessor property).
+   * Get the full type name (cached accessor property).
    *
    * @example
    * ```typescript
    * console.log(type.fullName); // "System.Int32"
    * ```
    */
+  @lazy
   get fullName(): string {
     return this.getFullName();
   }
+
+  // ===== TYPE RELATIONSHIPS =====
 
   /**
    * Get the MonoClass associated with this type.
@@ -484,13 +466,14 @@ export class MonoType extends MonoHandle {
    *
    * @example
    * ```typescript
-   * const klass = type.getClass();
+   * const klass = type.class;
    * if (klass) {
    *   console.log(`Class: ${klass.fullName}`);
    * }
    * ```
    */
-  getClass(): MonoClass | null {
+  @lazy
+  get class(): MonoClass | null {
     const klassPtr = this.native.mono_type_get_class(this.pointer);
     return pointerIsNull(klassPtr) ? null : new MonoClass(this.api, klassPtr);
   }
@@ -503,11 +486,12 @@ export class MonoType extends MonoHandle {
    * @example
    * ```typescript
    * // For an enum type, get the underlying integer type
-   * const underlying = enumType.getUnderlyingType();
+   * const underlying = enumType.underlyingType;
    * console.log(underlying?.name); // "Int32"
    * ```
    */
-  getUnderlyingType(): MonoType | null {
+  @lazy
+  get underlyingType(): MonoType | null {
     const typePtr = this.native.mono_type_get_underlying_type(this.pointer);
     return pointerIsNull(typePtr) ? null : new MonoType(this.api, typePtr);
   }
@@ -520,12 +504,13 @@ export class MonoType extends MonoHandle {
    * @example
    * ```typescript
    * // For int[], get the int type
-   * const element = arrayType.getElementType();
+   * const element = arrayType.elementType;
    * console.log(element?.name); // "Int32"
    * ```
    */
-  getElementType(): MonoType | null {
-    const kind = this.native.mono_type_get_type(this.pointer) as MonoTypeKind;
+  @lazy
+  get elementType(): MonoType | null {
+    const kind = this.kind;
     let elementPtr: NativePointer;
 
     switch (kind) {
@@ -558,6 +543,8 @@ export class MonoType extends MonoHandle {
     return pointerIsNull(elementPtr) ? null : new MonoType(this.api, elementPtr);
   }
 
+  // ===== TYPE CHARACTERISTICS =====
+
   /**
    * Check if this type is a by-reference type (ref T).
    *
@@ -565,12 +552,13 @@ export class MonoType extends MonoHandle {
    *
    * @example
    * ```typescript
-   * if (type.isByRef()) {
+   * if (type.byRef) {
    *   console.log("This is a ref parameter");
    * }
    * ```
    */
-  isByRef(): boolean {
+  @lazy
+  get byRef(): boolean {
     return (this.native.mono_type_is_byref(this.pointer) as number) !== 0;
   }
 
@@ -581,12 +569,13 @@ export class MonoType extends MonoHandle {
    *
    * @example
    * ```typescript
-   * if (type.isPointer()) {
+   * if (type.pointer) {
    *   console.log("This is a pointer type");
    * }
    * ```
    */
-  isPointer(): boolean {
+  @lazy
+  get pointerType(): boolean {
     return (this.native.mono_type_is_pointer(this.pointer) as number) !== 0;
   }
 
@@ -597,12 +586,13 @@ export class MonoType extends MonoHandle {
    *
    * @example
    * ```typescript
-   * if (type.isReferenceType()) {
+   * if (type.referenceType) {
    *   console.log("This is a reference type (class)");
    * }
    * ```
    */
-  isReferenceType(): boolean {
+  @lazy
+  get referenceType(): boolean {
     return (this.native.mono_type_is_reference(this.pointer) as number) !== 0;
   }
 
@@ -613,71 +603,38 @@ export class MonoType extends MonoHandle {
    *
    * @example
    * ```typescript
-   * if (type.isGenericParameter()) {
+   * if (type.genericParameter) {
    *   console.log("This is a generic type parameter");
    * }
    * ```
    */
-  isGenericParameter(): boolean {
+  @lazy
+  get genericParameter(): boolean {
     return (this.native.mono_type_is_generic_parameter(this.pointer) as number) !== 0;
   }
 
   /**
    * Check if this type is a value type (struct, enum, primitive).
-   *
-   * @returns true if this is a value type
-   *
-   * @remarks
-   * Value types include:
-   * - Primitive types (int, bool, float, etc.)
-   * - Structs (ValueType)
-   * - Enums
-   *
-   * @example
-   * ```typescript
-   * if (type.isValueType()) {
-   *   console.log("This is a value type (struct)");
-   * }
-   * ```
    */
-  isValueType(): boolean {
-    return isValueTypeKind(this.getKind());
+  @lazy
+  get valueType(): boolean {
+    return isValueTypeKind(this.kind);
   }
 
   /**
    * Check if this type is the void type.
-   *
-   * @returns true if this is the void type
-   *
-   * @example
-   * ```typescript
-   * if (type.isVoid()) {
-   *   console.log("This is void (no return value)");
-   * }
-   * ```
    */
-  isVoid(): boolean {
-    return this.getKind() === MonoTypeKind.Void;
+  @lazy
+  get isVoid(): boolean {
+    return this.kind === MonoTypeKind.Void;
   }
 
   /**
    * Check if this type is an array type.
-   *
-   * @returns true if this is an array type
-   *
-   * @remarks
-   * Returns true for both single-dimensional (T[]) and
-   * multi-dimensional arrays (T[,]).
-   *
-   * @example
-   * ```typescript
-   * if (type.isArray()) {
-   *   console.log(`Array with rank: ${type.getArrayRank()}`);
-   * }
-   * ```
    */
-  isArray(): boolean {
-    const kind = this.getKind();
+  @lazy
+  get isArray(): boolean {
+    const kind = this.kind;
     return kind === MonoTypeKind.Array || kind === MonoTypeKind.SingleDimArray;
   }
 
@@ -687,8 +644,9 @@ export class MonoType extends MonoHandle {
    * Returns 1 for single-dimensional arrays (SZARRAY).
    * Returns the actual rank for multi-dimensional arrays (ARRAY).
    */
-  getArrayRank(): number {
-    const kind = this.getKind();
+  @lazy
+  get arrayRank(): number {
+    const kind = this.kind;
 
     // Single-dimensional array (SZARRAY) always has rank 1
     if (kind === MonoTypeKind.SingleDimArray) {
@@ -708,6 +666,8 @@ export class MonoType extends MonoHandle {
     return 0;
   }
 
+  // ===== SIZE INFORMATION =====
+
   /**
    * Get the stack size and alignment for this type.
    *
@@ -715,11 +675,12 @@ export class MonoType extends MonoHandle {
    *
    * @example
    * ```typescript
-   * const { size, alignment } = type.getStackSize();
+   * const { size, alignment } = type.stackSize;
    * console.log(`Stack size: ${size}, alignment: ${alignment}`);
    * ```
    */
-  getStackSize(): { size: number; alignment: number } {
+  @lazy
+  get stackSize(): { size: number; alignment: number } {
     const alignPtr = Memory.alloc(4);
     const size = this.native.mono_type_stack_size(this.pointer, alignPtr) as number;
     const alignment = alignPtr.readU32();
@@ -733,16 +694,19 @@ export class MonoType extends MonoHandle {
    *
    * @example
    * ```typescript
-   * const { size, alignment } = type.getValueSize();
+   * const { size, alignment } = type.valueSize;
    * console.log(`Value size: ${size}, alignment: ${alignment}`);
    * ```
    */
-  getValueSize(): { size: number; alignment: number } {
+  @lazy
+  get valueSize(): { size: number; alignment: number } {
     const alignPtr = Memory.alloc(4);
     const size = this.native.mono_type_size(this.pointer, alignPtr) as number;
     const alignment = alignPtr.readU32();
     return { size, alignment };
   }
+
+  // ===== FORMATTING METHODS =====
 
   /**
    * Get the type name formatted for method signatures.
@@ -761,7 +725,7 @@ export class MonoType extends MonoHandle {
     return this.getFullName(format);
   }
 
-  // ===== SUMMARY & DESCRIPTION METHODS =====
+  // ===== SUMMARY & DESCRIPTION =====
 
   /**
    * Get a summary object containing comprehensive type information.
@@ -775,19 +739,19 @@ export class MonoType extends MonoHandle {
    * ```
    */
   getSummary(): MonoTypeSummary {
-    const { size, alignment } = this.getValueSize();
+    const { size, alignment } = this.valueSize;
     return {
-      name: this.getName(),
-      fullName: this.getFullName(),
-      kind: this.getKind(),
-      isByRef: this.isByRef(),
-      isPointer: this.isPointer(),
-      isReferenceType: this.isReferenceType(),
-      isValueType: this.isValueType(),
-      isGeneric: this.isGenericParameter(),
-      isVoid: this.isVoid(),
-      isArray: this.isArray(),
-      arrayRank: this.getArrayRank(),
+      name: this.name,
+      fullName: this.fullName,
+      kind: this.kind,
+      isByRef: this.byRef,
+      isPointer: this.pointerType,
+      isReferenceType: this.referenceType,
+      isValueType: this.valueType,
+      isGeneric: this.genericParameter,
+      isVoid: this.isVoid,
+      isArray: this.isArray,
+      arrayRank: this.arrayRank,
       size,
       alignment,
       pointer: this.pointer.toString(),
@@ -809,7 +773,7 @@ export class MonoType extends MonoHandle {
    */
   describe(): string {
     const summary = this.getSummary();
-    const kindName = this.getKindName();
+    const kindNameStr = this.kindName;
     const characteristics: string[] = [];
 
     if (summary.isValueType) characteristics.push("ValueType");
@@ -822,7 +786,7 @@ export class MonoType extends MonoHandle {
 
     return [
       `MonoType: ${summary.fullName}`,
-      `  Kind: ${kindName} (${characteristics.join(", ") || "none"})`,
+      `  Kind: ${kindNameStr} (${characteristics.join(", ") || "none"})`,
       `  Size: ${summary.size} bytes, Alignment: ${summary.alignment}`,
       `  Pointer: ${summary.pointer}`,
     ].join("\n");
@@ -839,10 +803,10 @@ export class MonoType extends MonoHandle {
    * ```
    */
   override toString(): string {
-    return this.getFullName();
+    return this.fullName;
   }
 
-  // ===== ADDITIONAL UTILITY METHODS =====
+  // ===== UTILITY METHODS =====
 
   /**
    * Get a human-readable name for the type kind.
@@ -851,11 +815,12 @@ export class MonoType extends MonoHandle {
    *
    * @example
    * ```typescript
-   * console.log(type.getKindName()); // "I4", "Class", "String", etc.
+   * console.log(type.kindName); // "I4", "Class", "String", etc.
    * ```
    */
-  getKindName(): string {
-    const kind = this.getKind();
+  @lazy
+  get kindName(): string {
+    const kind = this.kind;
     for (const [name, value] of Object.entries(MonoTypeKind)) {
       if (value === kind) {
         return name;
@@ -876,42 +841,33 @@ export class MonoType extends MonoHandle {
    * }
    * ```
    */
-  isPrimitive(): boolean {
-    return isPrimitiveKind(this.getKind());
+  @lazy
+  get isPrimitive(): boolean {
+    return isPrimitiveKind(this.kind);
   }
 
   /**
    * Check if this type is a numeric type.
-   *
-   * @returns true if this is a numeric type (integer or floating-point)
-   *
-   * @example
-   * ```typescript
-   * if (type.isNumeric()) {
-   *   console.log("This is a numeric type");
-   * }
-   * ```
    */
-  isNumeric(): boolean {
-    return isNumericKind(this.getKind());
+  @lazy
+  get isNumeric(): boolean {
+    return isNumericKind(this.kind);
   }
 
   /**
    * Check if this type is an enum type.
-   *
-   * @returns true if this is an enum type
    */
-  isEnum(): boolean {
-    return this.getKind() === MonoTypeKind.Enum;
+  @lazy
+  get isEnum(): boolean {
+    return this.kind === MonoTypeKind.Enum;
   }
 
   /**
    * Check if this is a generic instantiation (e.g., List<int>).
-   *
-   * @returns true if this is a generic instance
    */
-  isGenericInstance(): boolean {
-    return this.getKind() === MonoTypeKind.GenericInstance;
+  @lazy
+  get isGenericInstance(): boolean {
+    return this.kind === MonoTypeKind.GenericInstance;
   }
 
   /**
@@ -928,8 +884,10 @@ export class MonoType extends MonoHandle {
    * ```
    */
   equals(other: MonoType): boolean {
-    return this.getFullName() === other.getFullName();
+    return this.fullName === other.fullName;
   }
+
+  // ===== PRIVATE HELPER METHODS =====
 
   private readNativeString(factory: () => NativePointer): string {
     const namePtr = factory();

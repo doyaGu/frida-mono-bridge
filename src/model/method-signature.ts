@@ -1,7 +1,8 @@
+import { MonoEnums } from "../runtime/enums";
+import { lazy } from "../utils/cache";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
 import { MonoHandle } from "./base";
-import { MonoEnums } from "../runtime/enums";
 import { MonoType } from "./type";
 
 export interface MonoParameterInfo {
@@ -23,20 +24,28 @@ export const MonoCallConventionModifiers = Object.freeze({
 export type MonoCallConventionModifier = (typeof MonoCallConventionModifiers)[keyof typeof MonoCallConventionModifiers];
 
 export class MonoMethodSignature extends MonoHandle {
-  getParameterCount(): number {
+  /** Gets the number of parameters. */
+  @lazy
+  get parameterCount(): number {
     return this.native.mono_signature_get_param_count(this.pointer) as number;
   }
 
-  getReturnType(): MonoType {
+  /** Gets the return type. */
+  @lazy
+  get returnType(): MonoType {
     const typePtr = this.native.mono_signature_get_return_type(this.pointer);
     return new MonoType(this.api, typePtr);
   }
 
-  getParameterTypes(): MonoType[] {
+  /** Gets the parameter types. */
+  @lazy
+  get parameterTypes(): MonoType[] {
     return this.enumerateParameterTypes();
   }
 
-  getParameters(): MonoParameterInfo[] {
+  /** Gets the parameters. */
+  @lazy
+  get parameters(): MonoParameterInfo[] {
     const types = this.enumerateParameterTypes();
     return types.map((type, index) => ({
       index,
@@ -45,24 +54,32 @@ export class MonoMethodSignature extends MonoHandle {
     }));
   }
 
-  isInstanceMethod(): boolean {
+  /** Determines whether this is an instance method signature. */
+  @lazy
+  get isInstanceMethod(): boolean {
     return (this.native.mono_signature_is_instance(this.pointer) as number) !== 0;
   }
 
-  hasExplicitThis(): boolean {
+  /** Determines whether this signature has an explicit this parameter. */
+  @lazy
+  get hasExplicitThis(): boolean {
     return (this.native.mono_signature_explicit_this(this.pointer) as number) !== 0;
+  }
+
+  /** Gets the calling convention. */
+  @lazy
+  get callConvention(): number {
+    return this.native.mono_signature_get_call_conv(this.pointer) as number;
+  }
+
+  /** Gets the hash of this signature. */
+  @lazy
+  get hash(): number {
+    return this.native.mono_signature_hash(this.pointer) as number;
   }
 
   isOutParameter(index: number): boolean {
     return (this.native.mono_signature_param_is_out(this.pointer, index) as number) !== 0;
-  }
-
-  getCallConvention(): number {
-    return this.native.mono_signature_get_call_conv(this.pointer) as number;
-  }
-
-  getHash(): number {
-    return this.native.mono_signature_hash(this.pointer) as number;
   }
 
   getDescription(includeNamespace = true): string {

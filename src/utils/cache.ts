@@ -260,3 +260,71 @@ function ensureCacheStore(instance: any): Map<string, LruCache<string, unknown>>
   }
   return store;
 }
+
+// ============================================================================
+// LAZY DECORATOR
+// ============================================================================
+
+/**
+ * Decorator to lazily evaluate and cache a getter's result.
+ * After the first access, the getter is replaced with a simple value property.
+ *
+ * This is a lightweight alternative to @cached that doesn't use LRU cache,
+ * suitable for values that are computed once and never change.
+ *
+ * @example
+ * class MyClass {
+ *   @lazy
+ *   get expensiveValue(): string {
+ *     return performExpensiveOperation();
+ *   }
+ * }
+ */
+export function lazy<This, Return>(
+  target: (this: This) => Return,
+  context: ClassGetterDecoratorContext<This, Return>,
+): (this: This) => Return;
+export function lazy(_target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor): PropertyDescriptor;
+export function lazy(
+  targetOrGetter: any,
+  contextOrKey: ClassGetterDecoratorContext<any, any> | string | symbol,
+  descriptor?: PropertyDescriptor,
+): any {
+  // TypeScript 5+ stage 3 decorators
+  if (typeof contextOrKey === "object" && contextOrKey !== null && "kind" in contextOrKey) {
+    const getter = targetOrGetter as (this: any) => any;
+    const context = contextOrKey as ClassGetterDecoratorContext<any, any>;
+
+    return function (this: any) {
+      const value = getter.call(this);
+      Object.defineProperty(this, context.name, {
+        value,
+        configurable: true,
+        enumerable: false,
+        writable: false,
+      });
+      return value;
+    };
+  }
+
+  // Legacy TypeScript decorators (experimentalDecorators)
+  const propertyKey = contextOrKey as string | symbol;
+  const getter = descriptor?.get;
+
+  if (!getter) {
+    throw new MonoValidationError("@lazy can only be applied to getter accessors", "descriptor", descriptor);
+  }
+
+  descriptor!.get = function () {
+    const value = getter.call(this);
+    Object.defineProperty(this, propertyKey, {
+      value,
+      configurable: descriptor!.configurable,
+      enumerable: descriptor!.enumerable,
+      writable: false,
+    });
+    return value;
+  };
+
+  return descriptor;
+}

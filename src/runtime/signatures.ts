@@ -1,8 +1,9 @@
-import { GENERATED_SIGNATURES } from "./signatures/generated";
-import { MANUAL_ADDITIONS, MANUAL_OVERRIDES } from "./signatures/manual";
-import type { MonoExportSignature, MonoSignatureMap } from "./signatures/types";
+import { MonoErrorCodes, raise } from "../utils/errors";
+import { GENERATED_SIGNATURES } from "./signatures-generated";
+import { MANUAL_ADDITIONS, MANUAL_OVERRIDES } from "./signatures-manual";
+import type { MonoExportSignature, MonoSignatureMap } from "./signatures-types";
 
-export type { MonoExportSignature } from "./signatures/types";
+export type { MonoExportSignature } from "./signatures-types";
 
 const MONO_EXPORTS: MonoSignatureMap = buildMonoExportMap();
 
@@ -11,7 +12,11 @@ export type MonoApiName = keyof typeof MONO_EXPORTS;
 export function getSignature(name: MonoApiName): MonoExportSignature {
   const signature = MONO_EXPORTS[name];
   if (!signature) {
-    throw new Error(`Mono export signature not found: ${name}`);
+    raise(
+      MonoErrorCodes.EXPORT_NOT_FOUND,
+      `Mono export signature not found: ${name}`,
+      "This export may not be available in your Mono runtime version",
+    );
   }
   return signature;
 }

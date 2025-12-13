@@ -1,9 +1,49 @@
+/**
+ * Runtime Module - Core Mono runtime interaction layer.
+ *
+ * This module provides the foundation for interacting with the Mono runtime:
+ * - API bindings for Mono C functions
+ * - Thread management and attachment
+ * - Module discovery and loading
+ * - GC handle management
+ * - Internal call registration
+ * - Runtime version detection
+ *
+ * @module runtime
+ */
+
+// ===== CORE API =====
+// Main interface to Mono C API with caching and thread management
 export * from "./api";
-export * from "./enums";
-export * from "./gchandle";
-export * from "./icall";
-export * from "./metadata";
-export * from "./module";
-export * from "./signatures";
+
+// ===== THREAD MANAGEMENT =====
+// Thread attachment and execution context management
 export * from "./thread";
+
+// ===== MODULE DISCOVERY =====
+// Mono module finding and loading
+export * from "./module";
+
+// ===== GC HANDLES =====
+// Garbage collection handle management
+export * from "./gchandle";
+
+// ===== INTERNAL CALLS =====
+// Native function registration for managed code
+export * from "./icall";
+
+// ===== RUNTIME INFO =====
+// Version detection and feature flags
 export * from "./version";
+
+// ===== METADATA =====
+// Attribute flags and utilities
+export * from "./metadata";
+
+// ===== SIGNATURES =====
+// Mono export signatures and bindings
+export * from "./signatures";
+
+// ===== ENUMS =====
+// Mono runtime enumeration values
+export * from "./enums";

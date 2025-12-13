@@ -1,12 +1,16 @@
-import { MethodArgument, MonoHandle, MemberAccessibility, CustomAttribute, parseCustomAttributes } from "./base";
+import { hasFlag, pickFlags } from "../runtime/metadata";
+import { lazy } from "../utils/cache";
+import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { MonoMethod } from "./method";
+import { MonoArray } from "./array";
+import { CustomAttribute, MemberAccessibility, MethodArgument, MonoHandle } from "./base";
 import { MonoClass } from "./class";
+import { createPropertyAttributeContext, getCustomAttributes } from "./custom-attributes";
+import { MonoMethod } from "./method";
 import { MonoObject } from "./object";
 import { MonoType, MonoTypeSummary } from "./type";
-import { MonoValidationError } from "../utils/errors";
-import { hasFlag, pickFlags } from "../runtime/metadata";
+import { convertJsToMono, convertMonoToJs, resolveInstance as resolveInstanceHelper } from "./value-conversion";
 
 // ===== PROPERTY ATTRIBUTES =====
 
@@ -70,29 +74,6 @@ export interface PropertyInfo {
   declaringType: string;
 }
 
-// ===== NUMERIC RANGE DEFINITIONS =====
-
-interface NumericRange {
-  min: number;
-  max: number;
-  name: string;
-}
-
-const NUMERIC_RANGES: Record<string, NumericRange> = {
-  Byte: { min: 0, max: 255, name: "Byte" },
-  "System.Byte": { min: 0, max: 255, name: "Byte" },
-  SByte: { min: -128, max: 127, name: "SByte" },
-  "System.SByte": { min: -128, max: 127, name: "SByte" },
-  Int16: { min: -32768, max: 32767, name: "Int16" },
-  "System.Int16": { min: -32768, max: 32767, name: "Int16" },
-  UInt16: { min: 0, max: 65535, name: "UInt16" },
-  "System.UInt16": { min: 0, max: 65535, name: "UInt16" },
-  Int32: { min: -2147483648, max: 2147483647, name: "Int32" },
-  "System.Int32": { min: -2147483648, max: 2147483647, name: "Int32" },
-  UInt32: { min: 0, max: 4294967295, name: "UInt32" },
-  "System.UInt32": { min: 0, max: 4294967295, name: "UInt32" },
-};
-
 // ===== MAIN CLASS =====
 
 /**
@@ -122,267 +103,177 @@ const NUMERIC_RANGES: Record<string, NumericRange> = {
  * ```
  */
 export class MonoProperty<TValue = any> extends MonoHandle {
-  #name: string | null = null;
-  #parent: MonoClass | null = null;
-  #getter: MonoMethod | null | undefined;
-  #setter: MonoMethod | null | undefined;
-  #type: MonoType | null = null;
-  #flags: number | null = null;
-
-  // ===== BASIC PROPERTY INFORMATION =====
+  // ===== CORE PROPERTIES =====
 
   /**
-   * Get the name of this property
-   * @returns Property name
+   * Property name
    */
-  getName(): string {
-    if (this.#name !== null) {
-      return this.#name;
-    }
-    const namePtr = this.native.mono_property_get_name(this.pointer);
-    this.#name = readUtf8String(namePtr);
-    return this.#name;
-  }
-
-  /**
-   * Get the class that declares this property
-   * @returns Parent class
-   */
-  getParent(): MonoClass {
-    if (this.#parent) {
-      return this.#parent;
-    }
-    const parentPtr = this.native.mono_property_get_parent(this.pointer);
-    this.#parent = new MonoClass(this.api, parentPtr);
-    return this.#parent;
-  }
-
-  /**
-   * Get property attribute flags
-   * @returns Property flags (see PropertyAttribute)
-   */
-  getFlags(): number {
-    if (this.#flags !== null) {
-      return this.#flags;
-    }
-    this.#flags = this.native.mono_property_get_flags(this.pointer) as number;
-    return this.#flags;
-  }
-
-  /**
-   * Get the getter method for this property
-   * @returns Getter method or null if property is write-only
-   */
-  getGetter(): MonoMethod | null {
-    if (this.#getter !== undefined) {
-      return this.#getter;
-    }
-    const methodPtr = this.native.mono_property_get_get_method(this.pointer);
-    this.#getter = pointerIsNull(methodPtr) ? null : new MonoMethod(this.api, methodPtr);
-    return this.#getter;
-  }
-
-  /**
-   * Get the setter method for this property
-   * @returns Setter method or null if property is read-only
-   */
-  getSetter(): MonoMethod | null {
-    if (this.#setter !== undefined) {
-      return this.#setter;
-    }
-    const methodPtr = this.native.mono_property_get_set_method(this.pointer);
-    this.#setter = pointerIsNull(methodPtr) ? null : new MonoMethod(this.api, methodPtr);
-    return this.#setter;
-  }
-
-  // ===== PROPERTY ACCESSORS =====
-
-  /**
-   * Property name accessor
-   */
+  @lazy
   get name(): string {
-    return this.getName();
+    const namePtr = this.native.mono_property_get_name(this.pointer);
+    return readUtf8String(namePtr);
   }
 
   /**
-   * Declaring class accessor
+   * Declaring class
    */
+  @lazy
   get parent(): MonoClass {
-    return this.getParent();
+    const parentPtr = this.native.mono_property_get_parent(this.pointer);
+    return new MonoClass(this.api, parentPtr);
   }
 
   /**
-   * Property flags accessor
+   * Property attribute flags (see PropertyAttribute)
    */
+  @lazy
   get flags(): number {
-    return this.getFlags();
+    return this.native.mono_property_get_flags(this.pointer) as number;
   }
 
   /**
-   * Getter method accessor
+   * Getter method (or null if property is write-only)
    */
+  @lazy
   get getter(): MonoMethod | null {
-    return this.getGetter();
+    const methodPtr = this.native.mono_property_get_get_method(this.pointer);
+    return pointerIsNull(methodPtr) ? null : new MonoMethod(this.api, methodPtr);
   }
 
   /**
-   * Setter method accessor
+   * Setter method (or null if property is read-only)
    */
+  @lazy
   get setter(): MonoMethod | null {
-    return this.getSetter();
-  }
-
-  /**
-   * Property type accessor
-   */
-  get type(): MonoType {
-    return this.getType();
+    const methodPtr = this.native.mono_property_get_set_method(this.pointer);
+    return pointerIsNull(methodPtr) ? null : new MonoMethod(this.api, methodPtr);
   }
 
   // ===== TYPE INFORMATION =====
 
   /**
-   * Get the type of this property
-   * @returns Property type
-   * @throws MonoValidationError if type cannot be determined
+   * Property type
+   * @throws {MonoValidationError} if type cannot be determined
    */
-  getType(): MonoType {
-    if (this.#type) {
-      return this.#type;
-    }
-    const getter = this.getGetter();
-    if (getter) {
-      this.#type = getter.getReturnType();
-      return this.#type;
+  @lazy
+  get type(): MonoType {
+    if (this.getter) {
+      return this.getter.returnType;
     }
 
-    const setter = this.getSetter();
-    if (!setter) {
-      throw new MonoValidationError(`Property ${this.getName()} has no getter or setter method`, "property", this);
-    }
-
-    const parameterTypes = setter.getParameterTypes();
-    if (parameterTypes.length === 0) {
-      throw new MonoValidationError(
-        `Property ${this.getName()} setter exposes no parameters to infer type from`,
-        "property",
-        this,
+    if (!this.setter) {
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Property ${this.name} has no getter or setter method`,
+        "Ensure property has at least one accessor",
       );
     }
 
-    this.#type = parameterTypes[parameterTypes.length - 1];
-    return this.#type;
+    const parameterTypes = this.setter.parameterTypes;
+    if (parameterTypes.length === 0) {
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Property ${this.name} setter exposes no parameters to infer type from`,
+        "Ensure setter has at least one parameter",
+      );
+    }
+
+    return parameterTypes[parameterTypes.length - 1];
   }
   // ===== CAPABILITY CHECKS =====
 
   /**
    * Check if property can be read (has a getter)
-   * @returns True if property has a getter
    */
-  canRead(): boolean {
-    return this.getGetter() !== null;
+  @lazy
+  get canRead(): boolean {
+    return this.getter !== null;
   }
 
   /**
    * Check if property can be written (has a setter)
-   * @returns True if property has a setter
    */
-  canWrite(): boolean {
-    return this.getSetter() !== null;
+  @lazy
+  get canWrite(): boolean {
+    return this.setter !== null;
   }
 
   /**
    * Check if property is static
-   * @returns True if property is static
    */
-  isStatic(): boolean {
-    const getter = this.getGetter();
-    const setter = this.getSetter();
-
-    if (getter) return getter.isStatic();
-    if (setter) return setter.isStatic();
+  @lazy
+  get isStatic(): boolean {
+    if (this.getter) return this.getter.isStatic;
+    if (this.setter) return this.setter.isStatic;
     return false;
   }
 
   /**
    * Check if property has parameters (indexed property/indexer)
-   * @returns True if property is an indexer
    */
-  hasParameters(): boolean {
-    return this.getParameters().length > 0;
+  @lazy
+  get hasParameters(): boolean {
+    return this.parameters.length > 0;
   }
 
   /**
    * Check if this property has a special name
-   * @returns True if property has SpecialName attribute
    */
-  isSpecialName(): boolean {
-    return hasFlag(this.getFlags(), PropertyAttribute.SpecialName);
+  @lazy
+  get isSpecialName(): boolean {
+    return hasFlag(this.flags, PropertyAttribute.SpecialName);
   }
 
   /**
    * Check if this property has a runtime special name
-   * @returns True if property has RTSpecialName attribute
    */
-  isRTSpecialName(): boolean {
-    return hasFlag(this.getFlags(), PropertyAttribute.RTSpecialName);
+  @lazy
+  get isRTSpecialName(): boolean {
+    return hasFlag(this.flags, PropertyAttribute.RTSpecialName);
   }
 
   /**
    * Check if this property has a default value
-   * @returns True if property has HasDefault attribute
    */
-  hasDefault(): boolean {
-    return hasFlag(this.getFlags(), PropertyAttribute.HasDefault);
+  @lazy
+  get hasDefault(): boolean {
+    return hasFlag(this.flags, PropertyAttribute.HasDefault);
   }
 
   /**
-   * Get custom attributes applied to this property.
+   * Custom attributes applied to this property.
    * Uses mono_custom_attrs_from_property API to retrieve attribute metadata.
-   * @returns Array of CustomAttribute objects with attribute type information
    */
-  getCustomAttributes(): CustomAttribute[] {
-    if (!this.api.hasExport("mono_custom_attrs_from_property")) {
-      return [];
-    }
-
-    try {
-      const parentClass = this.getParent();
-      const customAttrInfoPtr = this.native.mono_custom_attrs_from_property(parentClass.pointer, this.pointer);
-      return parseCustomAttributes(
-        this.api,
-        customAttrInfoPtr,
-        ptr => new MonoClass(this.api, ptr).getName(),
-        ptr => new MonoClass(this.api, ptr).getFullName(),
-      );
-    } catch {
-      return [];
-    }
+  @lazy
+  get customAttributes(): CustomAttribute[] {
+    return getCustomAttributes(
+      createPropertyAttributeContext(this.api, this.parent.pointer, this.pointer, this.native),
+      ptr => new MonoClass(this.api, ptr).name,
+      ptr => new MonoClass(this.api, ptr).fullName,
+    );
   }
 
   /**
    * Check if this property is an indexer (has 'Item' name and parameters)
-   * @returns True if property is an indexer
    */
-  isIndexer(): boolean {
-    return this.getName() === "Item" && this.hasParameters();
+  @lazy
+  get isIndexer(): boolean {
+    return this.name === "Item" && this.hasParameters;
   }
 
   // ===== PARAMETER INFORMATION =====
 
   /**
-   * Get property parameters (for indexed properties/indexers)
-   * @returns Array of parameter types
+   * Property parameters (for indexed properties/indexers)
    */
-  getParameters(): MonoType[] {
-    const getter = this.getGetter();
-    if (getter) {
-      return [...getter.getParameterTypes()];
+  @lazy
+  get parameters(): MonoType[] {
+    if (this.getter) {
+      return [...this.getter.parameterTypes];
     }
 
-    const setter = this.getSetter();
-    if (setter) {
-      const setterParameters = setter.getParameterTypes();
+    if (this.setter) {
+      const setterParameters = this.setter.parameterTypes;
       if (setterParameters.length <= 1) {
         return [];
       }
@@ -400,7 +291,7 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @param instance Object instance (null for static properties)
    * @param parameters Index parameters (for indexers)
    * @returns Property value
-   * @throws Error if property is write-only
+   * @throws {MonoValidationError} if property is write-only
    *
    * @example
    * ```typescript
@@ -415,12 +306,15 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * ```
    */
   getValue(instance: MonoObject | NativePointer | null = null, parameters: MethodArgument[] = []): TValue {
-    const getter = this.getGetter();
-    if (!getter) {
-      throw new MonoValidationError(`Property ${this.getName()} is not readable (no getter)`, "property", this);
+    if (!this.getter) {
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Property ${this.name} is not readable (no getter)`,
+        "Use canRead to check if property is readable",
+      );
     }
 
-    const rawResult = getter.invoke(this.resolveInstance(instance), parameters);
+    const rawResult = this.getter.invoke(this.resolveInstance(instance), parameters);
     const resultObject = pointerIsNull(rawResult) ? null : new MonoObject(this.api, rawResult);
     return this.convertResult(resultObject) as TValue;
   }
@@ -431,7 +325,7 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @param instance Object instance (null for static properties)
    * @param value Value to set
    * @param parameters Index parameters (for indexers)
-   * @throws Error if property is read-only
+   * @throws {MonoValidationError} if property is read-only
    *
    * @example
    * ```typescript
@@ -446,13 +340,73 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * ```
    */
   setValue(instance: MonoObject | NativePointer | null = null, value: TValue, parameters: MethodArgument[] = []): void {
-    const setter = this.getSetter();
-    if (!setter) {
-      throw new MonoValidationError(`Property ${this.getName()} is not writable (no setter)`, "property", this);
+    if (!this.setter) {
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Property ${this.name} is not writable (no setter)`,
+        "Use canWrite to check if property is writable",
+      );
     }
 
     const invocationArgs = [...parameters, this.convertValue(value)];
-    setter.invoke(this.resolveInstance(instance), invocationArgs);
+    this.setter.invoke(this.resolveInstance(instance), invocationArgs);
+  }
+
+  /**
+   * Try to get property value without throwing
+   *
+   * @param instance Object instance (null for static properties)
+   * @param parameters Index parameters (for indexers)
+   * @returns Property value if readable, null otherwise
+   *
+   * @example
+   * ```typescript
+   * const value = prop.tryGetValue(instance);
+   * if (value !== null) {
+   *   console.log('Value:', value);
+   * }
+   * ```
+   */
+  tryGetValue(instance: MonoObject | NativePointer | null = null, parameters: MethodArgument[] = []): TValue | null {
+    if (!this.canRead) {
+      return null;
+    }
+    try {
+      return this.getValue(instance, parameters);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Try to set property value without throwing
+   *
+   * @param instance Object instance (null for static properties)
+   * @param value Value to set
+   * @param parameters Index parameters (for indexers)
+   * @returns true if successful, false otherwise
+   *
+   * @example
+   * ```typescript
+   * if (prop.trySetValue(instance, 42)) {
+   *   console.log('Value set successfully');
+   * }
+   * ```
+   */
+  trySetValue(
+    instance: MonoObject | NativePointer | null = null,
+    value: TValue,
+    parameters: MethodArgument[] = [],
+  ): boolean {
+    if (!this.canWrite) {
+      return false;
+    }
+    try {
+      this.setValue(instance, value, parameters);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -485,18 +439,17 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * Get property metadata information
    * @returns PropertyInfo object with property details
    */
-  getPropertyInfo(): PropertyInfo {
-    const parameters = this.getParameters();
+  @lazy get propertyInfo(): PropertyInfo {
     return {
-      name: this.getName(),
-      typeName: this.getType().getName(),
-      canRead: this.canRead(),
-      canWrite: this.canWrite(),
-      isStatic: this.isStatic(),
-      hasParameters: parameters.length > 0,
-      parameterCount: parameters.length,
-      parameterTypeNames: parameters.map(param => param.getName()),
-      declaringType: this.getParent().getFullName(),
+      name: this.name,
+      typeName: this.type.name,
+      canRead: this.canRead,
+      canWrite: this.canWrite,
+      isStatic: this.isStatic,
+      hasParameters: this.parameters.length > 0,
+      parameterCount: this.parameters.length,
+      parameterTypeNames: this.parameters.map(param => param.name),
+      declaringType: this.parent.fullName,
     };
   }
 
@@ -505,25 +458,21 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @returns MonoPropertySummary with detailed property information
    */
   getSummary(): MonoPropertySummary {
-    const propType = this.getType();
-    const parameters = this.getParameters();
-    const flags = this.getFlags();
-
     return {
-      name: this.getName(),
-      typeName: propType.getName(),
-      type: propType.getSummary(),
-      declaringType: this.getParent().getFullName(),
-      flags,
-      flagNames: pickFlags(flags, PROPERTY_FLAGS),
-      canRead: this.canRead(),
-      canWrite: this.canWrite(),
-      isStatic: this.isStatic(),
-      isIndexer: this.isIndexer(),
-      parameterCount: parameters.length,
-      parameterTypeNames: parameters.map(param => param.getName()),
-      hasDefault: this.hasDefault(),
-      isSpecialName: this.isSpecialName(),
+      name: this.name,
+      typeName: this.type.name,
+      type: this.type.getSummary(),
+      declaringType: this.parent.fullName,
+      flags: this.flags,
+      flagNames: pickFlags(this.flags, PROPERTY_FLAGS),
+      canRead: this.canRead,
+      canWrite: this.canWrite,
+      isStatic: this.isStatic,
+      isIndexer: this.isIndexer,
+      parameterCount: this.parameters.length,
+      parameterTypeNames: this.parameters.map(param => param.name),
+      hasDefault: this.hasDefault,
+      isSpecialName: this.isSpecialName,
     };
   }
 
@@ -539,24 +488,23 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * ```
    */
   describe(): string {
-    const type = this.getType().getName();
+    const typeName = this.type.name;
     const modifiers: string[] = [];
-    const parameters = this.getParameters();
     const accessors: string[] = [];
 
-    if (this.isStatic()) modifiers.push("static");
-    if (this.canRead()) accessors.push("get");
-    if (this.canWrite()) accessors.push("set");
+    if (this.isStatic) modifiers.push("static");
+    if (this.canRead) accessors.push("get");
+    if (this.canWrite) accessors.push("set");
 
     const modifierStr = modifiers.length > 0 ? `${modifiers.join(" ")} ` : "";
     const accessorStr = ` { ${accessors.join("; ")}; }`;
 
-    if (this.isIndexer()) {
-      const paramList = parameters.map(p => p.getName()).join(", ");
-      return `${modifierStr}${type} this[${paramList}]${accessorStr}`;
+    if (this.isIndexer) {
+      const paramList = this.parameters.map(p => p.name).join(", ");
+      return `${modifierStr}${typeName} this[${paramList}]${accessorStr}`;
     }
 
-    return `${modifierStr}${type} ${this.getName()}${accessorStr}`;
+    return `${modifierStr}${typeName} ${this.name}${accessorStr}`;
   }
 
   /**
@@ -564,94 +512,40 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @returns String in format "PropertyName (PropertyType)"
    */
   override toString(): string {
-    return `${this.getName()} (${this.getType().getName()})`;
+    return `${this.name} (${this.type.name})`;
   }
 
   // ===== PRIVATE HELPER METHODS =====
 
   /**
-   * Resolve instance pointer from MonoObject or NativePointer
+   * Resolve instance pointer from MonoObject or NativePointer.
+   * Delegates to shared helper for consistency across model types.
    */
   private resolveInstance(instance: MonoObject | NativePointer | null): NativePointer | null {
-    if (instance === null) {
-      return null;
-    }
-    if (instance instanceof MonoObject) {
-      // For value types, use the unboxed pointer; for reference types, use the object pointer
-      return instance.getInstancePointer();
-    }
-    if (instance.isNull()) {
-      return null;
-    }
-    // If it's a raw NativePointer, use it directly (caller is responsible for correctness)
-    return instance;
+    return resolveInstanceHelper(instance);
   }
 
   /**
-   * Convert method result to appropriate type
+   * Convert method result to appropriate JavaScript type.
+   * Uses shared conversion for consistency with MonoMethod.call().
    */
   private convertResult(result: MonoObject | null): any {
     if (!result) return null;
 
-    const propertyType = this.getType();
+    const propertyType = this.type;
 
-    // Convert value based on property type
-    try {
-      if (propertyType.isValueType()) {
-        return result.unbox();
-      }
-      return result;
-    } catch {
-      return result;
-    }
+    // Use shared conversion logic
+    return convertMonoToJs(this.api, result.pointer, propertyType);
   }
 
   /**
-   * Validate and convert a numeric value to the target type
-   * @param value The numeric value to validate
-   * @param typeName The target type name
-   * @returns The converted value
-   * @throws MonoValidationError if value is out of range
-   */
-  private validateNumericValue(value: number, typeName: string): number {
-    const range = NUMERIC_RANGES[typeName];
-    if (range) {
-      if (value < range.min || value > range.max) {
-        throw new MonoValidationError(
-          `Value ${value} is out of range for ${range.name} (${range.min} to ${range.max})`,
-          "property",
-          this,
-        );
-      }
-      return Math.floor(value);
-    }
-
-    // Float types don't need range validation
-    if (
-      typeName === "Single" ||
-      typeName === "System.Single" ||
-      typeName === "Double" ||
-      typeName === "System.Double"
-    ) {
-      return value;
-    }
-
-    // Default: return as-is
-    return value;
-  }
-
-  /**
-   * Convert value to appropriate parameter type.
-   * Supports automatic boxing of primitives and type coercion.
+   * Convert value to appropriate Mono type.
+   * Uses shared conversion for consistency across model types.
    *
-   * Supported conversions:
-   * - number → Byte, SByte, Int16, UInt16, Int32, UInt32, Single, Double
-   * - boolean → Boolean, or numeric 0/1
-   * - string → String, Char
-   * - bigint → Int64, UInt64
-   * - Array → MonoArray (when target is array type)
-   * - MonoObject → passthrough
-   * - NativePointer → passthrough
+   * Special handling for:
+   * - Arrays (converted to MonoArray)
+   * - Enums (name-to-value lookup)
+   * - Delegates (explicit error)
    *
    * @param value The value to convert
    * @returns The converted value suitable for Mono runtime
@@ -665,35 +559,16 @@ export class MonoProperty<TValue = any> extends MonoHandle {
       return value;
     }
 
-    // Get the property type for conversion hints
-    const propertyType = this.getType();
-    const typeName = propertyType.getName();
+    const propertyType = this.type;
 
-    // Handle primitive type conversions
-    if (typeof value === "number") {
-      return this.validateNumericValue(value, typeName);
-    }
-
-    if (typeof value === "boolean") {
-      return this.convertBooleanValue(value, typeName, propertyType);
-    }
-
-    if (typeof value === "string") {
-      return this.convertStringValue(value, typeName);
-    }
-
-    if (typeof value === "bigint") {
-      return this.convertBigIntValue(value, typeName);
-    }
-
-    // Array handling
+    // Array handling (special case - needs element type info)
     if (Array.isArray(value)) {
       return this.convertArrayValue(value, propertyType);
     }
 
     // Enum handling - convert string or number to enum value
-    if (propertyType.isValueType()) {
-      const enumResult = this.tryConvertEnumValue(value, propertyType, typeName);
+    if (propertyType.valueType) {
+      const enumResult = this.tryConvertEnumValue(value, propertyType);
       if (enumResult !== undefined) {
         return enumResult;
       }
@@ -701,74 +576,15 @@ export class MonoProperty<TValue = any> extends MonoHandle {
 
     // Delegate handling
     if (typeof value === "function") {
-      throw new MonoValidationError(
-        "Cannot convert JavaScript function to delegate. Use MonoDelegate.create() instead.",
-        "property",
-        this,
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        "Cannot convert JavaScript function to delegate",
+        "Use MonoDelegate.new() instead",
       );
     }
 
-    // NativePointer passthrough
-    if (value instanceof NativePointer) {
-      return value;
-    }
-
-    // Object/Dictionary handling - for complex types
-    // Return as-is and let the caller handle it
-    return value;
-  }
-
-  /**
-   * Convert boolean value to appropriate type
-   */
-  private convertBooleanValue(value: boolean, typeName: string, propertyType: MonoType): any {
-    if (typeName === "Boolean" || typeName === "System.Boolean") {
-      return value;
-    }
-    // Convert boolean to number if target is numeric value type
-    if (propertyType.isValueType()) {
-      return value ? 1 : 0;
-    }
-    return value;
-  }
-
-  /**
-   * Convert string value to appropriate type
-   */
-  private convertStringValue(value: string, typeName: string): any {
-    // String to MonoString conversion
-    if (typeName === "String" || typeName === "System.String") {
-      return this.api.stringNew(value);
-    }
-    // Char conversion (first character)
-    if (typeName === "Char" || typeName === "System.Char") {
-      if (value.length === 0) {
-        throw new MonoValidationError("Cannot convert empty string to Char", "property", this);
-      }
-      return value.charCodeAt(0);
-    }
-    return value;
-  }
-
-  /**
-   * Convert bigint value to appropriate type
-   */
-  private convertBigIntValue(value: bigint, typeName: string): any {
-    if (typeName === "Int64" || typeName === "System.Int64") {
-      return int64(value.toString());
-    }
-    if (typeName === "UInt64" || typeName === "System.UInt64") {
-      return uint64(value.toString());
-    }
-    // Fallback to number if within safe range
-    if (value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER)) {
-      return Number(value);
-    }
-    throw new MonoValidationError(
-      `BigInt value ${value} cannot be safely converted to target type ${typeName}`,
-      "property",
-      this,
-    );
+    // Use shared conversion for primitives, strings, bigints, etc.
+    return convertJsToMono(this.api, value, propertyType);
   }
 
   /**
@@ -776,17 +592,65 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    */
   private convertArrayValue(value: any[], propertyType: MonoType): any {
     // If property type is array, try to convert
-    if (propertyType.isArray()) {
-      try {
-        const { MonoArray } = require("./array");
-        const elementClass = propertyType.getClass();
-        if (elementClass) {
-          const monoArray = MonoArray.from(this.api, elementClass, value);
-          return monoArray.pointer;
-        }
-      } catch {
-        // Fall through to return as-is
+    if (propertyType.isArray) {
+      const elementType = propertyType.elementType;
+      let elementClass = elementType?.class ?? null;
+
+      if (!elementType) {
+        return value;
       }
+
+      if (!elementClass) {
+        try {
+          const klassPtr = this.native.mono_class_from_mono_type(elementType.pointer);
+          if (!pointerIsNull(klassPtr)) {
+            elementClass = new MonoClass(this.api, klassPtr);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!elementClass) {
+        return value;
+      }
+
+      const monoArray = MonoArray.new(this.api, elementClass, value.length);
+
+      for (let index = 0; index < value.length; index += 1) {
+        const item = value[index];
+
+        if (elementClass.isValueType) {
+          if (typeof item === "bigint" && typeof (monoArray as any).setBigInt === "function") {
+            (monoArray as any).setBigInt(index, item);
+          } else {
+            monoArray.setNumber(index, Number(item));
+          }
+          continue;
+        }
+
+        // Reference-type array.
+        if (item === null || item === undefined) {
+          monoArray.setReference(index, NULL);
+          continue;
+        }
+
+        if (item instanceof MonoObject) {
+          monoArray.setReference(index, item.pointer);
+          continue;
+        }
+
+        if (typeof item === "string") {
+          const strPtr = this.api.stringNew(item);
+          monoArray.setReference(index, strPtr);
+          continue;
+        }
+
+        // Best-effort: allow passing raw pointers.
+        monoArray.setReference(index, item as NativePointer);
+      }
+
+      return monoArray.pointer;
     }
     return value;
   }
@@ -795,9 +659,9 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * Try to convert value to enum type
    * @returns The converted value, or undefined if not an enum
    */
-  private tryConvertEnumValue(value: any, propertyType: MonoType, typeName: string): any {
-    const propClass = propertyType.getClass();
-    if (!propClass || !propClass.isEnum()) {
+  private tryConvertEnumValue(value: any, propertyType: MonoType): any {
+    const propClass = propertyType.class;
+    if (!propClass || !propClass.isEnum) {
       return undefined;
     }
 
@@ -809,8 +673,8 @@ export class MonoProperty<TValue = any> extends MonoHandle {
     // String value - try to parse enum name
     if (typeof value === "string") {
       // Try to find enum field by name
-      const enumField = propClass.tryGetField(value);
-      if (enumField && enumField.isLiteral()) {
+      const enumField = propClass.tryField(value);
+      if (enumField && enumField.isLiteral) {
         try {
           return enumField.getStaticValue();
         } catch {
@@ -822,7 +686,11 @@ export class MonoProperty<TValue = any> extends MonoHandle {
       if (!isNaN(numValue)) {
         return numValue;
       }
-      throw new MonoValidationError(`Cannot convert '${value}' to enum type ${typeName}`, "property", this);
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Cannot convert '${value}' to enum type ${propertyType.name}`,
+        "Provide a valid enum name or numeric value",
+      );
     }
 
     return undefined;

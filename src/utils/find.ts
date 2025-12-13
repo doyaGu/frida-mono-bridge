@@ -3,13 +3,14 @@
  * Provides wildcard matching, regex matching, and filtering capabilities
  */
 
-import { MonoClass } from "../model/class";
-import { MonoMethod } from "../model/method";
-import { MonoField } from "../model/field";
-import { MonoProperty } from "../model/property";
 import { MonoAssembly } from "../model/assembly";
+import { MonoClass } from "../model/class";
 import { MonoDomain } from "../model/domain";
+import { MonoField } from "../model/field";
+import { MonoMethod } from "../model/method";
+import { MonoProperty } from "../model/property";
 import { MonoApi } from "../runtime/api";
+import { MonoErrorCodes, raise } from "./errors";
 
 /**
  * Search options for find operations
@@ -52,7 +53,11 @@ function createMatcher(pattern: string, options: FindOptions = {}): RegExp {
     try {
       return new RegExp(pattern, caseInsensitive ? "i" : "");
     } catch (e) {
-      throw new Error(`Invalid regex pattern: ${pattern}`);
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Invalid regex pattern: ${pattern}`,
+        "Check the regex syntax and try again",
+      );
     }
   } else {
     // Convert wildcard to regex
@@ -123,8 +128,8 @@ export function classes(
 
     const image = assembly.image;
 
-    // Use image.getClasses() to enumerate all classes
-    const klassArray = image.getClasses();
+    // Use image.classes to enumerate all classes
+    const klassArray = image.classes;
 
     for (const klass of klassArray) {
       // Check limit again
@@ -138,8 +143,8 @@ export function classes(
       }
       seenClasses.add(klassKey);
 
-      const name = klass.getName();
-      const namespace = klass.getNamespace();
+      const name = klass.name;
+      const namespace = klass.namespace;
       const fullName = namespace ? `${namespace}.${name}` : name;
 
       let matches = false;
@@ -211,7 +216,7 @@ export function methods(api: MonoApi, pattern: string, options: FindOptions = {}
       break;
     }
 
-    const klassMethods = klass.getMethods();
+    const klassMethods = klass.methods;
 
     for (const method of klassMethods) {
       // Check limit
@@ -219,7 +224,7 @@ export function methods(api: MonoApi, pattern: string, options: FindOptions = {}
         break;
       }
 
-      const methodName = method.getName();
+      const methodName = method.name;
 
       if (matchesPattern(methodName, methodPattern, options)) {
         // Apply custom filter if provided
@@ -283,7 +288,7 @@ export function fields(api: MonoApi, pattern: string, options: FindOptions = {})
       break;
     }
 
-    const klassFields = klass.getFields();
+    const klassFields = klass.fields;
 
     for (const field of klassFields) {
       // Check limit
@@ -291,7 +296,7 @@ export function fields(api: MonoApi, pattern: string, options: FindOptions = {})
         break;
       }
 
-      const fieldName = field.getName();
+      const fieldName = field.name;
 
       if (matchesPattern(fieldName, fieldPattern, options)) {
         // Apply custom filter if provided
@@ -355,7 +360,7 @@ export function properties(api: MonoApi, pattern: string, options: FindOptions =
       break;
     }
 
-    const klassProperties = klass.getProperties();
+    const klassProperties = klass.properties;
 
     for (const prop of klassProperties) {
       // Check limit
@@ -363,7 +368,7 @@ export function properties(api: MonoApi, pattern: string, options: FindOptions =
         break;
       }
 
-      const propName = prop.getName();
+      const propName = prop.name;
 
       if (matchesPattern(propName, propPattern, options)) {
         // Apply custom filter if provided

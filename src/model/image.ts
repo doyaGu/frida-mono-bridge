@@ -1,4 +1,6 @@
 import { MonoApi } from "../runtime/api";
+import { lazy } from "../utils/cache";
+import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
 import { MonoHandle } from "./base";
@@ -61,6 +63,8 @@ export interface MonoImageSummary {
  * ```
  */
 export class MonoImage extends MonoHandle {
+  // ===== STATIC FACTORY METHODS =====
+
   /**
    * Create a MonoImage from an assembly path.
    *
@@ -78,6 +82,8 @@ export class MonoImage extends MonoHandle {
     return domain.assemblyOpen(path).image;
   }
 
+  // ===== CORE PROPERTIES =====
+
   /**
    * Get image name (assembly name without extension).
    *
@@ -87,15 +93,16 @@ export class MonoImage extends MonoHandle {
    * console.log(image.name); // "Assembly-CSharp"
    * ```
    */
+  @lazy
   get name(): string {
-    return this.getName();
+    const namePtr = this.native.mono_image_get_name(this.pointer);
+    return readUtf8String(namePtr);
   }
 
   /**
    * Get all classes defined in this image.
    *
    * @remarks
-   * This is a convenience accessor that calls `getClasses()`.
    * For large assemblies, consider using `enumerateClasses()` for better performance.
    *
    * @example
@@ -104,8 +111,11 @@ export class MonoImage extends MonoHandle {
    * classes.forEach(c => console.log(c.fullName));
    * ```
    */
+  @lazy
   get classes(): MonoClass[] {
-    return this.getClasses();
+    const classes: MonoClass[] = [];
+    this.enumerateClasses(klass => classes.push(klass));
+    return classes;
   }
 
   /**
@@ -116,8 +126,16 @@ export class MonoImage extends MonoHandle {
    * console.log(`Image has ${image.classCount} classes`);
    * ```
    */
+  @lazy
   get classCount(): number {
-    return this.getClassCount();
+    if (!this.api.hasExport("mono_image_get_table_info")) {
+      return 0;
+    }
+    const table = this.native.mono_image_get_table_info(this.pointer, MONO_METADATA_TABLE_TYPEDEF);
+    if (pointerIsNull(table)) {
+      return 0;
+    }
+    return this.native.mono_table_info_get_rows(table) as number;
   }
 
   /**
@@ -128,17 +146,25 @@ export class MonoImage extends MonoHandle {
    * image.namespaces.forEach(ns => console.log(ns || "(global)"));
    * ```
    */
+  @lazy
   get namespaces(): string[] {
-    return this.getNamespaces();
+    const namespaces = new Set<string>();
+    this.enumerateClasses(klass => {
+      const ns = klass.namespace;
+      namespaces.add(ns);
+    });
+    return Array.from(namespaces).sort();
   }
 
+  // ===== CLASS LOOKUP =====
+
   /**
-   * Find a class by namespace and name.
+   * Find a class by namespace and name, throwing if not found.
    *
    * @param namespace Namespace (can be empty string for global namespace)
    * @param name Class name
    * @returns The MonoClass instance
-   * @throws Error if the class is not found
+   * @throws {MonoClassNotFoundError} if the class is not found
    *
    * @example
    * ```typescript
@@ -147,17 +173,20 @@ export class MonoImage extends MonoHandle {
    * ```
    */
   classFromName(namespace: string, name: string): MonoClass {
-    const nsPtr = namespace ? Memory.allocUtf8String(namespace) : NULL;
-    const namePtr = Memory.allocUtf8String(name);
-    const klassPtr = this.native.mono_class_from_name(this.pointer, nsPtr, namePtr);
-    if (pointerIsNull(klassPtr)) {
-      throw new Error(`Class ${namespace}.${name} not found in image.`);
+    const klass = this.tryClassFromName(namespace, name);
+    if (klass) {
+      return klass;
     }
-    return new MonoClass(this.api, klassPtr);
+    const fullName = namespace ? `${namespace}.${name}` : name;
+    raise(
+      MonoErrorCodes.CLASS_NOT_FOUND,
+      `Class '${fullName}' not found in image '${this.name}'`,
+      "Use tryClassFromName() to avoid throwing",
+    );
   }
 
   /**
-   * Try to find a class by namespace and name.
+   * Try to find a class by namespace and name without throwing.
    *
    * @param namespace Namespace (can be empty string for global namespace)
    * @param name Class name
@@ -183,7 +212,25 @@ export class MonoImage extends MonoHandle {
   }
 
   /**
-   * Find a class by its full name.
+   * Check if this image contains a class with the given namespace and name.
+   *
+   * @param namespace Namespace (can be empty string for global namespace)
+   * @param name Class name
+   * @returns true if the class exists in this image
+   *
+   * @example
+   * ```typescript
+   * if (image.hasClassByName("Game", "Player")) {
+   *   console.log("Player class found!");
+   * }
+   * ```
+   */
+  hasClassByName(namespace: string, name: string): boolean {
+    return this.tryClassFromName(namespace, name) !== null;
+  }
+
+  /**
+   * Try to find a class by its full name without throwing.
    *
    * @param fullName Full class name with namespace (e.g., "Game.Player", "UnityEngine.GameObject")
    * @returns Class if found, null otherwise
@@ -194,20 +241,68 @@ export class MonoImage extends MonoHandle {
    *
    * @example
    * ```typescript
-   * const player = image.class("Game.Player");
-   * const go = image.class("UnityEngine.GameObject");
+   * const player = image.tryClass("Game.Player");
+   * if (player) {
+   *   console.log(`Found: ${player.fullName}`);
+   * }
    * ```
    */
-  class(fullName: string): MonoClass | null {
+  tryClass(fullName: string): MonoClass | null {
     return this.tryFindClassByFullName(fullName);
   }
 
   /**
-   * Find a class by its full name.
+   * Check if this image contains a class with the given full name.
+   *
+   * @param fullName Full class name to search for
+   * @returns true if the class exists in this image
+   *
+   * @example
+   * ```typescript
+   * if (image.hasClass("Game.Player")) {
+   *   console.log("Player class found!");
+   * }
+   * ```
+   */
+  hasClass(fullName: string): boolean {
+    return this.tryClass(fullName) !== null;
+  }
+
+  /**
+   * Find a class by its full name, throwing if not found.
+   *
+   * @param fullName Full class name with namespace (e.g., "Game.Player", "UnityEngine.GameObject")
+   * @returns The MonoClass instance
+   * @throws {MonoClassNotFoundError} if the class is not found
+   *
+   * @example
+   * ```typescript
+   * const player = image.class("Game.Player");
+   * const go = image.class("UnityEngine.GameObject");
+   * ```
+   */
+  class(fullName: string): MonoClass {
+    const trimmed = fullName ? fullName.trim() : "";
+    if (trimmed.length === 0) {
+      raise(MonoErrorCodes.INVALID_ARGUMENT, "Class name cannot be empty", "Use tryClass() to avoid throwing");
+    }
+    const klass = this.tryClass(trimmed);
+    if (klass) {
+      return klass;
+    }
+    raise(
+      MonoErrorCodes.CLASS_NOT_FOUND,
+      `Class '${trimmed}' not found in image '${this.name}'`,
+      "Use tryClass() to avoid throwing",
+    );
+  }
+
+  /**
+   * Find a class by its full name, throwing if not found.
    *
    * @param fullName Full class name with namespace (e.g., "Game.Player")
    * @returns The MonoClass instance
-   * @throws Error if the class is not found or name is empty
+   * @throws MonoClassNotFoundError if the class is not found or name is empty
    *
    * @example
    * ```typescript
@@ -215,21 +310,11 @@ export class MonoImage extends MonoHandle {
    * ```
    */
   findClassByFullName(fullName: string): MonoClass {
-    const trimmed = fullName ? fullName.trim() : "";
-    if (trimmed.length === 0) {
-      throw new Error("Class name must be non-empty");
-    }
-    const separatorIndex = trimmed.lastIndexOf(".");
-    if (separatorIndex === -1) {
-      return this.classFromName("", trimmed);
-    }
-    const namespace = trimmed.slice(0, separatorIndex);
-    const name = trimmed.slice(separatorIndex + 1);
-    return this.classFromName(namespace, name);
+    return this.class(fullName);
   }
 
   /**
-   * Try to find a class by its full name.
+   * Try to find a class by its full name without throwing.
    *
    * @param fullName Full class name with namespace (e.g., "Game.Player")
    * @returns The MonoClass if found, null otherwise
@@ -257,9 +342,31 @@ export class MonoImage extends MonoHandle {
   }
 
   /**
-   * Get metadata tokens for all classes in this image.
+   * Get classes filtered by namespace.
    *
-   * @returns Array of TypeDef metadata tokens
+   * @param namespace Namespace to filter by (exact match, use empty string for global)
+   * @returns Array of classes in the specified namespace
+   *
+   * @example
+   * const gameClasses = image.getClassesByNamespace('Game');
+   * const globalClasses = image.getClassesByNamespace('');
+   */
+  getClassesByNamespace(namespace: string): MonoClass[] {
+    const classes: MonoClass[] = [];
+
+    this.enumerateClasses(klass => {
+      if (klass.namespace === namespace) {
+        classes.push(klass);
+      }
+    });
+
+    return classes;
+  }
+
+  // ===== METADATA ACCESS =====
+
+  /**
+   * Get metadata tokens for all classes in this image.
    *
    * @remarks
    * Tokens are in the format `MONO_TOKEN_TYPE_DEF | (index + 1)`.
@@ -267,15 +374,16 @@ export class MonoImage extends MonoHandle {
    *
    * @example
    * ```typescript
-   * const tokens = image.getClassTokens();
+   * const tokens = image.classTokens;
    * // [0x02000001, 0x02000002, ...]
    * ```
    */
-  getClassTokens(): number[] {
+  @lazy
+  get classTokens(): number[] {
     if (!this.api.hasExport("mono_image_get_table_info")) {
       return [];
     }
-    const count = this.getClassCount();
+    const count = this.classCount;
     const tokens: number[] = [];
     for (let index = 0; index < count; index += 1) {
       tokens.push(MONO_METADATA_TOKEN_TYPEDEF | (index + 1));
@@ -283,26 +391,7 @@ export class MonoImage extends MonoHandle {
     return tokens;
   }
 
-  /**
-   * Get all classes defined in this image.
-   *
-   * @returns Array of all MonoClass instances
-   *
-   * @remarks
-   * For large assemblies with many classes, consider using `enumerateClasses()`
-   * to avoid creating the entire array in memory.
-   *
-   * @example
-   * ```typescript
-   * const classes = image.getClasses();
-   * console.log(`Found ${classes.length} classes`);
-   * ```
-   */
-  getClasses(): MonoClass[] {
-    const classes: MonoClass[] = [];
-    this.enumerateClasses(klass => classes.push(klass));
-    return classes;
-  }
+  // ===== ENUMERATION =====
 
   /**
    * Enumerate all classes in this image with a visitor callback.
@@ -310,7 +399,7 @@ export class MonoImage extends MonoHandle {
    * @param visitor Callback function called for each class with (klass, index)
    *
    * @remarks
-   * This is more memory-efficient than `getClasses()` for large assemblies
+   * This is more memory-efficient than accessing `classes` for large assemblies
    * as it doesn't create an array of all classes.
    *
    * @example
@@ -321,77 +410,21 @@ export class MonoImage extends MonoHandle {
    * ```
    */
   enumerateClasses(visitor: (klass: MonoClass, index: number) => void): void {
-    const tokens = this.getClassTokens();
-    if (tokens.length === 0) {
+    // Generate tokens inline to avoid circular dependency with classTokens getter
+    if (!this.api.hasExport("mono_image_get_table_info")) {
       return;
     }
-    tokens.forEach((token, index) => {
+    const count = this.classCount;
+    for (let index = 0; index < count; index += 1) {
+      const token = MONO_METADATA_TOKEN_TYPEDEF | (index + 1);
       const klassPtr = this.native.mono_class_get(this.pointer, token);
       if (!pointerIsNull(klassPtr)) {
         visitor(new MonoClass(this.api, klassPtr), index);
       }
-    });
-  }
-
-  /**
-   * Get the name of this image (assembly name without extension).
-   *
-   * @returns Image name
-   *
-   * @example
-   * ```typescript
-   * const name = image.getName();
-   * // "Assembly-CSharp"
-   * ```
-   */
-  getName(): string {
-    const namePtr = this.native.mono_image_get_name(this.pointer);
-    return readUtf8String(namePtr);
-  }
-
-  /**
-   * Get the total number of classes defined in this image.
-   *
-   * @returns Number of classes
-   *
-   * @example
-   * ```typescript
-   * console.log(`Image has ${image.getClassCount()} classes`);
-   * ```
-   */
-  getClassCount(): number {
-    if (!this.api.hasExport("mono_image_get_table_info")) {
-      return 0;
     }
-    const table = this.native.mono_image_get_table_info(this.pointer, MONO_METADATA_TABLE_TYPEDEF);
-    if (pointerIsNull(table)) {
-      return 0;
-    }
-    return this.native.mono_table_info_get_rows(table) as number;
   }
 
-  /**
-   * Get all unique namespaces in this image.
-   * Collects namespaces from all classes and returns them sorted.
-   *
-   * @returns Array of unique namespace strings (empty string for global namespace)
-   *
-   * @example
-   * ```typescript
-   * const namespaces = image.getNamespaces();
-   * // ['', 'System', 'System.Collections', 'Game', 'Game.Player']
-   * ```
-   */
-  getNamespaces(): string[] {
-    const namespaces = new Set<string>();
-
-    this.enumerateClasses(klass => {
-      const ns = klass.getNamespace();
-      namespaces.add(ns);
-    });
-
-    return Array.from(namespaces).sort();
-  }
+  // ===== UTILITY METHODS =====
 
   /**
    * Get a class by its metadata token.
@@ -422,28 +455,6 @@ export class MonoImage extends MonoHandle {
     }
   }
 
-  /**
-   * Get classes filtered by namespace.
-   *
-   * @param namespace Namespace to filter by (exact match, use empty string for global)
-   * @returns Array of classes in the specified namespace
-   *
-   * @example
-   * const gameClasses = image.getClassesByNamespace('Game');
-   * const globalClasses = image.getClassesByNamespace('');
-   */
-  getClassesByNamespace(namespace: string): MonoClass[] {
-    const classes: MonoClass[] = [];
-
-    this.enumerateClasses(klass => {
-      if (klass.getNamespace() === namespace) {
-        classes.push(klass);
-      }
-    });
-
-    return classes;
-  }
-
   // ===== SUMMARY & DESCRIPTION METHODS =====
 
   /**
@@ -465,12 +476,11 @@ export class MonoImage extends MonoHandle {
    * ```
    */
   getSummary(): MonoImageSummary {
-    const namespaces = this.getNamespaces();
     return {
-      name: this.getName(),
-      classCount: this.getClassCount(),
-      namespaceCount: namespaces.length,
-      namespaces,
+      name: this.name,
+      classCount: this.classCount,
+      namespaceCount: this.namespaces.length,
+      namespaces: this.namespaces,
       pointer: this.pointer.toString(),
     };
   }
@@ -490,17 +500,16 @@ export class MonoImage extends MonoHandle {
    * ```
    */
   describe(): string {
-    const namespaces = this.getNamespaces();
-    const nsPreview = namespaces
+    const nsPreview = this.namespaces
       .slice(0, 5)
       .map(ns => (ns ? `"${ns}"` : '""'))
       .join(", ");
-    const nsMore = namespaces.length > 5 ? `, ... (+${namespaces.length - 5} more)` : "";
+    const nsMore = this.namespaces.length > 5 ? `, ... (+${this.namespaces.length - 5} more)` : "";
 
     return [
-      `MonoImage: ${this.getName()}`,
-      `  Classes: ${this.getClassCount()}`,
-      `  Namespaces (${namespaces.length}): ${nsPreview}${nsMore}`,
+      `MonoImage: ${this.name}`,
+      `  Classes: ${this.classCount}`,
+      `  Namespaces (${this.namespaces.length}): ${nsPreview}${nsMore}`,
       `  Pointer: ${this.pointer}`,
     ].join("\n");
   }
@@ -517,58 +526,20 @@ export class MonoImage extends MonoHandle {
    * ```
    */
   override toString(): string {
-    return `MonoImage(${this.getName()}, ${this.getClassCount()} classes)`;
-  }
-
-  // ===== ADDITIONAL UTILITY METHODS =====
-
-  /**
-   * Check if this image contains a class with the given full name.
-   *
-   * @param fullName Full class name to search for
-   * @returns true if the class exists in this image
-   *
-   * @example
-   * ```typescript
-   * if (image.hasClass("Game.Player")) {
-   *   console.log("Player class found!");
-   * }
-   * ```
-   */
-  hasClass(fullName: string): boolean {
-    return this.tryFindClassByFullName(fullName) !== null;
-  }
-
-  /**
-   * Check if this image contains a class with the given namespace and name.
-   *
-   * @param namespace Namespace (can be empty string for global namespace)
-   * @param name Class name
-   * @returns true if the class exists in this image
-   *
-   * @example
-   * ```typescript
-   * if (image.hasClassByName("Game", "Player")) {
-   *   console.log("Player class found!");
-   * }
-   * ```
-   */
-  hasClassByName(namespace: string, name: string): boolean {
-    return this.tryClassFromName(namespace, name) !== null;
+    return `MonoImage(${this.name}, ${this.classCount} classes)`;
   }
 
   /**
    * Get the number of unique namespaces in this image.
    *
-   * @returns Number of unique namespaces
-   *
    * @example
    * ```typescript
-   * console.log(`Image has ${image.getNamespaceCount()} namespaces`);
+   * console.log(`Image has ${image.namespaceCount} namespaces`);
    * ```
    */
-  getNamespaceCount(): number {
-    return this.getNamespaces().length;
+  @lazy
+  get namespaceCount(): number {
+    return this.namespaces.length;
   }
 
   /**
@@ -613,7 +584,50 @@ export class MonoImage extends MonoHandle {
    */
   searchClasses(pattern: string): MonoClass[] {
     const lowerPattern = pattern.toLowerCase();
-    return this.findClasses(klass => klass.getName().toLowerCase().includes(lowerPattern));
+    return this.findClasses(klass => klass.name.toLowerCase().includes(lowerPattern));
+  }
+
+  // ===== ITERATION SUPPORT =====
+
+  /**
+   * Iterate over all classes in this image.
+   * Makes MonoImage directly iterable with for...of.
+   *
+   * @example
+   * ```typescript
+   * for (const klass of image) {
+   *   console.log(klass.fullName);
+   * }
+   * ```
+   */
+  *[Symbol.iterator](): IterableIterator<MonoClass> {
+    yield* this.classes;
+  }
+
+  /**
+   * Iterate over classes with their indices.
+   */
+  *entries(): IterableIterator<[number, MonoClass]> {
+    const classes = this.classes;
+    for (let i = 0; i < classes.length; i++) {
+      yield [i, classes[i]];
+    }
+  }
+
+  /**
+   * Iterate over class indices.
+   */
+  *keys(): IterableIterator<number> {
+    for (let i = 0; i < this.classCount; i++) {
+      yield i;
+    }
+  }
+
+  /**
+   * Iterate over classes (alias for Symbol.iterator).
+   */
+  *values(): IterableIterator<MonoClass> {
+    yield* this.classes;
   }
 }
 
