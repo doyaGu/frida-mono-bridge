@@ -404,8 +404,8 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
         onLeave: () => {},
       });
 
-      detach1();
-      detach2();
+      if (detach1) detach1();
+      if (detach2) detach2();
     }),
   );
 
@@ -425,8 +425,8 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
         onEnter: () => {},
       });
 
-      detach1();
-      detach2();
+      if (detach1) detach1();
+      if (detach2) detach2();
     }),
   );
 
@@ -443,9 +443,9 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const detach3 = Mono.trace.tryMethod(getLengthMethod!, {});
 
       // Detach in random order
-      detach2();
-      detach1();
-      detach3();
+      if (detach2) detach2();
+      if (detach1) detach1();
+      if (detach3) detach3();
     }),
   );
 
@@ -461,7 +461,7 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
         onEnter: () => {},
       });
 
-      detach!();
+      if (detach) detach();
     }),
   );
 
