@@ -78,28 +78,43 @@ export class MonoString extends MonoObject implements Iterable<string> {
    * Get the string content as a JavaScript string.
    * Uses mono_string_to_utf8 or mono_string_to_utf16.
    * Value is cached on first access.
+   *
+   * Memory management:
+   * - mono_string_to_utf8: returns heap-allocated buffer, freed after read
+   * - mono_string_to_utf16: returns heap-allocated buffer, freed after read
+   * - mono_string_chars: returns pointer into managed object, NOT freed
    */
   @lazy
   get content(): string {
     // Try mono_string_to_utf8 first (most reliable for Unity Mono)
+    // Note: mono_string_to_utf8 allocates memory that must be freed
     if (this.api.hasExport("mono_string_to_utf8")) {
       const utf8Ptr = this.native.mono_string_to_utf8(this.pointer);
       if (!pointerIsNull(utf8Ptr)) {
-        const result = readUtf8String(utf8Ptr);
-        this.api.tryFree(utf8Ptr);
-        return result;
+        try {
+          return readUtf8String(utf8Ptr);
+        } finally {
+          this.api.tryFree(utf8Ptr);
+        }
       }
     }
 
     // Fallback: Try mono_string_to_utf16
+    // Note: mono_string_to_utf16 allocates memory that must be freed
     if (this.api.hasExport("mono_string_to_utf16")) {
       const utf16Ptr = this.native.mono_string_to_utf16(this.pointer);
       if (!pointerIsNull(utf16Ptr)) {
-        return readUtf16String(utf16Ptr);
+        try {
+          return readUtf16String(utf16Ptr);
+        } finally {
+          this.api.tryFree(utf16Ptr);
+        }
       }
     }
 
     // Last resort: Try mono_string_chars + mono_string_length
+    // Note: mono_string_chars returns a pointer INTO the managed string object
+    // This is NOT heap-allocated, do NOT free it
     if (this.api.hasExport("mono_string_chars") && this.api.hasExport("mono_string_length")) {
       const chars = this.native.mono_string_chars(this.pointer);
       const len = this.native.mono_string_length(this.pointer) as number;

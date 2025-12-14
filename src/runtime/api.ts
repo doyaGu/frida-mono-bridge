@@ -480,6 +480,11 @@ export class MonoApi {
    * Read a MonoString pointer to JavaScript string using Mono API.
    * Tries mono_string_to_utf8 first, then falls back to UTF-16 methods.
    *
+   * Memory management:
+   * - mono_string_to_utf8: returns heap-allocated buffer, MUST be freed
+   * - mono_string_to_utf16: returns heap-allocated buffer, MUST be freed
+   * - mono_string_chars: returns pointer into managed object, do NOT free
+   *
    * @param strPtr MonoString pointer
    * @param fallbackToChars Whether to try mono_string_chars as fallback (default: true)
    * @returns JavaScript string or empty string if failed
@@ -488,22 +493,36 @@ export class MonoApi {
     if (pointerIsNull(strPtr)) return "";
 
     // Try mono_string_to_utf8 first (most common)
-    const utf8Ptr = this.native.mono_string_to_utf8(strPtr);
-    if (!pointerIsNull(utf8Ptr)) {
-      const result = utf8Ptr.readUtf8String() || "";
-      this.tryFree(utf8Ptr);
-      return result;
+    // Note: mono_string_to_utf8 allocates memory that must be freed
+    if (this.hasExport("mono_string_to_utf8")) {
+      const utf8Ptr = this.native.mono_string_to_utf8(strPtr);
+      if (!pointerIsNull(utf8Ptr)) {
+        try {
+          return utf8Ptr.readUtf8String() || "";
+        } finally {
+          this.tryFree(utf8Ptr);
+        }
+      }
     }
 
     if (!fallbackToChars) return "";
 
     // Fallback: Try mono_string_to_utf16
-    const utf16Ptr = this.native.mono_string_to_utf16(strPtr);
-    if (!pointerIsNull(utf16Ptr)) {
-      return utf16Ptr.readUtf16String() || "";
+    // Note: mono_string_to_utf16 allocates memory that must be freed
+    if (this.hasExport("mono_string_to_utf16")) {
+      const utf16Ptr = this.native.mono_string_to_utf16(strPtr);
+      if (!pointerIsNull(utf16Ptr)) {
+        try {
+          return utf16Ptr.readUtf16String() || "";
+        } finally {
+          this.tryFree(utf16Ptr);
+        }
+      }
     }
 
     // Last resort: Try mono_string_chars + mono_string_length
+    // Note: mono_string_chars returns a pointer INTO the managed string object
+    // This is NOT heap-allocated, do NOT free it
     if (this.hasExport("mono_string_chars") && this.hasExport("mono_string_length")) {
       const chars = this.native.mono_string_chars(strPtr);
       const length = this.native.mono_string_length(strPtr) as number;
@@ -628,6 +647,24 @@ export class MonoApi {
   // ============================================================================
 
   /**
+   * Clear all internal caches without disposing the API instance.
+   * Use this to free memory while keeping the API usable.
+   *
+   * Clears:
+   * - Native function cache
+   * - Export address cache
+   * - Delegate thunk cache
+   *
+   * Cached items will be re-created on next access.
+   */
+  clearCaches(): void {
+    this.ensureNotDisposed();
+    this.functionCache.clear();
+    this.addressCache.clear();
+    this.delegateThunkCache.clear();
+  }
+
+  /**
    * Cleans up resources associated with this MonoApi instance.
    * Detaches all threads and clears caches to prevent memory leaks.
    * Should be called when the API instance is no longer needed.
@@ -714,17 +751,49 @@ export class MonoApi {
   }
 
   /**
-   * Safely free memory allocated by Mono (e.g., from mono_string_to_utf8)
-   * Does nothing if mono_free is not available (Unity Mono doesn't export it)
+   * Safely free memory allocated by Mono (e.g., from mono_string_to_utf8).
+   *
+   * Tries multiple free functions in order of preference:
+   * 1. mono_free (standard Mono)
+   * 2. mono_unity_g_free (Unity Mono builds)
+   * 3. g_free (fallback for older builds)
+   *
+   * If none are available, logs a warning on first occurrence.
+   * This is acceptable for short-lived scripts but may leak in long sessions.
    */
   tryFree(ptr: NativePointer): void {
     if (pointerIsNull(ptr)) return;
+
+    // Try mono_free first (standard Mono)
     if (this.hasExport("mono_free")) {
       this.native.mono_free(ptr);
+      return;
     }
-    // If mono_free is not available, the memory will leak but won't crash
-    // This is acceptable for short-lived scripts
+
+    // Try mono_unity_g_free (Unity Mono builds)
+    if (this.hasExport("mono_unity_g_free")) {
+      this.native.mono_unity_g_free(ptr);
+      return;
+    }
+
+    // Try g_free (older Mono builds)
+    if (this.hasExport("g_free")) {
+      this.native.g_free(ptr);
+      return;
+    }
+
+    // No free function available - log warning once
+    if (!this._warnedAboutMissingFree) {
+      this._warnedAboutMissingFree = true;
+      console.warn(
+        "[frida-mono-bridge] No free function available (mono_free, mono_unity_g_free, g_free). " +
+          "Memory allocated by Mono APIs will leak. This may be acceptable for short-lived scripts.",
+      );
+    }
   }
+
+  /** Track whether we've warned about missing free function */
+  private _warnedAboutMissingFree = false;
 
   // ============================================================================
   // EXPORT RESOLUTION AND MODULE ACCESS
