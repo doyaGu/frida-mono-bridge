@@ -7,8 +7,8 @@ import { createMonoPropertyTests } from "../test-mono-property";
 import { runTestCategory, TestResult } from "../test-runner-base";
 
 // Wrapper function to convert array of results to single result
-function runMonoPropertyTests(): TestResult {
-  const results = createMonoPropertyTests();
+async function runMonoPropertyTests(): Promise<TestResult> {
+  const results = await createMonoPropertyTests();
   const passed = results.filter(r => r.passed).length;
   const failed = results.filter(r => r.failed).length;
   const skipped = results.filter(r => r.skipped).length;

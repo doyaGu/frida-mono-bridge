@@ -18,39 +18,39 @@
 import Mono from "../src";
 import { TestResult, assert, assertNotNull, createMonoDependentTest } from "./test-framework";
 
-export function createFindToolTests(): TestResult[] {
+export async function createFindToolTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // =====================================================
   // Section 1: Mono.find API Availability Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Find - Mono.find object exists", () => {
+    await createMonoDependentTest("Find - Mono.find object exists", () => {
       assertNotNull(Mono.find, "Mono.find should exist");
       assert(typeof Mono.find === "object", "Mono.find should be an object");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find - classes function exists", () => {
+    await createMonoDependentTest("Find - classes function exists", () => {
       assert(typeof Mono.find.classes === "function", "Mono.find.classes should be a function");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find - methods function exists", () => {
+    await createMonoDependentTest("Find - methods function exists", () => {
       assert(typeof Mono.find.methods === "function", "Mono.find.methods should be a function");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find - fields function exists", () => {
+    await createMonoDependentTest("Find - fields function exists", () => {
       assert(typeof Mono.find.fields === "function", "Mono.find.fields should be a function");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find - classExact function exists", () => {
+    await createMonoDependentTest("Find - classExact function exists", () => {
       assert(typeof Mono.find.classExact === "function", "Mono.find.classExact should be a function");
     }),
   );
@@ -59,41 +59,41 @@ export function createFindToolTests(): TestResult[] {
   // Section 2: classExact Exact Search Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classExact - find System.String", () => {
-      const stringClass = Mono.find.classExact(Mono.api, "System.String");
+    await createMonoDependentTest("Find.classExact - find System.String", () => {
+      const stringClass = Mono.find.classExact("System.String");
       assertNotNull(stringClass, "Should find System.String class");
-      assert(stringClass!.getName() === "String", "Class name should be String");
-      assert(stringClass!.getNamespace() === "System", "Namespace should be System");
+      assert(stringClass!.name === "String", "Class name should be String");
+      assert(stringClass!.namespace === "System", "Namespace should be System");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.classExact - find System.Int32", () => {
-      const intClass = Mono.find.classExact(Mono.api, "System.Int32");
+    await createMonoDependentTest("Find.classExact - find System.Int32", () => {
+      const intClass = Mono.find.classExact("System.Int32");
       assertNotNull(intClass, "Should find System.Int32 class");
-      assert(intClass!.getName() === "Int32", "Class name should be Int32");
+      assert(intClass!.name === "Int32", "Class name should be Int32");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.classExact - find System.Object", () => {
-      const objectClass = Mono.find.classExact(Mono.api, "System.Object");
+    await createMonoDependentTest("Find.classExact - find System.Object", () => {
+      const objectClass = Mono.find.classExact("System.Object");
       assertNotNull(objectClass, "Should find System.Object class");
-      assert(objectClass!.getName() === "Object", "Class name should be Object");
+      assert(objectClass!.name === "Object", "Class name should be Object");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.classExact - non-existent class returns null", () => {
-      const nonExistent = Mono.find.classExact(Mono.api, "NonExistent.FakeClass");
+    await createMonoDependentTest("Find.classExact - non-existent class returns null", () => {
+      const nonExistent = Mono.find.classExact("NonExistent.FakeClass");
       assert(nonExistent === null, "Non-existent class should return null");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.classExact - find class without namespace", () => {
+    await createMonoDependentTest("Find.classExact - find class without namespace", () => {
       // Try to find top-level type (if exists)
-      const result = Mono.find.classExact(Mono.api, "Object");
+      const result = Mono.find.classExact("Object");
       // This may return null since Object is in System namespace
       console.log(`[INFO] No-namespace lookup 'Object': ${result ? "found" : "not found"}`);
     }),
@@ -103,13 +103,13 @@ export function createFindToolTests(): TestResult[] {
   // Section 3: classes Wildcard Search Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classes - search with * wildcard", () => {
+    await createMonoDependentTest("Find.classes - search with * wildcard", () => {
       // Search for classes containing String
-      const stringClasses = Mono.find.classes(Mono.api, "*String*", true);
+      const stringClasses = Mono.find.classes("*String*", { searchNamespace: true });
       assert(stringClasses.length > 0, "Should find classes containing String");
 
       // Verify results include System.String
-      const hasSystemString = stringClasses.some(c => c.getFullName() === "System.String");
+      const hasSystemString = stringClasses.some(c => c.fullName === "System.String");
       assert(hasSystemString, "Results should include System.String");
 
       console.log(`[INFO] Found ${stringClasses.length} classes containing 'String'`);
@@ -117,17 +117,14 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.classes - search System.* namespace", () => {
-      const systemClasses = Mono.find.classes(Mono.api, "System.*", true);
+    await createMonoDependentTest("Find.classes - search System.* namespace", () => {
+      const systemClasses = Mono.find.classes("System.*", { searchNamespace: true });
       assert(systemClasses.length > 0, "Should find classes in System namespace");
 
       // All results should be in System namespace
       for (const klass of systemClasses.slice(0, 10)) {
-        const ns = klass.getNamespace();
-        assert(
-          ns === "System" || ns.startsWith("System."),
-          `Class ${klass.getFullName()} should be in System namespace`,
-        );
+        const ns = klass.namespace;
+        assert(ns === "System" || ns.startsWith("System."), `Class ${klass.fullName} should be in System namespace`);
       }
 
       console.log(`[INFO] Found ${systemClasses.length} System.* classes`);
@@ -135,13 +132,13 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.classes - search class name only without namespace", () => {
-      const classes = Mono.find.classes(Mono.api, "*Object*", false);
+    await createMonoDependentTest("Find.classes - search class name only without namespace", () => {
+      const classes = Mono.find.classes("*Object*", { searchNamespace: false });
       assert(classes.length > 0, "Should find classes containing Object");
 
       // Verify matching by class name only
       for (const klass of classes) {
-        const name = klass.getName();
+        const name = klass.name;
         assert(name.toLowerCase().includes("object"), `Class name ${name} should contain 'object'`);
       }
 
@@ -150,9 +147,9 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.classes - use ? single character wildcard", () => {
+    await createMonoDependentTest("Find.classes - use ? single character wildcard", () => {
       // Int?? should match Int16, Int32, Int64 etc
-      const intClasses = Mono.find.classes(Mono.api, "*Int??*", false);
+      const intClasses = Mono.find.classes("*Int??*", { searchNamespace: false });
 
       if (intClasses.length === 0) {
         console.log("[SKIP] No classes matching Int??");
@@ -161,15 +158,15 @@ export function createFindToolTests(): TestResult[] {
 
       console.log(`[INFO] Found ${intClasses.length} classes matching Int??`);
       for (const klass of intClasses.slice(0, 5)) {
-        console.log(`[INFO]   - ${klass.getFullName()}`);
+        console.log(`[INFO]   - ${klass.fullName}`);
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.classes - empty pattern returns all classes", () => {
+    await createMonoDependentTest("Find.classes - empty pattern returns all classes", () => {
       // * should match all
-      const allClasses = Mono.find.classes(Mono.api, "*", false);
+      const allClasses = Mono.find.classes("*", { searchNamespace: false });
       assert(allClasses.length > 0, "Should find classes");
       console.log(`[INFO] Using * found ${allClasses.length} classes`);
     }),
@@ -179,13 +176,13 @@ export function createFindToolTests(): TestResult[] {
   // Section 4: methods Search Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.methods - search ToString methods", () => {
-      const methods = Mono.find.methods(Mono.api, "*ToString*");
+    await createMonoDependentTest("Find.methods - search ToString methods", () => {
+      const methods = Mono.find.methods("*ToString*");
       assert(methods.length > 0, "Should find ToString methods");
 
       // Verify method names contain ToString
       for (const method of methods.slice(0, 5)) {
-        const name = method.getName();
+        const name = method.name;
         assert(name.toLowerCase().includes("tostring"), `Method name ${name} should contain 'toString'`);
       }
 
@@ -194,9 +191,9 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.methods - search ClassName.MethodName format", () => {
+    await createMonoDependentTest("Find.methods - search ClassName.MethodName format", () => {
       // Search System.String class methods
-      const methods = Mono.find.methods(Mono.api, "System.String.*");
+      const methods = Mono.find.methods("System.String.*");
 
       if (methods.length === 0) {
         console.log("[SKIP] No methods found for System.String");
@@ -205,8 +202,8 @@ export function createFindToolTests(): TestResult[] {
 
       // Verify all are String class methods
       for (const method of methods.slice(0, 5)) {
-        const declaringClass = method.getDeclaringClass();
-        const className = declaringClass.getName();
+        const declaringClass = method.declaringClass;
+        const className = declaringClass.name;
         assert(className === "String", `Method should belong to String class, got ${className}`);
       }
 
@@ -215,8 +212,8 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.methods - search Get* methods", () => {
-      const getMethods = Mono.find.methods(Mono.api, "*Get*");
+    await createMonoDependentTest("Find.methods - search Get* methods", () => {
+      const getMethods = Mono.find.methods("*Get*");
       assert(getMethods.length > 0, "Should find Get methods");
 
       console.log(`[INFO] Found ${getMethods.length} methods containing 'Get'`);
@@ -227,9 +224,9 @@ export function createFindToolTests(): TestResult[] {
   // Section 5: fields Search Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.fields - search Empty field", () => {
+    await createMonoDependentTest("Find.fields - search Empty field", () => {
       // String.Empty is a common static field
-      const fields = Mono.find.fields(Mono.api, "*Empty*");
+      const fields = Mono.find.fields("*Empty*");
 
       if (fields.length === 0) {
         console.log("[SKIP] No Empty fields found");
@@ -238,15 +235,15 @@ export function createFindToolTests(): TestResult[] {
 
       console.log(`[INFO] Found ${fields.length} fields containing 'Empty'`);
       for (const field of fields.slice(0, 5)) {
-        console.log(`[INFO]   - ${field.getFullName()}`);
+        console.log(`[INFO]   - ${field.fullName}`);
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.fields - search ClassName.FieldName format", () => {
+    await createMonoDependentTest("Find.fields - search ClassName.FieldName format", () => {
       // Search System.String class fields
-      const fields = Mono.find.fields(Mono.api, "System.String.*");
+      const fields = Mono.find.fields("System.String.*");
 
       if (fields.length === 0) {
         console.log("[SKIP] No fields found for System.String");
@@ -255,15 +252,15 @@ export function createFindToolTests(): TestResult[] {
 
       console.log(`[INFO] Found ${fields.length} System.String.* fields`);
       for (const field of fields) {
-        console.log(`[INFO]   - ${field.getName()}`);
+        console.log(`[INFO]   - ${field.name}`);
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.fields - search _* private field pattern", () => {
+    await createMonoDependentTest("Find.fields - search _* private field pattern", () => {
       // Many private fields start with _
-      const privateFields = Mono.find.fields(Mono.api, "*_*");
+      const privateFields = Mono.find.fields("*_*");
 
       console.log(`[INFO] Found ${privateFields.length} fields containing '_'`);
     }),
@@ -273,10 +270,10 @@ export function createFindToolTests(): TestResult[] {
   // Section 6: Case Insensitive Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classes - case insensitive search", () => {
-      const upperCase = Mono.find.classes(Mono.api, "*STRING*", false);
-      const lowerCase = Mono.find.classes(Mono.api, "*string*", false);
-      const mixedCase = Mono.find.classes(Mono.api, "*String*", false);
+    await createMonoDependentTest("Find.classes - case insensitive search", () => {
+      const upperCase = Mono.find.classes("*STRING*", { searchNamespace: false });
+      const lowerCase = Mono.find.classes("*string*", { searchNamespace: false });
+      const mixedCase = Mono.find.classes("*String*", { searchNamespace: false });
 
       // All three searches should return the same number of results
       assert(
@@ -287,9 +284,9 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.methods - case insensitive search", () => {
-      const upperCase = Mono.find.methods(Mono.api, "*TOSTRING*");
-      const lowerCase = Mono.find.methods(Mono.api, "*tostring*");
+    await createMonoDependentTest("Find.methods - case insensitive search", () => {
+      const upperCase = Mono.find.methods("*TOSTRING*");
+      const lowerCase = Mono.find.methods("*tostring*");
 
       assert(
         upperCase.length === lowerCase.length,
@@ -302,8 +299,8 @@ export function createFindToolTests(): TestResult[] {
   // Section 7: Unity Specific Search Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classes - search UnityEngine.* classes", () => {
-      const unityClasses = Mono.find.classes(Mono.api, "UnityEngine.*", true);
+    await createMonoDependentTest("Find.classes - search UnityEngine.* classes", () => {
+      const unityClasses = Mono.find.classes("UnityEngine.*", { searchNamespace: true });
 
       if (unityClasses.length === 0) {
         console.log("[SKIP] No UnityEngine classes found (may not be a Unity project)");
@@ -315,23 +312,23 @@ export function createFindToolTests(): TestResult[] {
       // List some common Unity classes
       const knownClasses = ["GameObject", "Transform", "MonoBehaviour", "Component"];
       for (const known of knownClasses) {
-        const found = unityClasses.some(c => c.getName() === known);
+        const found = unityClasses.some(c => c.name === known);
         console.log(`[INFO]   ${known}: ${found ? "found" : "not found"}`);
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.methods - search Update methods (Unity)", () => {
-      const updateMethods = Mono.find.methods(Mono.api, "*Update*");
+    await createMonoDependentTest("Find.methods - search Update methods (Unity)", () => {
+      const updateMethods = Mono.find.methods("*Update*");
 
       console.log(`[INFO] Found ${updateMethods.length} methods containing 'Update'`);
 
       if (updateMethods.length > 0) {
         // List first few
         for (const method of updateMethods.slice(0, 5)) {
-          const className = method.getDeclaringClass().getFullName();
-          console.log(`[INFO]   - ${className}.${method.getName()}`);
+          const className = method.declaringClass.fullName;
+          console.log(`[INFO]   - ${className}.${method.name}`);
         }
       }
     }),
@@ -341,20 +338,20 @@ export function createFindToolTests(): TestResult[] {
   // Section 8: Edge Case Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classes - empty string pattern", () => {
-      const classes = Mono.find.classes(Mono.api, "", false);
+    await createMonoDependentTest("Find.classes - empty string pattern", () => {
+      const classes = Mono.find.classes("", { searchNamespace: false });
       console.log(`[INFO] Empty string pattern returned ${classes.length} classes`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.classes - special character patterns", () => {
+    await createMonoDependentTest("Find.classes - special character patterns", () => {
       // Test patterns containing special characters
       const patterns = ["*<>*", "*`*", "*[]*"];
 
       for (const pattern of patterns) {
         try {
-          const classes = Mono.find.classes(Mono.api, pattern, false);
+          const classes = Mono.find.classes(pattern, { searchNamespace: false });
           console.log(`[INFO] Pattern '${pattern}' returned ${classes.length} classes`);
         } catch (e) {
           console.log(`[INFO] Pattern '${pattern}' threw exception: ${e}`);
@@ -364,15 +361,15 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.methods - non-existent pattern", () => {
-      const methods = Mono.find.methods(Mono.api, "NonExistent.FakeMethod");
+    await createMonoDependentTest("Find.methods - non-existent pattern", () => {
+      const methods = Mono.find.methods("NonExistent.FakeMethod");
       assert(methods.length === 0, "Non-existent method pattern should return empty array");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.fields - non-existent pattern", () => {
-      const fields = Mono.find.fields(Mono.api, "NonExistent.FakeField");
+    await createMonoDependentTest("Find.fields - non-existent pattern", () => {
+      const fields = Mono.find.fields("NonExistent.FakeField");
       assert(fields.length === 0, "Non-existent field pattern should return empty array");
     }),
   );
@@ -381,9 +378,9 @@ export function createFindToolTests(): TestResult[] {
   // Section 9: Performance Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classes - performance: search all classes", () => {
+    await createMonoDependentTest("Find.classes - performance: search all classes", () => {
       const startTime = Date.now();
-      const allClasses = Mono.find.classes(Mono.api, "*", true);
+      const allClasses = Mono.find.classes("*", { searchNamespace: true });
       const elapsed = Date.now() - startTime;
 
       console.log(`[INFO] Searching all classes took: ${elapsed}ms, found ${allClasses.length} classes`);
@@ -394,9 +391,9 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.methods - performance: search common methods", () => {
+    await createMonoDependentTest("Find.methods - performance: search common methods", () => {
       const startTime = Date.now();
-      const methods = Mono.find.methods(Mono.api, "*Get*");
+      const methods = Mono.find.methods("*Get*");
       const elapsed = Date.now() - startTime;
 
       console.log(`[INFO] Searching Get* methods took: ${elapsed}ms, found ${methods.length} methods`);
@@ -407,33 +404,33 @@ export function createFindToolTests(): TestResult[] {
   // Section 10: Result Validation
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classes - results are valid MonoClass objects", () => {
-      const classes = Mono.find.classes(Mono.api, "*String*", false);
+    await createMonoDependentTest("Find.classes - results are valid MonoClass objects", () => {
+      const classes = Mono.find.classes("*String*", { searchNamespace: false });
       assert(classes.length > 0, "Should find classes");
 
       for (const klass of classes.slice(0, 5)) {
         // Verify MonoClass methods can be called
-        const name = klass.getName();
-        const methods = klass.getMethods();
-        const fields = klass.getFields();
+        const name = klass.name;
+        const methods = klass.methods;
+        const fields = klass.fields;
 
         assert(typeof name === "string" && name.length > 0, "Class name should be non-empty string");
-        assert(Array.isArray(methods), "getMethods() should return array");
-        assert(Array.isArray(fields), "getFields() should return array");
+        assert(Array.isArray(methods), "methods should be an array");
+        assert(Array.isArray(fields), "fields should be an array");
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.methods - results are valid MonoMethod objects", () => {
-      const methods = Mono.find.methods(Mono.api, "*ToString*");
+    await createMonoDependentTest("Find.methods - results are valid MonoMethod objects", () => {
+      const methods = Mono.find.methods("*ToString*");
       assert(methods.length > 0, "Should find methods");
 
       for (const method of methods.slice(0, 5)) {
         // Verify MonoMethod methods can be called
-        const name = method.getName();
-        const declaringClass = method.getDeclaringClass();
-        const paramCount = method.getParameterCount();
+        const name = method.name;
+        const declaringClass = method.declaringClass;
+        const paramCount = method.parameterCount;
 
         assert(typeof name === "string" && name.length > 0, "Method name should be non-empty string");
         assertNotNull(declaringClass, "Declaring class should not be null");
@@ -443,8 +440,8 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.fields - results are valid MonoField objects", () => {
-      const fields = Mono.find.fields(Mono.api, "*");
+    await createMonoDependentTest("Find.fields - results are valid MonoField objects", () => {
+      const fields = Mono.find.fields("*");
 
       if (fields.length === 0) {
         console.log("[SKIP] No fields found");
@@ -453,9 +450,9 @@ export function createFindToolTests(): TestResult[] {
 
       for (const field of fields.slice(0, 5)) {
         // Verify MonoField methods can be called
-        const name = field.getName();
-        const parent = field.getParent();
-        const type = field.getType();
+        const name = field.name;
+        const parent = field.parent;
+        const type = field.type;
 
         assert(typeof name === "string" && name.length > 0, "Field name should be non-empty string");
         assertNotNull(parent, "Parent should not be null");
@@ -468,13 +465,13 @@ export function createFindToolTests(): TestResult[] {
   // Section 11: Regex Search Tests (New Feature)
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classes - regex search", () => {
+    await createMonoDependentTest("Find.classes - regex search", () => {
       // Search all classes ending with String
-      const classes = Mono.find.classes(Mono.api, ".*String$", { regex: true });
+      const classes = Mono.find.classes(".*String$", { regex: true });
       assert(classes.length > 0, "Should find classes ending with String");
 
       for (const klass of classes) {
-        const name = klass.getName();
+        const name = klass.name;
         assert(name.endsWith("String"), `Class name ${name} should end with String`);
       }
       console.log(`[INFO] Found ${classes.length} classes ending with String`);
@@ -482,13 +479,13 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.classes - regex search - starting with uppercase", () => {
+    await createMonoDependentTest("Find.classes - regex search - starting with uppercase", () => {
       // Search classes in System namespace starting with Int
-      const classes = Mono.find.classes(Mono.api, "System\\.Int.*", { regex: true });
+      const classes = Mono.find.classes("System\\.Int.*", { regex: true });
       assert(classes.length > 0, "Should find System.Int* classes");
 
       for (const klass of classes) {
-        const fullName = klass.getFullName();
+        const fullName = klass.fullName;
         assert(fullName.startsWith("System.Int"), `Class name ${fullName} should start with System.Int`);
       }
       console.log(`[INFO] Found ${classes.length} System.Int* classes`);
@@ -496,13 +493,13 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.methods - regex search", () => {
+    await createMonoDependentTest("Find.methods - regex search", () => {
       // Search all methods starting with get_ or set_
-      const methods = Mono.find.methods(Mono.api, "^(get|set)_.*", { regex: true, limit: 50 });
+      const methods = Mono.find.methods("^(get|set)_.*", { regex: true, limit: 50 });
       assert(methods.length > 0, "Should find get_/set_ methods");
 
       for (const method of methods.slice(0, 10)) {
-        const name = method.getName();
+        const name = method.name;
         assert(
           name.startsWith("get_") || name.startsWith("set_"),
           `Method name ${name} should start with get_ or set_`,
@@ -516,18 +513,18 @@ export function createFindToolTests(): TestResult[] {
   // Section 12: limit Option Tests (New Feature)
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classes - limit option", () => {
+    await createMonoDependentTest("Find.classes - limit option", () => {
       const limit = 5;
-      const classes = Mono.find.classes(Mono.api, "*", { limit });
+      const classes = Mono.find.classes("*", { limit });
       assert(classes.length <= limit, `Result count ${classes.length} should be <= ${limit}`);
       console.log(`[INFO] Limit ${limit} returned ${classes.length} classes`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.methods - limit option", () => {
+    await createMonoDependentTest("Find.methods - limit option", () => {
       const limit = 10;
-      const methods = Mono.find.methods(Mono.api, "*", { limit });
+      const methods = Mono.find.methods("*", { limit });
       assert(methods.length <= limit, `Result count ${methods.length} should be <= ${limit}`);
       console.log(`[INFO] Limit ${limit} returned ${methods.length} methods`);
     }),
@@ -537,41 +534,41 @@ export function createFindToolTests(): TestResult[] {
   // Section 13: filter Option Tests (New Feature)
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classes - filter option for interfaces", () => {
-      const classes = Mono.find.classes(Mono.api, "System.I*", {
+    await createMonoDependentTest("Find.classes - filter option for interfaces", () => {
+      const classes = Mono.find.classes("System.I*", {
         filter: (c: any) => c.isInterface(),
       });
 
       for (const klass of classes.slice(0, 5)) {
-        assert(klass.isInterface(), `${klass.getName()} should be an interface`);
+        assert(klass.isInterface, `${klass.name} should be an interface`);
       }
       console.log(`[INFO] Found ${classes.length} System.I* interfaces`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.methods - filter option for static methods", () => {
-      const methods = Mono.find.methods(Mono.api, "*Parse*", {
-        filter: (m: any) => m.isStatic(),
+    await createMonoDependentTest("Find.methods - filter option for static methods", () => {
+      const methods = Mono.find.methods("*Parse*", {
+        filter: (m: any) => m.isStatic,
         limit: 20,
       });
 
       for (const method of methods) {
-        assert(method.isStatic(), `${method.getName()} should be a static method`);
+        assert(method.isStatic, `${method.name} should be a static method`);
       }
       console.log(`[INFO] Found ${methods.length} static Parse methods`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.fields - filter option for static fields", () => {
-      const fields = Mono.find.fields(Mono.api, "*", {
-        filter: (f: any) => f.isStatic(),
+    await createMonoDependentTest("Find.fields - filter option for static fields", () => {
+      const fields = Mono.find.fields("*", {
+        filter: (f: any) => f.isStatic,
         limit: 20,
       });
 
       for (const field of fields) {
-        assert(field.isStatic(), `${field.getName()} should be a static field`);
+        assert(field.isStatic, `${field.name} should be a static field`);
       }
       console.log(`[INFO] Found ${fields.length} static fields`);
     }),
@@ -581,18 +578,18 @@ export function createFindToolTests(): TestResult[] {
   // Section 14: properties Search Tests (New Feature)
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.properties - function exists", () => {
+    await createMonoDependentTest("Find.properties - function exists", () => {
       assert(typeof Mono.find.properties === "function", "Mono.find.properties should be a function");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.properties - basic search", () => {
-      const props = Mono.find.properties(Mono.api, "*Length*", { limit: 20 });
+    await createMonoDependentTest("Find.properties - basic search", () => {
+      const props = Mono.find.properties("*Length*", { limit: 20 });
       assert(props.length > 0, "Should find properties containing Length");
 
       for (const prop of props.slice(0, 5)) {
-        const name = prop.getName();
+        const name = prop.name;
         assert(name.toLowerCase().includes("length"), `Property name ${name} should contain Length`);
       }
       console.log(`[INFO] Found ${props.length} Length properties`);
@@ -600,14 +597,14 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.properties - ClassName.PropertyName format", () => {
-      const props = Mono.find.properties(Mono.api, "System.String.*", { limit: 20 });
+    await createMonoDependentTest("Find.properties - ClassName.PropertyName format", () => {
+      const props = Mono.find.properties("System.String.*", { limit: 20 });
 
       for (const prop of props.slice(0, 5)) {
-        const parent = prop.getParent();
+        const parent = prop.parent;
         assert(
-          parent.getNamespace() === "System" && parent.getName() === "String",
-          `Property ${prop.getName()} should belong to System.String`,
+          parent.namespace === "System" && parent.name === "String",
+          `Property ${prop.name} should belong to System.String`,
         );
       }
       console.log(`[INFO] Found ${props.length} System.String properties`);
@@ -615,13 +612,13 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.properties - regex search", () => {
+    await createMonoDependentTest("Find.properties - regex search", () => {
       // Search properties starting with uppercase letter
-      const props = Mono.find.properties(Mono.api, "^[A-Z].*", { regex: true, limit: 20 });
+      const props = Mono.find.properties("^[A-Z].*", { regex: true, limit: 20 });
       assert(props.length > 0, "Should find properties starting with uppercase letter");
 
       for (const prop of props.slice(0, 5)) {
-        const name = prop.getName();
+        const name = prop.name;
         assert(/^[A-Z]/.test(name), `Property name ${name} should start with uppercase letter`);
       }
       console.log(`[INFO] Found ${props.length} properties starting with uppercase letter`);
@@ -629,8 +626,8 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.properties - results are valid MonoProperty objects", () => {
-      const props = Mono.find.properties(Mono.api, "*", { limit: 10 });
+    await createMonoDependentTest("Find.properties - results are valid MonoProperty objects", () => {
+      const props = Mono.find.properties("*", { limit: 10 });
 
       if (props.length === 0) {
         console.log("[SKIP] No properties found");
@@ -639,8 +636,8 @@ export function createFindToolTests(): TestResult[] {
 
       for (const prop of props.slice(0, 5)) {
         // Verify MonoProperty methods can be called
-        const name = prop.getName();
-        const parent = prop.getParent();
+        const name = prop.name;
+        const parent = prop.parent;
         const getter = prop.getter;
         const setter = prop.setter;
 
@@ -656,13 +653,13 @@ export function createFindToolTests(): TestResult[] {
   // Section 14: caseInsensitive Option Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classes - caseInsensitive option (default true)", () => {
+    await createMonoDependentTest("Find.classes - caseInsensitive option (default true)", () => {
       // Search with lowercase pattern - should match uppercase class names by default
-      const classesLower = Mono.find.classes(Mono.api, "*string*", { limit: 10 });
+      const classesLower = Mono.find.classes("*string*", { limit: 10 });
       assert(classesLower.length > 0, "Should find classes with case-insensitive match (default)");
 
       // Verify at least some matches have different case
-      const names = classesLower.map(c => c.getName());
+      const names = classesLower.map(c => c.name);
       console.log(
         `[INFO] Found ${classesLower.length} classes matching '*string*' (case-insensitive): ${names.slice(0, 5).join(", ")}`,
       );
@@ -670,10 +667,10 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.classes - caseInsensitive option set to false", () => {
+    await createMonoDependentTest("Find.classes - caseInsensitive option set to false", () => {
       // Search with exact case matching
-      const classesExact = Mono.find.classes(Mono.api, "*String*", { caseInsensitive: false, limit: 20 });
-      const classesLower = Mono.find.classes(Mono.api, "*string*", { caseInsensitive: false, limit: 20 });
+      const classesExact = Mono.find.classes("*String*", { caseInsensitive: false, limit: 20 });
+      const classesLower = Mono.find.classes("*string*", { caseInsensitive: false, limit: 20 });
 
       // When case-sensitive, searching for lowercase 'string' should find fewer or no results
       // compared to searching for 'String' which is the actual casing
@@ -685,14 +682,14 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.methods - caseInsensitive option", () => {
+    await createMonoDependentTest("Find.methods - caseInsensitive option", () => {
       // Test case-insensitive method search
-      const methodsLower = Mono.find.methods(Mono.api, "*tostring*", { limit: 20 });
+      const methodsLower = Mono.find.methods("*tostring*", { limit: 20 });
       assert(methodsLower.length > 0, "Should find ToString methods with lowercase pattern");
 
       for (const method of methodsLower.slice(0, 5)) {
-        const name = method.getName().toLowerCase();
-        assert(name.includes("tostring"), `Method ${method.getName()} should match pattern`);
+        const name = method.name.toLowerCase();
+        assert(name.includes("tostring"), `Method ${method.name} should match pattern`);
       }
       console.log(`[INFO] Found ${methodsLower.length} methods matching '*tostring*'`);
     }),
@@ -702,25 +699,25 @@ export function createFindToolTests(): TestResult[] {
   // Section 15: searchNamespace Option Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classes - searchNamespace true (default)", () => {
+    await createMonoDependentTest("Find.classes - searchNamespace true (default)", () => {
       // Search with namespace included - should find System.String
-      const classes = Mono.find.classes(Mono.api, "System.String", { searchNamespace: true });
+      const classes = Mono.find.classes("System.String", { searchNamespace: true });
       assert(classes.length >= 1, "Should find System.String when searching namespace");
 
-      const found = classes.find(c => c.getFullName() === "System.String");
+      const found = classes.find(c => c.fullName === "System.String");
       assert(found !== undefined, "Should find exact System.String class");
       console.log(`[INFO] Found ${classes.length} classes matching 'System.String'`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.classes - searchNamespace false", () => {
+    await createMonoDependentTest("Find.classes - searchNamespace false", () => {
       // Search without namespace - should match class name only
-      const classes = Mono.find.classes(Mono.api, "String", { searchNamespace: false, limit: 20 });
+      const classes = Mono.find.classes("String", { searchNamespace: false, limit: 20 });
       assert(classes.length > 0, "Should find classes named 'String'");
 
       for (const klass of classes) {
-        const name = klass.getName();
+        const name = klass.name;
         assert(name === "String", `Class name should be 'String', got '${name}'`);
       }
       console.log(`[INFO] Found ${classes.length} classes named 'String' (without namespace search)`);
@@ -728,13 +725,13 @@ export function createFindToolTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Find.classes - searchNamespace with wildcard", () => {
+    await createMonoDependentTest("Find.classes - searchNamespace with wildcard", () => {
       // Search with wildcard in namespace
-      const classes = Mono.find.classes(Mono.api, "System.Collections.*", { searchNamespace: true, limit: 20 });
+      const classes = Mono.find.classes("System.Collections.*", { searchNamespace: true, limit: 20 });
       assert(classes.length > 0, "Should find classes in System.Collections namespace");
 
       for (const klass of classes.slice(0, 5)) {
-        const fullName = klass.getFullName();
+        const fullName = klass.fullName;
         assert(fullName.startsWith("System.Collections"), `Class ${fullName} should be in System.Collections`);
       }
       console.log(`[INFO] Found ${classes.length} classes in System.Collections.*`);
@@ -745,33 +742,33 @@ export function createFindToolTests(): TestResult[] {
   // Section 16: classExact Function Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Find.classExact - find exact class by full name", () => {
-      const stringClass = Mono.find.classExact(Mono.api, "System.String");
+    await createMonoDependentTest("Find.classExact - find exact class by full name", () => {
+      const stringClass = Mono.find.classExact("System.String");
       assertNotNull(stringClass, "Should find System.String class");
 
       if (stringClass) {
-        assert(stringClass.getName() === "String", "Class name should be String");
-        assert(stringClass.getNamespace() === "System", "Namespace should be System");
-        assert(stringClass.getFullName() === "System.String", "Full name should be System.String");
+        assert(stringClass.name === "String", "Class name should be String");
+        assert(stringClass.namespace === "System", "Namespace should be System");
+        assert(stringClass.fullName === "System.String", "Full name should be System.String");
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.classExact - return null for non-existent class", () => {
-      const nonExistent = Mono.find.classExact(Mono.api, "NonExistent.FakeClass.DoesNotExist");
+    await createMonoDependentTest("Find.classExact - return null for non-existent class", () => {
+      const nonExistent = Mono.find.classExact("NonExistent.FakeClass.DoesNotExist");
       assert(nonExistent === null, "Should return null for non-existent class");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Find.classExact - find class without namespace", () => {
+    await createMonoDependentTest("Find.classExact - find class without namespace", () => {
       // Some classes might not have namespace
-      const intClass = Mono.find.classExact(Mono.api, "System.Int32");
+      const intClass = Mono.find.classExact("System.Int32");
       assertNotNull(intClass, "Should find System.Int32 class");
 
       if (intClass) {
-        assert(intClass.getName() === "Int32", "Class name should be Int32");
+        assert(intClass.name === "Int32", "Class name should be Int32");
       }
     }),
   );

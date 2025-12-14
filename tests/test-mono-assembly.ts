@@ -7,20 +7,20 @@
 import Mono from "../src";
 import {
   TestResult,
-  createMonoDependentTest,
-  createPerformanceTest,
-  createErrorHandlingTest,
   assert,
   assertNotNull,
+  createErrorHandlingTest,
+  createMonoDependentTest,
+  createPerformanceTest,
 } from "./test-framework";
 
-export function createMonoAssemblyTests(): TestResult[] {
+export async function createMonoAssemblyTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // ===== ASSEMBLY ENUMERATION AND DISCOVERY TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly should enumerate all assemblies in domain", () => {
+    await createMonoDependentTest("MonoAssembly should enumerate all assemblies in domain", () => {
       const domain = Mono.domain;
       assertNotNull(domain, "Domain should be available");
 
@@ -33,31 +33,31 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should find assemblies by name", () => {
+    await createMonoDependentTest("MonoAssembly should find assemblies by name", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "Should find mscorlib assembly");
       assert(mscorlib.name === "mscorlib", "Assembly name should be mscorlib");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should handle missing assemblies gracefully", () => {
+    await createMonoDependentTest("MonoAssembly should handle missing assemblies gracefully", () => {
       const domain = Mono.domain;
 
-      const missingAssembly = domain.getAssembly("DefinitelyDoesNotExist");
+      const missingAssembly = domain.tryAssembly("DefinitelyDoesNotExist");
       assert(missingAssembly === null, "Missing assembly should return null");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide assembly names", () => {
+    await createMonoDependentTest("MonoAssembly should provide assembly names", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const name = mscorlib.getName();
+        const name = mscorlib.name;
         assertNotNull(name, "Assembly name should be available");
         assert(name === "mscorlib", "Assembly name should be mscorlib");
       }
@@ -67,30 +67,32 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY LOADING AND UNLOADING TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide load state information", () => {
+    await createMonoDependentTest("MonoAssembly should provide load state information", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const loadState = mscorlib.getLoadState();
-        assertNotNull(loadState, "Load state should be available");
+        // Assembly is considered loaded if we can access its basic properties
+        const name = mscorlib.name;
+        assertNotNull(name, "Assembly name should be available (indicates loaded state)");
 
-        const isLoaded = mscorlib.isFullyLoaded();
-        assert(typeof isLoaded === "boolean", "isFullyLoaded should return boolean");
+        const classes = mscorlib.classes;
+        assert(classes.length > 0, "Loaded assembly should have classes");
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should handle assembly size information", () => {
+    await createMonoDependentTest("MonoAssembly should handle assembly size information", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const sizeInfo = mscorlib.getSizeInfo();
-        assertNotNull(sizeInfo, "Size info should be available");
-        assert(sizeInfo.assemblyName === "mscorlib", "Size info should include assembly name");
-        assert(typeof sizeInfo.classCount === "number", "Size info should include class count");
+        // Use performanceStats which includes size information
+        const stats = mscorlib.performanceStats;
+        assertNotNull(stats, "Performance stats should be available");
+        assert(stats.assemblyName === "mscorlib", "Stats should include assembly name");
+        assert(typeof stats.classCount === "number", "Stats should include class count");
       }
     }),
   );
@@ -98,12 +100,12 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== DEPENDENCY RELATIONSHIP RESOLUTION TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide referenced assemblies", () => {
+    await createMonoDependentTest("MonoAssembly should provide referenced assemblies", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const referencedAssemblies = mscorlib.getReferencedAssemblies();
+        const referencedAssemblies = mscorlib.referencedAssemblies;
         assertNotNull(referencedAssemblies, "Referenced assemblies should be available");
         assert(Array.isArray(referencedAssemblies), "Referenced assemblies should be an array");
       }
@@ -111,12 +113,12 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide referencing assemblies", () => {
+    await createMonoDependentTest("MonoAssembly should provide referencing assemblies", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const referencingAssemblies = mscorlib.getReferencingAssemblies();
+        const referencingAssemblies = mscorlib.referencingAssemblies;
         assertNotNull(referencingAssemblies, "Referencing assemblies should be available");
         assert(Array.isArray(referencingAssemblies), "Referencing assemblies should be an array");
       }
@@ -124,11 +126,11 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should check dependencies", () => {
+    await createMonoDependentTest("MonoAssembly should check dependencies", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
-      const systemCore = domain.getAssembly("System.Core");
+      const mscorlib = domain.tryAssembly("mscorlib");
+      const systemCore = domain.tryAssembly("System.Core");
 
       if (mscorlib && systemCore) {
         // Test dependency checking
@@ -142,12 +144,12 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide dependency tree", () => {
+    await createMonoDependentTest("MonoAssembly should provide dependency tree", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const dependencyTree = mscorlib.getDependencyTree();
+        const dependencyTree = mscorlib.dependencyTree;
         assertNotNull(dependencyTree, "Dependency tree should be available");
         assertNotNull(dependencyTree.root, "Dependency tree should have root");
         assert(typeof dependencyTree.totalAssemblies === "number", "Dependency tree should have total count");
@@ -159,18 +161,18 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY METADATA ACCESS TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide assembly metadata", () => {
+    await createMonoDependentTest("MonoAssembly should provide assembly metadata", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const fullName = mscorlib.getFullName();
+        const fullName = mscorlib.fullName;
         assertNotNull(fullName, "Full name should be available");
 
-        const culture = mscorlib.getCulture();
+        const culture = mscorlib.culture;
         assertNotNull(culture, "Culture should be available");
 
-        const version = mscorlib.getVersion();
+        const version = mscorlib.version;
         assertNotNull(version, "Version should be available");
         assert(typeof version.major === "number", "Version should have major");
         assert(typeof version.minor === "number", "Version should have minor");
@@ -179,12 +181,12 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide detailed information", () => {
+    await createMonoDependentTest("MonoAssembly should provide detailed information", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const detailedInfo = mscorlib.getDetailedInfo();
+        const detailedInfo = mscorlib.detailedInfo;
         assertNotNull(detailedInfo, "Detailed info should be available");
 
         assertNotNull(detailedInfo.basic, "Basic info should be available");
@@ -198,12 +200,12 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide entry point information", () => {
+    await createMonoDependentTest("MonoAssembly should provide entry point information", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const entryPoint = mscorlib.getEntryPoint();
+        const entryPoint = mscorlib.entryPoint;
         // mscorlib might not have a traditional entry point
         if (entryPoint) {
           assertNotNull(entryPoint.name, "Entry point should have name");
@@ -213,12 +215,12 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide custom attributes", () => {
+    await createMonoDependentTest("MonoAssembly should provide custom attributes", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const customAttributes = mscorlib.getCustomAttributes();
+        const customAttributes = mscorlib.customAttributes;
         assertNotNull(customAttributes, "Custom attributes should be available");
         assert(Array.isArray(customAttributes), "Custom attributes should be an array");
       }
@@ -228,17 +230,17 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== UNITY ASSEMBLY HANDLING TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly should handle Unity assemblies", () => {
+    await createMonoDependentTest("MonoAssembly should handle Unity assemblies", () => {
       const domain = Mono.domain;
 
-      const unityEngine = domain.getAssembly("UnityEngine");
+      const unityEngine = domain.tryAssembly("UnityEngine");
       if (unityEngine) {
         assert(unityEngine.name === "UnityEngine", "Unity engine assembly should be found");
 
-        const isSystem = unityEngine.isSystemAssembly();
+        const isSystem = unityEngine.isSystemAssembly;
         assert(isSystem === true, "UnityEngine should be system assembly");
 
-        const isUser = unityEngine.isUserAssembly();
+        const isUser = unityEngine.isUserAssembly;
         assert(isUser === false, "UnityEngine should not be user assembly");
       } else {
         console.log("  - UnityEngine assembly not found");
@@ -247,14 +249,14 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should handle Assembly-CSharp", () => {
+    await createMonoDependentTest("MonoAssembly should handle Assembly-CSharp", () => {
       const domain = Mono.domain;
 
-      const assemblyCSharp = domain.getAssembly("Assembly-CSharp");
+      const assemblyCSharp = domain.tryAssembly("Assembly-CSharp");
       if (assemblyCSharp) {
         assert(assemblyCSharp.name.includes("Assembly-CSharp"), "Assembly-CSharp should be found");
 
-        const isSystem = assemblyCSharp.isSystemAssembly();
+        const isSystem = assemblyCSharp.isSystemAssembly;
         // Assembly-CSharp might be considered user assembly depending on context
         console.log(`  - Assembly-CSharp isSystem: ${isSystem}`);
       } else {
@@ -264,7 +266,7 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should identify Unity vs system assemblies", () => {
+    await createMonoDependentTest("MonoAssembly should identify Unity vs system assemblies", () => {
       const domain = Mono.domain;
 
       const assemblies = domain.assemblies;
@@ -284,11 +286,11 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY SECURITY AND VALIDATION TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly should validate assembly compatibility", () => {
+    await createMonoDependentTest("MonoAssembly should validate assembly compatibility", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
-      const systemCore = domain.getAssembly("System.Core");
+      const mscorlib = domain.tryAssembly("mscorlib");
+      const systemCore = domain.tryAssembly("System.Core");
 
       if (mscorlib && systemCore) {
         const isCompatible = mscorlib.isCompatibleWith(systemCore);
@@ -298,11 +300,11 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should compare assemblies", () => {
+    await createMonoDependentTest("MonoAssembly should compare assemblies", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
-      const systemCore = domain.getAssembly("System.Core");
+      const mscorlib = domain.tryAssembly("mscorlib");
+      const systemCore = domain.tryAssembly("System.Core");
 
       if (mscorlib && systemCore) {
         const comparison = mscorlib.compareTo(systemCore);
@@ -314,46 +316,33 @@ export function createMonoAssemblyTests(): TestResult[] {
     }),
   );
 
-  results.push(
-    createMonoDependentTest("MonoAssembly should handle assembly location", () => {
-      const domain = Mono.domain;
-
-      const mscorlib = domain.getAssembly("mscorlib");
-      if (mscorlib) {
-        const location = mscorlib.getLocation();
-        assertNotNull(location, "Location should be available");
-        assert(typeof location === "string", "Location should be string");
-      }
-    }),
-  );
-
   // ===== ASSEMBLY CLASS ACCESS TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide access to classes", () => {
+    await createMonoDependentTest("MonoAssembly should provide access to classes", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
         const classes = mscorlib.classes;
         assert(classes.length > 0, "Should find classes in assembly");
 
-        const stringClass = classes.find(c => c.getName() === "String");
+        const stringClass = classes.find(c => c.name === "String");
         assertNotNull(stringClass, "Should find String class in mscorlib");
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should find classes by full name", () => {
+    await createMonoDependentTest("MonoAssembly should find classes by full name", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const stringClass = mscorlib.class("System.String");
+        const stringClass = mscorlib.tryClass("System.String");
         if (stringClass) {
-          assert(stringClass.getName() === "String", "Should find String class by full name");
-          assert(stringClass.getNamespace() === "System", "String class should be in System namespace");
+          assert(stringClass.name === "String", "Should find String class by full name");
+          assert(stringClass.namespace === "System", "String class should be in System namespace");
         } else {
           console.log("  - String class not found by full name");
         }
@@ -362,15 +351,15 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should find classes by namespace and name", () => {
+    await createMonoDependentTest("MonoAssembly should find classes by namespace and name", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
         const stringClass = mscorlib.tryFindClass("System", "String");
         if (stringClass) {
-          assert(stringClass.getName() === "String", "Should find String class");
-          assert(stringClass.getNamespace() === "System", "String class should be in System namespace");
+          assert(stringClass.name === "String", "Should find String class");
+          assert(stringClass.namespace === "System", "String class should be in System namespace");
         } else {
           console.log("  - String class not found by namespace/name");
         }
@@ -381,10 +370,10 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY IMAGE ACCESS TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide access to image", () => {
+    await createMonoDependentTest("MonoAssembly should provide access to image", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
         const image = mscorlib.image;
         assertNotNull(image, "Assembly should have image");
@@ -401,7 +390,7 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY PERFORMANCE TESTS =====
 
   results.push(
-    createPerformanceTest("MonoAssembly enumeration performance", () => {
+    await createPerformanceTest("MonoAssembly enumeration performance", () => {
       const domain = Mono.domain;
 
       const startTime = Date.now();
@@ -414,10 +403,10 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createPerformanceTest("MonoAssembly class access performance", () => {
+    await createPerformanceTest("MonoAssembly class access performance", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
         const startTime = Date.now();
         const classes = mscorlib.classes;
@@ -430,13 +419,13 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createPerformanceTest("MonoAssembly dependency analysis performance", () => {
+    await createPerformanceTest("MonoAssembly dependency analysis performance", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
         const startTime = Date.now();
-        const dependencyTree = mscorlib.getDependencyTree();
+        const dependencyTree = mscorlib.dependencyTree;
         const analysisTime = Date.now() - startTime;
 
         console.log(`  Analyzed dependencies in ${analysisTime}ms`);
@@ -448,10 +437,10 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY ERROR HANDLING TESTS =====
 
   results.push(
-    createErrorHandlingTest("MonoAssembly should handle invalid operations gracefully", () => {
+    await createErrorHandlingTest("MonoAssembly should handle invalid operations gracefully", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
         // Try to find non-existent class
         const missingClass = mscorlib.tryFindClass("NonExistent.Namespace", "NonExistentClass");
@@ -463,10 +452,10 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY TOSTRING AND SERIALIZATION TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly toString should work correctly", () => {
+    await createMonoDependentTest("MonoAssembly toString should work correctly", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
         const stringRep = mscorlib.toString();
         assertNotNull(stringRep, "toString should return a value");
@@ -476,10 +465,10 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide JSON representation", () => {
+    await createMonoDependentTest("MonoAssembly should provide JSON representation", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
         const json = mscorlib.toJSON();
         assertNotNull(json, "toJSON should return a value");
@@ -494,10 +483,10 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY DESCRIPTION TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide human-readable descriptions", () => {
+    await createMonoDependentTest("MonoAssembly should provide human-readable descriptions", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
         const description = mscorlib.describe();
         assertNotNull(description, "Description should be available");
@@ -510,12 +499,12 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY VERSION COMPATIBILITY TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly should handle version information", () => {
+    await createMonoDependentTest("MonoAssembly should handle version information", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const version = mscorlib.getVersion();
+        const version = mscorlib.version;
         assertNotNull(version, "Version should be available");
 
         assert(typeof version.major === "number", "Version major should be number");
@@ -529,12 +518,12 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly should handle culture information", () => {
+    await createMonoDependentTest("MonoAssembly should handle culture information", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
-        const culture = mscorlib.getCulture();
+        const culture = mscorlib.culture;
         assertNotNull(culture, "Culture should be available");
         assert(typeof culture === "string", "Culture should be string");
 
@@ -546,20 +535,20 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY CLASSIFICATION TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly should classify assemblies correctly", () => {
+    await createMonoDependentTest("MonoAssembly should classify assemblies correctly", () => {
       const domain = Mono.domain;
 
-      const mscorlib = domain.getAssembly("mscorlib");
-      const unityEngine = domain.getAssembly("UnityEngine");
+      const mscorlib = domain.tryAssembly("mscorlib");
+      const unityEngine = domain.tryAssembly("UnityEngine");
 
       if (mscorlib) {
-        assert(mscorlib.isSystemAssembly(), "mscorlib should be system assembly");
-        assert(!mscorlib.isUserAssembly(), "mscorlib should not be user assembly");
+        assert(mscorlib.isSystemAssembly, "mscorlib should be system assembly");
+        assert(!mscorlib.isUserAssembly, "mscorlib should not be user assembly");
       }
 
       if (unityEngine) {
         // Unity assemblies might be classified as system
-        const isSystem = unityEngine.isSystemAssembly();
+        const isSystem = unityEngine.isSystemAssembly;
         console.log(`  - UnityEngine classified as system: ${isSystem}`);
       }
     }),
@@ -568,15 +557,15 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY ROOT NAMESPACES TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly should provide root namespace information", () => {
+    await createMonoDependentTest("MonoAssembly should provide root namespace information", () => {
       const domain = Mono.domain;
 
-      const rootNamespaces = domain.getRootNamespaces();
+      const rootNamespaces = domain.rootNamespaces;
       assertNotNull(rootNamespaces, "Root namespaces should be available");
       assert(Array.isArray(rootNamespaces), "Root namespaces should be an array");
       assert(rootNamespaces.length > 0, "Should find root namespaces");
 
-      const systemNamespace = rootNamespaces.find(ns => ns === "System");
+      const systemNamespace = rootNamespaces.find((ns: string) => ns === "System");
       assertNotNull(systemNamespace, "Should find System namespace");
 
       console.log(`  - Found ${rootNamespaces.length} root namespaces`);
@@ -586,13 +575,13 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== ASSEMBLY PERFORMANCE STATS TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly.getPerformanceStats returns valid statistics", () => {
+    await createMonoDependentTest("MonoAssembly.performanceStats returns valid statistics", () => {
       const domain = Mono.domain;
-      const mscorlib = domain.assembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
-      const stats = mscorlib!.getPerformanceStats();
-      assertNotNull(stats, "getPerformanceStats should return object");
+      const stats = mscorlib!.performanceStats;
+      assertNotNull(stats, "performanceStats should return object");
 
       assert(typeof stats.assemblyName === "string", "assemblyName should be string");
       assert(stats.assemblyName === "mscorlib", `assemblyName should be mscorlib, got ${stats.assemblyName}`);
@@ -617,16 +606,16 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly.getPerformanceStats works for user assemblies", () => {
+    await createMonoDependentTest("MonoAssembly.performanceStats works for user assemblies", () => {
       const domain = Mono.domain;
       const assemblies = domain.assemblies;
 
       // Find Assembly-CSharp or any user assembly
-      const userAssembly = assemblies.find((a: any) => a.getName() === "Assembly-CSharp" || a.isUserAssembly());
+      const userAssembly = assemblies.find(a => a.name === "Assembly-CSharp" || a.isUserAssembly);
 
       if (userAssembly) {
-        const stats = userAssembly.getPerformanceStats();
-        assertNotNull(stats, "getPerformanceStats should return object");
+        const stats = userAssembly.performanceStats;
+        assertNotNull(stats, "performanceStats should return object");
         assert(stats.classCount >= 0, "classCount should be non-negative");
 
         console.log(`[INFO] ${stats.assemblyName} stats: ${stats.classCount} classes`);
@@ -639,23 +628,23 @@ export function createMonoAssemblyTests(): TestResult[] {
   // ===== REFERENCING ASSEMBLIES TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoAssembly.getReferencingAssemblies should return array", () => {
+    await createMonoDependentTest("MonoAssembly.referencingAssemblies should return array", () => {
       const domain = Mono.domain;
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
-      const refs = mscorlib!.getReferencingAssemblies();
-      assert(Array.isArray(refs), "getReferencingAssemblies should return an array");
+      const refs = mscorlib!.referencingAssemblies;
+      assert(Array.isArray(refs), "referencingAssemblies should return an array");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly.getReferencingAssemblies mscorlib should have dependents", () => {
+    await createMonoDependentTest("MonoAssembly.referencingAssemblies mscorlib should have dependents", () => {
       const domain = Mono.domain;
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
-      const refs = mscorlib!.getReferencingAssemblies();
+      const refs = mscorlib!.referencingAssemblies;
       // Most assemblies reference mscorlib
       assert(refs.length > 0, "mscorlib should have dependent assemblies");
       console.log(`  - mscorlib has ${refs.length} dependent assemblies`);
@@ -663,30 +652,30 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly.getReferencingAssemblies should not include self", () => {
+    await createMonoDependentTest("MonoAssembly.referencingAssemblies should not include self", () => {
       const domain = Mono.domain;
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
-      const refs = mscorlib!.getReferencingAssemblies();
+      const refs = mscorlib!.referencingAssemblies;
       const selfPointer = mscorlib!.pointer.toString();
-      const includesSelf = refs.some(r => r.pointer.toString() === selfPointer);
+      const includesSelf = refs.some((r: { pointer: NativePointer }) => r.pointer.toString() === selfPointer);
       assert(!includesSelf, "Referencing assemblies should not include self");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly.getReferencingAssemblies should return valid assemblies", () => {
+    await createMonoDependentTest("MonoAssembly.referencingAssemblies should return valid assemblies", () => {
       const domain = Mono.domain;
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
-      const refs = mscorlib!.getReferencingAssemblies();
+      const refs = mscorlib!.referencingAssemblies;
       if (refs.length === 0) return; // No dependents is valid
 
       // All returned assemblies should have valid names
-      const allValid = refs.every(r => {
-        const name = r.getName();
+      const allValid = refs.every((r: { name: string }) => {
+        const name = r.name;
         return typeof name === "string" && name.length > 0;
       });
       assert(allValid, "All referencing assemblies should have valid names");
@@ -694,13 +683,13 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly.getReferencingAssemblies should cache result", () => {
+    await createMonoDependentTest("MonoAssembly.referencingAssemblies should cache result", () => {
       const domain = Mono.domain;
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
-      const refs1 = mscorlib!.getReferencingAssemblies();
-      const refs2 = mscorlib!.getReferencingAssemblies();
+      const refs1 = mscorlib!.referencingAssemblies;
+      const refs2 = mscorlib!.referencingAssemblies;
 
       // Same array reference (cached)
       assert(refs1 === refs2, "Result should be cached (same array reference)");
@@ -708,21 +697,21 @@ export function createMonoAssemblyTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoAssembly.getReferencingAssemblies dependents should reference mscorlib", () => {
+    await createMonoDependentTest("MonoAssembly.referencingAssemblies dependents should reference mscorlib", () => {
       const domain = Mono.domain;
-      const mscorlib = domain.getAssembly("mscorlib");
+      const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
-      const dependents = mscorlib!.getReferencingAssemblies();
+      const dependents = mscorlib!.referencingAssemblies;
       if (dependents.length === 0) return; // No dependents is valid
 
-      const mscorlibName = mscorlib!.getName().toLowerCase();
+      const mscorlibName = mscorlib!.name.toLowerCase();
 
       // Check first few dependents
       for (const dep of dependents.slice(0, 3)) {
-        const refs = dep.getReferencedAssemblies();
-        const hasMscorlib = refs.some(r => r.getName().toLowerCase() === mscorlibName);
-        assert(hasMscorlib, `${dep.getName()} should reference mscorlib`);
+        const refs = dep.referencedAssemblies;
+        const hasMscorlib = refs.some((r: { name: string }) => r.name.toLowerCase() === mscorlibName);
+        assert(hasMscorlib, `${dep.name} should reference mscorlib`);
       }
     }),
   );

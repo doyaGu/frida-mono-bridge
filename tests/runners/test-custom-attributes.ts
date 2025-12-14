@@ -9,8 +9,8 @@
 import { createCustomAttributeTests } from "../test-custom-attributes";
 import { runTestCategory, TestResult } from "../test-runner-base";
 
-function runCustomAttributesTests(): TestResult {
-  const results = createCustomAttributeTests();
+async function runCustomAttributesTests(): Promise<TestResult> {
+  const results = await createCustomAttributeTests();
   const passed = results.filter(r => r.passed).length;
   const failed = results.filter(r => r.failed).length;
   const skipped = results.filter(r => r.skipped).length;

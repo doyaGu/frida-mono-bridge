@@ -15,53 +15,53 @@
  * - Edge cases
  */
 
-import Mono, { MonoArray } from "../src";
+import Mono from "../src";
 import { TestResult, assert, assertNotNull, createMonoDependentTest } from "./test-framework";
 
-export function createMonoArrayTests(): TestResult[] {
+export async function createMonoArrayTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // =====================================================
   // SECTION 1: Basic Property Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - create array with MonoArray.new()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - create array with Mono.array.new()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 10);
+      const arr = Mono.array.new(intClass, 10);
       assertNotNull(arr, "Created array should not be null");
       assert(!arr.pointer.isNull(), "Array pointer should not be null");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - length property", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - length property", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 10);
+      const arr = Mono.array.new(intClass, 10);
       assert(arr.length === 10, `Array length should be 10, got ${arr.length}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - getLength() method", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - getLength() method", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 15);
-      assert(arr.getLength() === 15, `getLength() should return 15, got ${arr.getLength()}`);
+      const arr = Mono.array.new(intClass, 15);
+      assert(arr.length === 15, `getLength() should return 15, got ${arr.length}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - length equals getLength()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - length equals getLength()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 20);
-      assert(arr.length === arr.getLength(), `length (${arr.length}) should equal getLength() (${arr.getLength()})`);
+      const arr = Mono.array.new(intClass, 20);
+      assert(arr.length === arr.length, `length (${arr.length}) should equal getLength() (${arr.length})`);
     }),
   );
 
@@ -69,43 +69,43 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 2: Element Class Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - getElementClass() for Int32 array", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - elementClass property for Int32 array", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 5);
-      const elementClass = arr.getElementClass();
+      const arr = Mono.array.new(intClass, 5);
+      const elementClass = arr.elementClass;
 
       assertNotNull(elementClass, "Element class should not be null");
-      const className = elementClass.getName();
+      const className = elementClass.name;
       assert(className === "Int32", `Element class should be Int32, got ${className}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - getElementClass() for String array", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("MonoArray - elementClass property for String array", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const arr = MonoArray.new(Mono.api, stringClass, 5);
-      const elementClass = arr.getElementClass();
+      const arr = Mono.array.new(stringClass, 5);
+      const elementClass = arr.elementClass;
 
       assertNotNull(elementClass, "Element class should not be null");
-      const className = elementClass.getName();
+      const className = elementClass.name;
       assert(className === "String", `Element class should be String, got ${className}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - getElementClass() for Object array", () => {
-      const objectClass = Mono.domain.class("System.Object");
+    await createMonoDependentTest("MonoArray - elementClass property for Object array", () => {
+      const objectClass = Mono.domain.tryClass("System.Object");
       assertNotNull(objectClass, "Object class should exist");
 
-      const arr = MonoArray.new(Mono.api, objectClass, 5);
-      const elementClass = arr.getElementClass();
+      const arr = Mono.array.new(objectClass, 5);
+      const elementClass = arr.elementClass;
 
       assertNotNull(elementClass, "Element class should not be null");
-      const className = elementClass.getName();
+      const className = elementClass.name;
       assert(className === "Object", `Element class should be Object, got ${className}`);
     }),
   );
@@ -114,60 +114,60 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 3: Element Size Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - getElementSize() for byte array", () => {
-      const byteClass = Mono.domain.class("System.Byte");
+    await createMonoDependentTest("MonoArray - elementSize property for byte array", () => {
+      const byteClass = Mono.domain.tryClass("System.Byte");
       assertNotNull(byteClass, "Byte class should exist");
 
-      const arr = MonoArray.new(Mono.api, byteClass, 5);
-      const size = arr.getElementSize();
+      const arr = Mono.array.new(byteClass, 5);
+      const size = arr.elementSize;
 
       assert(size === 1, `Byte element size should be 1, got ${size}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - getElementSize() for Int16 array", () => {
-      const shortClass = Mono.domain.class("System.Int16");
+    await createMonoDependentTest("MonoArray - elementSize property for Int16 array", () => {
+      const shortClass = Mono.domain.tryClass("System.Int16");
       assertNotNull(shortClass, "Int16 class should exist");
 
-      const arr = MonoArray.new(Mono.api, shortClass, 5);
-      const size = arr.getElementSize();
+      const arr = Mono.array.new(shortClass, 5);
+      const size = arr.elementSize;
 
       assert(size === 2, `Int16 element size should be 2, got ${size}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - getElementSize() for Int32 array", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - elementSize property for Int32 array", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 5);
-      const size = arr.getElementSize();
+      const arr = Mono.array.new(intClass, 5);
+      const size = arr.elementSize;
 
       assert(size === 4, `Int32 element size should be 4, got ${size}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - getElementSize() for Int64 array", () => {
-      const longClass = Mono.domain.class("System.Int64");
+    await createMonoDependentTest("MonoArray - elementSize property for Int64 array", () => {
+      const longClass = Mono.domain.tryClass("System.Int64");
       assertNotNull(longClass, "Int64 class should exist");
 
-      const arr = MonoArray.new(Mono.api, longClass, 5);
-      const size = arr.getElementSize();
+      const arr = Mono.array.new(longClass, 5);
+      const size = arr.elementSize;
 
       assert(size === 8, `Int64 element size should be 8, got ${size}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - getElementSize() for reference type (pointer size)", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("MonoArray - elementSize property for reference type (pointer size)", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const arr = MonoArray.new(Mono.api, stringClass, 5);
-      const size = arr.getElementSize();
+      const arr = Mono.array.new(stringClass, 5);
+      const size = arr.elementSize;
 
       assert(size === Process.pointerSize, `String element size should be ${Process.pointerSize}, got ${size}`);
     }),
@@ -177,11 +177,11 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 4: Numeric Array Read/Write Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - setNumber() and getNumber() for byte array", () => {
-      const byteClass = Mono.domain.class("System.Byte");
+    await createMonoDependentTest("MonoArray - setNumber() and getNumber() for byte array", () => {
+      const byteClass = Mono.domain.tryClass("System.Byte");
       assertNotNull(byteClass, "Byte class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, byteClass, 5);
+      const arr = Mono.array.new<number>(byteClass, 5);
 
       arr.setNumber(0, 0);
       arr.setNumber(1, 127);
@@ -194,11 +194,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - setNumber() and getNumber() for Int16 array", () => {
-      const shortClass = Mono.domain.class("System.Int16");
+    await createMonoDependentTest("MonoArray - setNumber() and getNumber() for Int16 array", () => {
+      const shortClass = Mono.domain.tryClass("System.Int16");
       assertNotNull(shortClass, "Int16 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, shortClass, 5);
+      const arr = Mono.array.new<number>(shortClass, 5);
 
       arr.setNumber(0, 0);
       arr.setNumber(1, 32767);
@@ -211,11 +211,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - setNumber() and getNumber() for Int32 array", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - setNumber() and getNumber() for Int32 array", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
 
       arr.setNumber(0, 0);
       arr.setNumber(1, 2147483647);
@@ -228,11 +228,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - setNumber() and getNumber() sequence", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - setNumber() and getNumber() sequence", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 10);
+      const arr = Mono.array.new<number>(intClass, 10);
 
       // Write sequence
       for (let i = 0; i < 10; i++) {
@@ -248,11 +248,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - overwrite number values", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - overwrite number values", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
 
       // Initial write
       arr.setNumber(0, 100);
@@ -268,11 +268,11 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 5: getTyped() / setTyped() Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - getTyped() for numeric array", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - getTyped() for numeric array", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
       arr.setNumber(2, 42);
 
       const value = arr.getTyped(2);
@@ -281,11 +281,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - setTyped() for numeric array", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - setTyped() for numeric array", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
       arr.setTyped(3, 99);
 
       const value = arr.getNumber(3);
@@ -294,11 +294,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - getTyped() bounds check (out of range)", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - getTyped() bounds check (out of range)", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
 
       let threw = false;
       try {
@@ -312,11 +312,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - setTyped() bounds check (negative index)", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - setTyped() bounds check (negative index)", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
 
       let threw = false;
       try {
@@ -333,11 +333,11 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 6: elementAt() Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - elementAt() basic usage", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - elementAt() basic usage", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
       arr.setNumber(0, 10);
       arr.setNumber(1, 20);
       arr.setNumber(2, 30);
@@ -349,11 +349,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - elementAt() throws for out of bounds", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - elementAt() throws for out of bounds", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
 
       let threw = false;
       try {
@@ -370,11 +370,11 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 7: LINQ-like Methods Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - where() filter", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - where() filter", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
       for (let i = 0; i < 5; i++) {
         arr.setNumber(i, i * 10);
       }
@@ -387,11 +387,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - select() transform", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - select() transform", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 1);
       arr.setNumber(1, 2);
       arr.setNumber(2, 3);
@@ -405,11 +405,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - first() without predicate", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - first() without predicate", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 100);
       arr.setNumber(1, 200);
       arr.setNumber(2, 300);
@@ -420,11 +420,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - first() with predicate", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - first() with predicate", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
       for (let i = 0; i < 5; i++) {
         arr.setNumber(i, i * 10);
       }
@@ -435,11 +435,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - first() returns null when not found", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - first() returns null when not found", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 1);
       arr.setNumber(1, 2);
       arr.setNumber(2, 3);
@@ -450,11 +450,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - last() without predicate", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - last() without predicate", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 100);
       arr.setNumber(1, 200);
       arr.setNumber(2, 300);
@@ -465,11 +465,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - last() with predicate", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - last() with predicate", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
       for (let i = 0; i < 5; i++) {
         arr.setNumber(i, i * 10);
       }
@@ -480,11 +480,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - any() without predicate", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - any() without predicate", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 1);
 
       assert(arr.any() === true, "any() should return true for non-empty array");
@@ -492,21 +492,21 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - any() returns false for empty array", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - any() returns false for empty array", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 0);
+      const arr = Mono.array.new<number>(intClass, 0);
       assert(arr.any() === false, "any() should return false for empty array");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - any() with predicate", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - any() with predicate", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 1);
       arr.setNumber(1, 2);
       arr.setNumber(2, 3);
@@ -517,11 +517,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - all() predicate", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - all() predicate", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 10);
       arr.setNumber(1, 20);
       arr.setNumber(2, 30);
@@ -532,21 +532,21 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - count() without predicate", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - count() without predicate", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
       assert(arr.count() === 5, `count() should return 5, got ${arr.count()}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - count() with predicate", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - count() with predicate", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
       for (let i = 0; i < 5; i++) {
         arr.setNumber(i, i);
       }
@@ -560,11 +560,11 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 8: More LINQ-like Methods
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - aggregate() / reduce()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - aggregate() / reduce()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 4);
+      const arr = Mono.array.new<number>(intClass, 4);
       arr.setNumber(0, 1);
       arr.setNumber(1, 2);
       arr.setNumber(2, 3);
@@ -579,11 +579,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - toArray()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - toArray()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 10);
       arr.setNumber(1, 20);
       arr.setNumber(2, 30);
@@ -598,11 +598,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - forEach()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - forEach()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 1);
       arr.setNumber(1, 2);
       arr.setNumber(2, 3);
@@ -618,11 +618,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - map() (alias for select)", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - map() (alias for select)", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 1);
       arr.setNumber(1, 2);
       arr.setNumber(2, 3);
@@ -635,11 +635,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - filter() (alias for where)", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - filter() (alias for where)", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
       for (let i = 0; i < 5; i++) {
         arr.setNumber(i, i);
       }
@@ -650,11 +650,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - find() (alias for first with predicate)", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - find() (alias for first with predicate)", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
       for (let i = 0; i < 5; i++) {
         arr.setNumber(i, i * 10);
       }
@@ -665,11 +665,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - findIndex()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - findIndex()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
       for (let i = 0; i < 5; i++) {
         arr.setNumber(i, i * 10);
       }
@@ -680,11 +680,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - findIndex() returns -1 when not found", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - findIndex() returns -1 when not found", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 1);
       arr.setNumber(1, 2);
       arr.setNumber(2, 3);
@@ -695,11 +695,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - includes()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - includes()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 10);
       arr.setNumber(1, 20);
       arr.setNumber(2, 30);
@@ -710,11 +710,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - slice()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - slice()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
       for (let i = 0; i < 5; i++) {
         arr.setNumber(i, i * 10);
       }
@@ -728,11 +728,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - distinct()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - distinct()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 6);
+      const arr = Mono.array.new<number>(intClass, 6);
       arr.setNumber(0, 1);
       arr.setNumber(1, 2);
       arr.setNumber(2, 1);
@@ -746,11 +746,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - orderBy()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - orderBy()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 4);
+      const arr = Mono.array.new<number>(intClass, 4);
       arr.setNumber(0, 30);
       arr.setNumber(1, 10);
       arr.setNumber(2, 40);
@@ -768,11 +768,11 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 9: Iterator Support
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - Symbol.iterator support", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - Symbol.iterator support", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 100);
       arr.setNumber(1, 200);
       arr.setNumber(2, 300);
@@ -790,11 +790,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - spread operator with iterator", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - spread operator with iterator", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr = Mono.array.new<number>(intClass, 3);
       arr.setNumber(0, 1);
       arr.setNumber(1, 2);
       arr.setNumber(2, 3);
@@ -809,11 +809,11 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 10: Utility Methods
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - describe()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - describe()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 10);
+      const arr = Mono.array.new(intClass, 10);
       const description = arr.describe();
 
       assert(typeof description === "string", "describe() should return string");
@@ -823,11 +823,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - validateArray()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - validateArray()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 5);
+      const arr = Mono.array.new(intClass, 5);
       const validation = arr.validateArray();
 
       assert(validation.isValid === true, "Valid array should pass validation");
@@ -836,11 +836,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - toString()", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - toString()", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 5);
+      const arr = Mono.array.new(intClass, 5);
       const str = arr.toString();
 
       assert(typeof str === "string", "toString() should return string");
@@ -854,23 +854,23 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 11: Empty Array Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - empty array properties", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - empty array properties", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 0);
+      const arr = Mono.array.new(intClass, 0);
 
       assert(arr.length === 0, "Empty array length should be 0");
-      assert(arr.getLength() === 0, "Empty array getLength() should be 0");
+      assert(arr.length === 0, "Empty array getLength() should be 0");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - empty array LINQ operations", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - empty array LINQ operations", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 0);
+      const arr = Mono.array.new<number>(intClass, 0);
 
       assert(arr.any() === false, "any() on empty should return false");
       assert(arr.first() === null, "first() on empty should return null");
@@ -881,11 +881,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - empty array iteration", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - empty array iteration", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 0);
+      const arr = Mono.array.new<number>(intClass, 0);
 
       let iterationCount = 0;
       for (const _item of arr) {
@@ -900,11 +900,11 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 12: Different Element Type Arrays
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - UInt32 array", () => {
-      const uintClass = Mono.domain.class("System.UInt32");
+    await createMonoDependentTest("MonoArray - UInt32 array", () => {
+      const uintClass = Mono.domain.tryClass("System.UInt32");
       assertNotNull(uintClass, "UInt32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, uintClass, 3);
+      const arr = Mono.array.new<number>(uintClass, 3);
       arr.setNumber(0, 0);
       arr.setNumber(1, 2147483647);
       arr.setNumber(2, 4294967295);
@@ -916,11 +916,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - Boolean array", () => {
-      const boolClass = Mono.domain.class("System.Boolean");
+    await createMonoDependentTest("MonoArray - Boolean array", () => {
+      const boolClass = Mono.domain.tryClass("System.Boolean");
       assertNotNull(boolClass, "Boolean class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, boolClass, 3);
+      const arr = Mono.array.new<number>(boolClass, 3);
       arr.setNumber(0, 0); // false
       arr.setNumber(1, 1); // true
       arr.setNumber(2, 0); // false
@@ -932,11 +932,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - Char array", () => {
-      const charClass = Mono.domain.class("System.Char");
+    await createMonoDependentTest("MonoArray - Char array", () => {
+      const charClass = Mono.domain.tryClass("System.Char");
       assertNotNull(charClass, "Char class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, charClass, 3);
+      const arr = Mono.array.new<number>(charClass, 3);
       arr.setNumber(0, 65); // 'A'
       arr.setNumber(1, 66); // 'B'
       arr.setNumber(2, 67); // 'C'
@@ -944,7 +944,7 @@ export function createMonoArrayTests(): TestResult[] {
       assert(arr.getNumber(0) === 65, "Char[0] should be 65 (A)");
       assert(arr.getNumber(1) === 66, "Char[1] should be 66 (B)");
       assert(arr.getNumber(2) === 67, "Char[2] should be 67 (C)");
-      assert(arr.getElementSize() === 2, "Char element size should be 2");
+      assert(arr.elementSize === 2, "Char element size should be 2");
     }),
   );
 
@@ -952,21 +952,21 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 13: Large Array Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - large array creation", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - large array creation", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 1000);
+      const arr = Mono.array.new(intClass, 1000);
       assert(arr.length === 1000, `Large array length should be 1000, got ${arr.length}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - large array read/write", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - large array read/write", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 100);
+      const arr = Mono.array.new<number>(intClass, 100);
 
       // Write all elements
       for (let i = 0; i < 100; i++) {
@@ -986,11 +986,11 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 14: getElementAddress() Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - getElementAddress() returns valid pointers", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - getElementAddress() returns valid pointers", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 5);
+      const arr = Mono.array.new(intClass, 5);
 
       for (let i = 0; i < 5; i++) {
         const addr = arr.getElementAddress(i);
@@ -1000,12 +1000,12 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - getElementAddress() sequential addresses", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - getElementAddress() sequential addresses", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new(Mono.api, intClass, 3);
-      const elementSize = arr.getElementSize();
+      const arr = Mono.array.new(intClass, 3);
+      const elementSize = arr.elementSize;
 
       const addr0 = arr.getElementAddress(0);
       const addr1 = arr.getElementAddress(1);
@@ -1024,11 +1024,11 @@ export function createMonoArrayTests(): TestResult[] {
   // SECTION 15: Integration Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoArray - chained operations", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - chained operations", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 10);
+      const arr = Mono.array.new<number>(intClass, 10);
       for (let i = 0; i < 10; i++) {
         arr.setNumber(i, i);
       }
@@ -1044,12 +1044,12 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - multiple arrays independent", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - multiple arrays independent", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr1 = MonoArray.new<number>(Mono.api, intClass, 3);
-      const arr2 = MonoArray.new<number>(Mono.api, intClass, 3);
+      const arr1 = Mono.array.new<number>(intClass, 3);
+      const arr2 = Mono.array.new<number>(intClass, 3);
 
       arr1.setNumber(0, 100);
       arr2.setNumber(0, 200);
@@ -1065,11 +1065,11 @@ export function createMonoArrayTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoArray - pointer validity after operations", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoArray - pointer validity after operations", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      const arr = MonoArray.new<number>(Mono.api, intClass, 5);
+      const arr = Mono.array.new<number>(intClass, 5);
 
       // Perform various operations
       arr.setNumber(0, 42);

@@ -4,28 +4,28 @@
  */
 
 import Mono from "../src";
-import { MonoEnums, MonoDefines } from "../src/runtime/enums";
 import { MonoTypeKind } from "../src/model/type";
+import { MonoDefines, MonoEnums } from "../src/runtime/enums";
 import { Logger } from "../src/utils/log";
 import {
-  TestResult,
-  TestSuite,
-  createMonoDependentTest,
-  createStandaloneTest,
-  createDomainTest,
-  createDomainTestEnhanced,
-  createSmokeTest,
-  createIntegrationTest,
-  createErrorHandlingTest,
-  createNestedPerformTest,
   assert,
-  assertPerformWorks,
   assertApiAvailable,
   assertDomainAvailable,
+  assertPerformWorks,
+  createDomainTestAsync,
+  createDomainTestEnhanced,
+  createErrorHandlingTest,
+  createIntegrationTest,
+  createMonoDependentTest,
+  createNestedPerformTest,
+  createSmokeTest,
+  createStandaloneTest,
   TestCategory,
+  TestResult,
+  TestSuite,
 } from "./test-framework";
 
-export function testSupporting(): TestResult {
+export async function testSupporting(): Promise<TestResult> {
   console.log("\nSupporting Features (Definitions, Metadata, Logger):");
 
   const suite = new TestSuite("Supporting Features Tests", TestCategory.INTEGRATION);
@@ -37,13 +37,13 @@ export function testSupporting(): TestResult {
   // DEFINITIONS TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Mono.perform should work for definition tests", () => {
       assertPerformWorks("Mono.perform() should work for definition tests");
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("MonoEnums should expose common enumerations", () => {
       assert(MonoEnums.MonoExceptionEnum.MONO_EXCEPTION_CLAUSE_NONE === 0, "Exception enum should include NONE");
       assert(MonoEnums.MonoCallConvention.MONO_CALL_STDCALL === 2, "Call convention enum should match header value");
@@ -52,7 +52,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("MonoType values should be consistent", () => {
       const monoTypeEnum = MonoEnums.MonoTypeEnum;
       assert(monoTypeEnum.MONO_TYPE_STRING === MonoTypeKind.String, "String type value should match MonoTypeKind");
@@ -69,7 +69,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("MonoDefines should expose numeric constants", () => {
       assert(MonoDefines.MONO_PROFILER_API_VERSION === 3, "Profiler API version should be available");
       assert(MonoDefines.MONO_DEBUGGER_MAJOR_VERSION >= 0, "Debugger major version should be numeric");
@@ -77,7 +77,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test exception enumeration values", () => {
       const exceptionEnum = MonoEnums.MonoExceptionEnum;
 
@@ -91,7 +91,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test call convention enumeration", () => {
       const callConvEnum = MonoEnums.MonoCallConvention;
 
@@ -106,7 +106,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test marshal native enumeration", () => {
       const marshalEnum = MonoEnums.MonoMarshalNative;
 
@@ -133,7 +133,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test profiler and debugger defines", () => {
       // Test profiler defines
       assert(typeof MonoDefines.MONO_PROFILER_API_VERSION === "number", "Profiler API version should be numeric");
@@ -152,7 +152,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test definition value ranges and validity", () => {
       // Test that enum values are in expected ranges
       const callConvEnum = MonoEnums.MonoCallConvention;
@@ -179,7 +179,7 @@ export function testSupporting(): TestResult {
   );
 
   suite.addResult(
-    createErrorHandlingTest("Should handle definition access errors gracefully", () => {
+    await createErrorHandlingTest("Should handle definition access errors gracefully", () => {
       // Test accessing non-existent properties
       const nonExistentEnum = (MonoEnums as any).NonExistentEnum;
       assert(nonExistentEnum === undefined, "Non-existent enum should be undefined");
@@ -195,34 +195,34 @@ export function testSupporting(): TestResult {
   // METADATA COLLECTION TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Mono.perform should work for metadata collection tests", () => {
       assertPerformWorks("Mono.perform() should work for metadata collection tests");
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should access domain for metadata collection", () => {
       assertDomainAvailable("Mono.domain should be accessible for metadata operations");
       assertApiAvailable("Mono.api should be accessible for metadata operations");
 
       const domain = Mono.domain;
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
 
       assert(Array.isArray(assemblies), "Should get assemblies array from domain");
       console.log(`    Found ${assemblies.length} assemblies for metadata collection`);
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should collect assembly metadata through domain", () => {
       const domain = Mono.domain;
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
 
       if (assemblies.length > 0) {
         // Collect assembly metadata manually using modern API
         const assemblySummaries = assemblies.map(assembly => ({
-          name: assembly.getName(),
+          name: assembly.name,
           assembly: assembly,
           hasImage: !!assembly.image,
         }));
@@ -232,7 +232,7 @@ export function testSupporting(): TestResult {
 
         const first = assemblySummaries[0];
         assert(typeof first.name === "string", "Summary should have string name");
-        assert(typeof first.assembly.getName === "function", "Summary should expose MonoAssembly");
+        assert(typeof first.assembly.name === "string", "Summary should expose MonoAssembly");
 
         console.log(`    Created ${assemblySummaries.length} assembly summaries`);
       } else {
@@ -241,10 +241,10 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should collect class metadata through images", () => {
       const domain = Mono.domain;
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
 
       if (assemblies.length > 0) {
         let totalClasses = 0;
@@ -253,17 +253,17 @@ export function testSupporting(): TestResult {
         for (const assembly of assemblies) {
           const image = assembly.image;
           if (image) {
-            const classes = image.getClasses();
+            const classes = image.classes;
             totalClasses += classes.length;
 
             for (const klass of classes) {
               classSummaries.push({
-                name: klass.getName(),
-                namespace: klass.getNamespace ? klass.getNamespace() : "Unknown",
+                name: klass.name,
+                namespace: klass.namespace ?? "Unknown",
                 klass: klass,
-                methodCount: klass.getMethods ? klass.getMethods().length : 0,
-                fieldCount: klass.getFields ? klass.getFields().length : 0,
-                propertyCount: klass.getProperties ? klass.getProperties().length : 0,
+                methodCount: klass.methods ? klass.methods.length : 0,
+                fieldCount: klass.fields ? klass.fields.length : 0,
+                propertyCount: klass.properties ? klass.properties.length : 0,
               });
             }
           }
@@ -275,7 +275,7 @@ export function testSupporting(): TestResult {
         if (classSummaries.length > 0) {
           const first = classSummaries[0];
           assert(typeof first.name === "string", "Class summary should have name");
-          assert(typeof first.klass.getName === "function", "Summary should expose MonoClass");
+          assert(typeof first.klass.name === "string", "Summary should expose MonoClass");
         }
       } else {
         console.log("    No assemblies available for class metadata collection");
@@ -283,10 +283,10 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should group classes by namespace", () => {
       const domain = Mono.domain;
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
 
       if (assemblies.length > 0) {
         const classes = [];
@@ -295,7 +295,7 @@ export function testSupporting(): TestResult {
         for (const assembly of assemblies) {
           const image = assembly.image;
           if (image) {
-            const assemblyClasses = image.getClasses();
+            const assemblyClasses = image.classes;
             classes.push(...assemblyClasses);
           }
         }
@@ -303,7 +303,7 @@ export function testSupporting(): TestResult {
         // Group classes by namespace manually
         const namespaceIndex = new Map();
         for (const klass of classes) {
-          const namespace = klass.getNamespace ? klass.getNamespace() : "Unknown";
+          const namespace = klass.namespace ?? "Unknown";
           if (!namespaceIndex.has(namespace)) {
             namespaceIndex.set(namespace, []);
           }
@@ -329,26 +329,26 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test metadata filtering and sorting", () => {
       const domain = Mono.domain;
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
 
       if (assemblies.length > 0) {
         // Test filtering by name patterns
-        const systemAssemblies = assemblies.filter(a => a.getName().includes("System"));
-        const unityAssemblies = assemblies.filter(a => a.getName().includes("Unity"));
+        const systemAssemblies = assemblies.filter(a => a.name.includes("System"));
+        const unityAssemblies = assemblies.filter(a => a.name.includes("Unity"));
 
         console.log(`    System assemblies: ${systemAssemblies.length}`);
         console.log(`    Unity assemblies: ${unityAssemblies.length}`);
 
         // Test sorting by name
-        const sortedAssemblies = [...assemblies].sort((a, b) => a.getName().localeCompare(b.getName()));
+        const sortedAssemblies = [...assemblies].sort((a, b) => a.name.localeCompare(b.name));
         assert(sortedAssemblies.length === assemblies.length, "Sorted assemblies should have same count");
 
         if (sortedAssemblies.length > 1) {
-          const first = sortedAssemblies[0].getName();
-          const second = sortedAssemblies[1].getName();
+          const first = sortedAssemblies[0].name;
+          const second = sortedAssemblies[1].name;
           const isSorted = first.localeCompare(second) <= 0;
           console.log(`    Assemblies sorted: ${isSorted ? "Yes" : "No"} (${first}, ${second})`);
         }
@@ -358,7 +358,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test metadata performance and caching", () => {
       const domain = Mono.domain;
 
@@ -366,7 +366,7 @@ export function testSupporting(): TestResult {
       const startTime = Date.now();
 
       for (let i = 0; i < 10; i++) {
-        const assemblies = domain.getAssemblies();
+        const assemblies = domain.assemblies;
         assert(Array.isArray(assemblies), "Repeated access should return arrays");
       }
 
@@ -383,12 +383,12 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createNestedPerformTest({
       context: "metadata collection",
       testName: "Should support metadata collection in nested perform calls",
       validate: domain => {
-        const assemblies = domain.getAssemblies();
+        const assemblies = domain.assemblies;
 
         assert(Array.isArray(assemblies), "Nested perform should allow assembly access");
 
@@ -396,7 +396,7 @@ export function testSupporting(): TestResult {
           const firstAssembly = assemblies[0];
           const image = firstAssembly.image;
           if (image) {
-            const classes = image.getClasses();
+            const classes = image.classes;
             assert(Array.isArray(classes), "Nested perform should allow class access");
           }
         }
@@ -405,16 +405,16 @@ export function testSupporting(): TestResult {
   );
 
   suite.addResult(
-    createErrorHandlingTest("Should handle metadata collection errors gracefully", () => {
+    await createErrorHandlingTest("Should handle metadata collection errors gracefully", () => {
       const domain = Mono.domain;
 
       // Test with non-existent assemblies
-      const nonExistentAssembly = domain.assembly("NonExistent.Metadata.Assembly");
+      const nonExistentAssembly = domain.tryAssembly("NonExistent.Metadata.Assembly");
       assert(nonExistentAssembly === null, "Non-existent assembly should return null");
 
       // Test metadata collection with empty results
       try {
-        const assemblies = domain.getAssemblies();
+        const assemblies = domain.assemblies;
         if (assemblies.length === 0) {
           console.log("    No assemblies available - empty metadata collection handled gracefully");
         }
@@ -431,13 +431,13 @@ export function testSupporting(): TestResult {
   // LOGGER TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Mono.perform should work for logger tests", () => {
       assertPerformWorks("Mono.perform() should work for logger tests");
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Logger can be imported and used directly", () => {
       const logger = new Logger({ tag: "Test" });
       assert(typeof logger.info === "function", "info method should exist");
@@ -447,7 +447,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Logger methods should not throw", () => {
       const logger = new Logger({ tag: "MethodsTest" });
       // These should not throw
@@ -458,7 +458,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Logger can be created with custom tag", () => {
       const customLogger = new Logger({ tag: "CustomTag" });
       assert(typeof customLogger.info === "function", "Custom logger should have info method");
@@ -466,7 +466,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Logger can be created with custom level", () => {
       const debugLogger = new Logger({ level: "debug", tag: "DebugLogger" });
       debugLogger.debug("Debug level message");
@@ -477,7 +477,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Logger respects log levels", () => {
       // Error level logger should only show error messages
       const errorLogger = new Logger({ level: "error" });
@@ -488,14 +488,14 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Logger can log multi-line messages", () => {
       const logger = new Logger({ tag: "MultiLine" });
       logger.info("Line 1\nLine 2\nLine 3");
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Logger can log special characters", () => {
       const logger = new Logger({ tag: "SpecialChars" });
       logger.info("Special: !@#$%^&*()[]{}");
@@ -503,7 +503,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Logger can log empty strings", () => {
       const logger = new Logger({ tag: "Empty" });
       logger.info("");
@@ -511,7 +511,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Multiple loggers can coexist", () => {
       const logger1 = new Logger({ tag: "Logger1" });
       const logger2 = new Logger({ tag: "Logger2" });
@@ -525,7 +525,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Logger handles very long messages", () => {
       const logger = new Logger({ tag: "LongMessage" });
       const longMessage = "A".repeat(1000);
@@ -533,7 +533,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Logger works with Mono domain operations", () => {
       const logger = new Logger({ tag: "DomainTest" });
 
@@ -557,8 +557,8 @@ export function testSupporting(): TestResult {
   // INTEGRATION TESTS
   // ============================================================================
 
-  suite.addResult(
-    createDomainTest("Should integrate definitions with fluent API", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Should integrate definitions with fluent API", domain => {
       // Test that definitions work alongside the fluent API
       const api = Mono.api;
       const version = Mono.version;
@@ -579,29 +579,29 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Should test metadata integration with utilities", domain => {
-      const assemblies = domain.getAssemblies();
+  await suite.addResultAsync(
+    createDomainTestAsync("Should test metadata integration with utilities", domain => {
+      const assemblies = domain.assemblies;
       assert(Array.isArray(assemblies), "Should get assemblies for integration");
 
       if (assemblies.length > 0) {
         // Test that metadata can be enhanced with enum-based typing
         const firstAssembly = assemblies[0];
-        assert(typeof firstAssembly.getName === "function", "Assembly should have getName method");
+        assert(typeof firstAssembly.name === "string", "Assembly should have name property");
 
         // Test that metadata collection can be enhanced with logger
         const logger = new Logger({ tag: "MetadataIntegration" });
-        logger.info(`Processing assembly: ${firstAssembly.getName()}`);
+        logger.info(`Processing assembly: ${firstAssembly.name}`);
 
         console.log("    Metadata integration working correctly");
       }
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Should test logger integration with metadata operations", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Should test logger integration with metadata operations", domain => {
       const logger = new Logger({ tag: "LoggerIntegration" });
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
 
       logger.info(`Starting metadata collection with ${assemblies.length} assemblies`);
 
@@ -610,7 +610,7 @@ export function testSupporting(): TestResult {
         for (const assembly of assemblies) {
           const image = assembly.image;
           if (image) {
-            const classes = image.getClasses();
+            const classes = image.classes;
             totalClasses += classes.length;
           }
         }
@@ -622,8 +622,8 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Should test cross-feature supporting operations", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Should test cross-feature supporting operations", domain => {
       // Test that definitions, metadata, and logging work together
       const logger = new Logger({ tag: "CrossFeature" });
 
@@ -632,14 +632,14 @@ export function testSupporting(): TestResult {
       logger.info(`Using call convention: ${callConv}`);
 
       // Test metadata in context
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
       logger.info(`Processing ${assemblies.length} assemblies`);
 
       if (assemblies.length > 0) {
         const first = assemblies[0];
         const image = first.image;
         if (image) {
-          const classes = image.getClasses();
+          const classes = image.classes;
           logger.info(`First assembly has ${classes.length} classes`);
         }
       }
@@ -656,8 +656,8 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Should test supporting features performance", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Should test supporting features performance", domain => {
       const logger = new Logger({ tag: "Performance" });
       const startTime = Date.now();
 
@@ -668,7 +668,7 @@ export function testSupporting(): TestResult {
         const marshalType = MonoEnums.MonoMarshalNative.MONO_NATIVE_I4;
 
         // Metadata
-        const assemblies = domain.getAssemblies();
+        const assemblies = domain.assemblies;
 
         // Logging
         if (i % 10 === 0) {
@@ -684,7 +684,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createIntegrationTest("Should test supporting features consistency", () => {
       // Test that supporting features provide consistent results
       const domain1 = Mono.domain;
@@ -708,7 +708,7 @@ export function testSupporting(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createDomainTestEnhanced("Should handle supporting features integration errors", domain => {
       // Test error handling across all supporting features
       try {
@@ -716,8 +716,8 @@ export function testSupporting(): TestResult {
         const invalidEnum = (MonoEnums as any).InvalidEnum;
         assert(invalidEnum === undefined, "Invalid enum should be undefined");
 
-        // Metadata error handling
-        const invalidAssembly = domain.assembly("Invalid.Assembly");
+        // Metadata error handling - use tryAssembly to avoid throwing
+        const invalidAssembly = domain.tryAssembly("Invalid.Assembly");
         assert(invalidAssembly === null, "Invalid assembly should return null");
 
         // Logger error handling

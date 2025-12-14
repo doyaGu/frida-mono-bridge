@@ -6,7 +6,7 @@
 
 import { createGCToolsTests } from "../test-gc-tools";
 
-const results = createGCToolsTests();
+const results = await createGCToolsTests();
 
 // Print summary
 const passed = results.filter(r => r.passed).length;

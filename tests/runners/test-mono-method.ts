@@ -7,8 +7,8 @@ import { createMonoMethodTests } from "../test-mono-method";
 import { runTestCategory, TestResult } from "../test-runner-base";
 
 // Wrapper function to convert array of results to single result
-function runMonoMethodTests(): TestResult {
-  const results = createMonoMethodTests();
+async function runMonoMethodTests(): Promise<TestResult> {
+  const results = await createMonoMethodTests();
   const passed = results.filter(r => r.passed).length;
   const failed = results.filter(r => r.failed).length;
   const skipped = results.filter(r => r.skipped).length;

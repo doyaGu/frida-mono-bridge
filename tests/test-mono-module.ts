@@ -10,19 +10,19 @@
 
 import Mono from "../src";
 import {
-  TestResult,
-  TestSuite,
-  createMonoDependentTest,
-  createPerformanceTest,
-  createErrorHandlingTest,
-  createIntegrationTest,
   assert,
   assertNotNull,
   assertPerformWorks,
+  createErrorHandlingTest,
+  createIntegrationTest,
+  createMonoDependentTest,
+  createPerformanceTest,
   TestCategory,
+  TestResult,
+  TestSuite,
 } from "./test-framework";
 
-export function testMonoModule(): TestResult {
+export async function testMonoModule(): Promise<TestResult> {
   console.log("\nComprehensive Mono Module Tests:");
 
   const suite = new TestSuite("Mono Module Complete Tests", TestCategory.MONO_DEPENDENT);
@@ -31,7 +31,7 @@ export function testMonoModule(): TestResult {
   // MODULE DETECTION AND ENUMERATION
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should be detected and accessible", () => {
       assertPerformWorks("Module detection should work");
 
@@ -55,7 +55,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should match expected Mono patterns", () => {
       const module = Mono.module;
       assertNotNull(module, "Module should be available");
@@ -83,7 +83,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should have valid memory layout", () => {
       const module = Mono.module;
       assertNotNull(module, "Module should be available");
@@ -125,7 +125,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should enumerate exports correctly", () => {
       const module = Mono.module;
       assertNotNull(module, "Module should be available");
@@ -173,7 +173,7 @@ export function testMonoModule(): TestResult {
   // VERSION COMPATIBILITY CHECKING
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should provide version information", () => {
       const version = Mono.version;
       assertNotNull(version, "Version information should be available");
@@ -205,7 +205,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should adapt to Unity Mono versions", () => {
       const module = Mono.module;
       const version = Mono.version;
@@ -248,7 +248,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should handle version-specific exports", () => {
       const api = Mono.api;
       const module = Mono.module;
@@ -293,7 +293,7 @@ export function testMonoModule(): TestResult {
   // MODULE METADATA ACCESS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should provide metadata access", () => {
       const module = Mono.module;
       const api = Mono.api;
@@ -318,7 +318,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should export required functions", () => {
       const api = Mono.api;
 
@@ -359,7 +359,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should handle export resolution", () => {
       const api = Mono.api;
 
@@ -403,7 +403,7 @@ export function testMonoModule(): TestResult {
   // MODULE LOADING AND UNLOADING
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should handle loading scenarios", () => {
       const module = Mono.module;
 
@@ -432,7 +432,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should handle dependency information", () => {
       const module = Mono.module;
 
@@ -472,7 +472,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should handle unloading scenarios", () => {
       const module = Mono.module;
 
@@ -512,7 +512,7 @@ export function testMonoModule(): TestResult {
   // MODULE DEPENDENCY RESOLUTION
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should resolve dependencies correctly", () => {
       const api = Mono.api;
 
@@ -552,7 +552,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Module should handle circular dependencies", () => {
       const api = Mono.api;
 
@@ -588,7 +588,7 @@ export function testMonoModule(): TestResult {
   // PERFORMANCE TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createPerformanceTest("Performance: Module access operations", () => {
       const module = Mono.module;
       const iterations = 1000;
@@ -620,7 +620,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createPerformanceTest("Performance: Export resolution", () => {
       const api = Mono.api;
       const iterations = 500;
@@ -655,7 +655,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createPerformanceTest("Performance: Module enumeration", () => {
       const iterations = 100;
       const startTime = Date.now();
@@ -681,7 +681,7 @@ export function testMonoModule(): TestResult {
   // ERROR HANDLING AND EDGE CASES
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createErrorHandlingTest("Module should handle invalid operations", () => {
       const module = Mono.module;
       const api = Mono.api;
@@ -711,7 +711,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createErrorHandlingTest("Module should handle resolution failures", () => {
       const api = Mono.api;
 
@@ -748,7 +748,7 @@ export function testMonoModule(): TestResult {
   // INTEGRATION TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createIntegrationTest("Module should integrate with API operations", () => {
       const module = Mono.module;
       const api = Mono.api;
@@ -769,7 +769,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createIntegrationTest("Module should integrate with domain operations", () => {
       const module = Mono.module;
 
@@ -779,14 +779,14 @@ export function testMonoModule(): TestResult {
       const domain = Mono.domain;
       assertNotNull(domain, "Domain should be accessible");
 
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
       assert(Array.isArray(assemblies), "Domain should provide assemblies");
 
       console.log(`    Module-domain integration: ${assemblies.length} assemblies accessible`);
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createIntegrationTest("Module should integrate with threading operations", () => {
       const module = Mono.module;
       const api = Mono.api;
@@ -809,7 +809,7 @@ export function testMonoModule(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createIntegrationTest("Module should integrate with Unity systems", () => {
       const module = Mono.module;
 
@@ -827,12 +827,12 @@ export function testMonoModule(): TestResult {
 
         // Test Unity-specific operations
         const domain = Mono.domain;
-        const unityAssembly = domain.assembly("UnityEngine.CoreModule");
+        const unityAssembly = domain.tryAssembly("UnityEngine.CoreModule");
 
         if (unityAssembly) {
           console.log("    Unity assembly accessible through module");
 
-          const gameObjectClass = unityAssembly.image.class("UnityEngine.GameObject");
+          const gameObjectClass = unityAssembly.image.tryClass("UnityEngine.GameObject");
           if (gameObjectClass) {
             console.log("    Unity GameObject class accessible through module");
           }

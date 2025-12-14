@@ -20,66 +20,64 @@
  */
 
 import Mono from "../src";
-import { MonoDelegate } from "../src/model/delegate";
-import { MonoObject } from "../src/model/object";
-import { TestResult, createMonoDependentTest, assert, assertNotNull, assertThrows } from "./test-framework";
+import { TestResult, assert, assertNotNull, createMonoDependentTest } from "./test-framework";
 
-export function createMonoDelegateTests(): TestResult[] {
+export async function createMonoDelegateTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // =====================================================
   // Section 1: Basic Delegate Type Discovery
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - Action delegate type exists", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - Action delegate type exists", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "System.Action class should exist");
-      assert(actionClass.isDelegate(), "Action should be a delegate type");
+      assert(actionClass.isDelegate, "Action should be a delegate type");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Action<T> generic delegate exists", () => {
+    await createMonoDependentTest("MonoDelegate - Action<T> generic delegate exists", () => {
       // Action`1 is the generic version of Action<T>
-      const actionT = Mono.domain.class("System.Action`1");
+      const actionT = Mono.domain.tryClass("System.Action`1");
       if (!actionT) {
         console.log("[SKIP] Action`1 generic delegate not found");
         return;
       }
-      assert(actionT.isDelegate(), "Action<T> should be a delegate type");
+      assert(actionT.isDelegate, "Action<T> should be a delegate type");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Func<TResult> delegate exists", () => {
-      const funcT = Mono.domain.class("System.Func`1");
+    await createMonoDependentTest("MonoDelegate - Func<TResult> delegate exists", () => {
+      const funcT = Mono.domain.tryClass("System.Func`1");
       if (!funcT) {
         console.log("[SKIP] Func`1 generic delegate not found");
         return;
       }
-      assert(funcT.isDelegate(), "Func<TResult> should be a delegate type");
+      assert(funcT.isDelegate, "Func<TResult> should be a delegate type");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Predicate<T> delegate exists", () => {
-      const predicateT = Mono.domain.class("System.Predicate`1");
+    await createMonoDependentTest("MonoDelegate - Predicate<T> delegate exists", () => {
+      const predicateT = Mono.domain.tryClass("System.Predicate`1");
       if (!predicateT) {
         console.log("[SKIP] Predicate`1 generic delegate not found");
         return;
       }
-      assert(predicateT.isDelegate(), "Predicate<T> should be a delegate type");
+      assert(predicateT.isDelegate, "Predicate<T> should be a delegate type");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - EventHandler delegate exists", () => {
-      const eventHandler = Mono.domain.class("System.EventHandler");
+    await createMonoDependentTest("MonoDelegate - EventHandler delegate exists", () => {
+      const eventHandler = Mono.domain.tryClass("System.EventHandler");
       if (!eventHandler) {
         console.log("[SKIP] EventHandler delegate not found");
         return;
       }
-      assert(eventHandler.isDelegate(), "EventHandler should be a delegate type");
+      assert(eventHandler.isDelegate, "EventHandler should be a delegate type");
     }),
   );
 
@@ -87,23 +85,23 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 2: Delegate Class Structure Check
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - Action has Invoke method", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - Action has Invoke method", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "System.Action class should exist");
 
-      const invokeMethod = actionClass.tryGetMethod("Invoke", 0);
+      const invokeMethod = actionClass.tryMethod("Invoke", 0);
       assertNotNull(invokeMethod, "Action should have Invoke method");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Action has BeginInvoke/EndInvoke methods", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - Action has BeginInvoke/EndInvoke methods", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "System.Action class should exist");
 
       // BeginInvoke takes AsyncCallback and object state
-      const beginInvoke = actionClass.tryGetMethod("BeginInvoke", 2);
-      const endInvoke = actionClass.tryGetMethod("EndInvoke", 1);
+      const beginInvoke = actionClass.tryMethod("BeginInvoke", 2);
+      const endInvoke = actionClass.tryMethod("EndInvoke", 1);
 
       // These methods may not exist in some Mono versions
       if (!beginInvoke || !endInvoke) {
@@ -117,15 +115,15 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Delegate inherits from MulticastDelegate", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - Delegate inherits from MulticastDelegate", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "System.Action class should exist");
 
-      const parent = actionClass.getParent();
+      const parent = actionClass.parent;
       assertNotNull(parent, "Action should have a parent class");
 
       // Action should inherit from MulticastDelegate
-      const parentName = parent.getName();
+      const parentName = parent.name;
       assert(
         parentName === "MulticastDelegate" || parentName === "Delegate",
         `Delegate parent should be MulticastDelegate or Delegate, got ${parentName}`,
@@ -137,19 +135,19 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 3: Delegate Creation Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate.create() - Create static method delegate", () => {
+    await createMonoDependentTest("MonoDelegate.create() - Create static method delegate", () => {
       // Use String.IsNullOrEmpty as static method delegate target
-      const stringClass = Mono.domain.class("System.String");
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const isNullOrEmptyMethod = stringClass.tryGetMethod("IsNullOrEmpty", 1);
+      const isNullOrEmptyMethod = stringClass.tryMethod("IsNullOrEmpty", 1);
       if (!isNullOrEmptyMethod) {
         console.log("[SKIP] String.IsNullOrEmpty method not found");
         return;
       }
 
       // Find Predicate<string> delegate type
-      const predicateString = Mono.domain.class("System.Predicate`1");
+      const predicateString = Mono.domain.tryClass("System.Predicate`1");
       if (!predicateString) {
         console.log("[SKIP] Predicate`1 delegate type not found");
         return;
@@ -162,21 +160,21 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Get Invoke method", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - Get Invoke method", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "System.Action class should exist");
 
-      const invokeMethod = actionClass.tryGetMethod("Invoke", 0);
+      const invokeMethod = actionClass.tryMethod("Invoke", 0);
       assertNotNull(invokeMethod, "Action should have Invoke method");
 
       // Verify Invoke method characteristics
-      assert(invokeMethod!.isVirtual(), "Invoke method should be virtual");
+      assert(invokeMethod!.isVirtual, "Invoke method should be virtual");
 
-      const returnType = invokeMethod!.getReturnType();
+      const returnType = invokeMethod!.returnType;
       assertNotNull(returnType, "Invoke method should have a return type");
 
       // Action's Invoke returns void
-      const returnTypeName = returnType!.getFullName();
+      const returnTypeName = returnType!.fullName;
       assert(
         returnTypeName === "System.Void" || returnTypeName === "void",
         `Action.Invoke return type should be void, got ${returnTypeName}`,
@@ -188,9 +186,9 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 4: Using Runtime Delegate Instances
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - Get delegate instance from field", () => {
+    await createMonoDependentTest("MonoDelegate - Get delegate instance from field", () => {
       // Look for classes that might contain delegates (like Unity's event system)
-      const appDomainClass = Mono.domain.class("System.AppDomain");
+      const appDomainClass = Mono.domain.tryClass("System.AppDomain");
       if (!appDomainClass) {
         console.log("[SKIP] AppDomain class not found");
         return;
@@ -198,10 +196,10 @@ export function createMonoDelegateTests(): TestResult[] {
 
       // Check for event-related fields
       const fields = appDomainClass.fields;
-      const delegateFields = fields.filter(f => {
-        const fieldType = f.getType();
-        const fieldClass = fieldType.getClass();
-        return fieldClass && fieldClass.isDelegate();
+      const delegateFields = fields.filter((f: import("../src/model/field").MonoField) => {
+        const fieldType = f.type;
+        const fieldClass = fieldType.class;
+        return fieldClass && fieldClass.isDelegate;
       });
 
       console.log(`[INFO] Found ${delegateFields.length} delegate type fields in AppDomain`);
@@ -209,7 +207,7 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Delegate type detection", () => {
+    await createMonoDependentTest("MonoDelegate - Delegate type detection", () => {
       // Test if various types are correctly identified as delegates
       const testCases = [
         { name: "System.Action", isDelegate: true },
@@ -219,10 +217,10 @@ export function createMonoDelegateTests(): TestResult[] {
       ];
 
       for (const { name, isDelegate: expected } of testCases) {
-        const klass = Mono.domain.class(name);
+        const klass = Mono.domain.tryClass(name);
         if (klass) {
-          const actual = klass.isDelegate();
-          assert(actual === expected, `${name}.isDelegate() should be ${expected}, got ${actual}`);
+          const actual = klass.isDelegate;
+          assert(actual === expected, `${name}.isDelegate should be ${expected}, got ${actual}`);
         }
       }
     }),
@@ -232,15 +230,15 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 5: Delegate Thunk Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - getDelegateThunk API exists", () => {
+    await createMonoDependentTest("MonoDelegate - getDelegateThunk API exists", () => {
       // Verify API has getDelegateThunk method
       assert(typeof Mono.api.getDelegateThunk === "function", "Mono.api.getDelegateThunk should be a function");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - getDelegateThunk return structure", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - getDelegateThunk return structure", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "System.Action class should exist");
 
       try {
@@ -268,20 +266,20 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 6: Comparison Delegate Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - Comparison<T> delegate exists", () => {
-      const comparisonT = Mono.domain.class("System.Comparison`1");
+    await createMonoDependentTest("MonoDelegate - Comparison<T> delegate exists", () => {
+      const comparisonT = Mono.domain.tryClass("System.Comparison`1");
       if (!comparisonT) {
         console.log("[SKIP] Comparison`1 generic delegate not found");
         return;
       }
-      assert(comparisonT.isDelegate(), "Comparison<T> should be a delegate type");
+      assert(comparisonT.isDelegate, "Comparison<T> should be a delegate type");
 
       // Comparison<T> Invoke takes two parameters and returns int
-      const invokeMethod = comparisonT.tryGetMethod("Invoke", 2);
+      const invokeMethod = comparisonT.tryMethod("Invoke", 2);
       if (invokeMethod) {
-        const returnType = invokeMethod.getReturnType();
+        const returnType = invokeMethod.returnType;
         if (returnType) {
-          console.log(`[INFO] Comparison<T>.Invoke return type: ${returnType.getFullName()}`);
+          console.log(`[INFO] Comparison<T>.Invoke return type: ${returnType.fullName}`);
         }
       }
     }),
@@ -291,13 +289,13 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 7: Converter Delegate Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - Converter<TInput, TOutput> delegate exists", () => {
-      const converterT = Mono.domain.class("System.Converter`2");
+    await createMonoDependentTest("MonoDelegate - Converter<TInput, TOutput> delegate exists", () => {
+      const converterT = Mono.domain.tryClass("System.Converter`2");
       if (!converterT) {
         console.log("[SKIP] Converter`2 generic delegate not found");
         return;
       }
-      assert(converterT.isDelegate(), "Converter<TInput, TOutput> should be a delegate type");
+      assert(converterT.isDelegate, "Converter<TInput, TOutput> should be a delegate type");
     }),
   );
 
@@ -305,16 +303,16 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 8: AsyncCallback Delegate Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - AsyncCallback delegate exists", () => {
-      const asyncCallback = Mono.domain.class("System.AsyncCallback");
+    await createMonoDependentTest("MonoDelegate - AsyncCallback delegate exists", () => {
+      const asyncCallback = Mono.domain.tryClass("System.AsyncCallback");
       if (!asyncCallback) {
         console.log("[SKIP] AsyncCallback delegate not found");
         return;
       }
-      assert(asyncCallback.isDelegate(), "AsyncCallback should be a delegate type");
+      assert(asyncCallback.isDelegate, "AsyncCallback should be a delegate type");
 
       // AsyncCallback.Invoke takes IAsyncResult parameter
-      const invokeMethod = asyncCallback.tryGetMethod("Invoke", 1);
+      const invokeMethod = asyncCallback.tryMethod("Invoke", 1);
       assertNotNull(invokeMethod, "AsyncCallback should have Invoke method with 1 parameter");
     }),
   );
@@ -323,24 +321,24 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 9: Delegate Method Signature Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - Action<T> has correct Invoke signature", () => {
-      const actionT = Mono.domain.class("System.Action`1");
+    await createMonoDependentTest("MonoDelegate - Action<T> has correct Invoke signature", () => {
+      const actionT = Mono.domain.tryClass("System.Action`1");
       if (!actionT) {
         console.log("[SKIP] Action`1 not found");
         return;
       }
 
       // Action<T>.Invoke takes 1 parameter (T obj)
-      const invokeMethod = actionT.tryGetMethod("Invoke", 1);
+      const invokeMethod = actionT.tryMethod("Invoke", 1);
       assertNotNull(invokeMethod, "Action<T> should have Invoke method with 1 parameter");
 
       if (invokeMethod) {
-        const paramCount = invokeMethod.getParameterCount();
+        const paramCount = invokeMethod.parameterCount;
         assert(paramCount === 1, `Action<T>.Invoke should have 1 parameter, got ${paramCount}`);
 
-        const returnType = invokeMethod.getReturnType();
+        const returnType = invokeMethod.returnType;
         if (returnType) {
-          const returnTypeName = returnType.getFullName();
+          const returnTypeName = returnType.fullName;
           assert(
             returnTypeName === "System.Void" || returnTypeName === "void",
             `Action<T>.Invoke should return void, got ${returnTypeName}`,
@@ -351,38 +349,38 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Func<TResult> has correct Invoke signature", () => {
-      const funcT = Mono.domain.class("System.Func`1");
+    await createMonoDependentTest("MonoDelegate - Func<TResult> has correct Invoke signature", () => {
+      const funcT = Mono.domain.tryClass("System.Func`1");
       if (!funcT) {
         console.log("[SKIP] Func`1 not found");
         return;
       }
 
       // Func<TResult>.Invoke takes 0 parameters and returns TResult
-      const invokeMethod = funcT.tryGetMethod("Invoke", 0);
+      const invokeMethod = funcT.tryMethod("Invoke", 0);
       assertNotNull(invokeMethod, "Func<TResult> should have Invoke method with 0 parameters");
 
       if (invokeMethod) {
-        const paramCount = invokeMethod.getParameterCount();
+        const paramCount = invokeMethod.parameterCount;
         assert(paramCount === 0, `Func<TResult>.Invoke should have 0 parameters, got ${paramCount}`);
 
         // Return type should be generic parameter T
-        const returnType = invokeMethod.getReturnType();
+        const returnType = invokeMethod.returnType;
         assertNotNull(returnType, "Func<TResult>.Invoke should have a return type");
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Func<T, TResult> has correct Invoke signature", () => {
-      const funcTT = Mono.domain.class("System.Func`2");
+    await createMonoDependentTest("MonoDelegate - Func<T, TResult> has correct Invoke signature", () => {
+      const funcTT = Mono.domain.tryClass("System.Func`2");
       if (!funcTT) {
         console.log("[SKIP] Func`2 not found");
         return;
       }
 
       // Func<T, TResult>.Invoke takes 1 parameter and returns TResult
-      const invokeMethod = funcTT.tryGetMethod("Invoke", 1);
+      const invokeMethod = funcTT.tryMethod("Invoke", 1);
       assertNotNull(invokeMethod, "Func<T, TResult> should have Invoke method with 1 parameter");
     }),
   );
@@ -391,29 +389,29 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 10: MulticastDelegate Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - MulticastDelegate class exists", () => {
-      const multicastDelegate = Mono.domain.class("System.MulticastDelegate");
+    await createMonoDependentTest("MonoDelegate - MulticastDelegate class exists", () => {
+      const multicastDelegate = Mono.domain.tryClass("System.MulticastDelegate");
       assertNotNull(multicastDelegate, "System.MulticastDelegate class should exist");
 
       // MulticastDelegate itself is not a delegate instance
       // It's the base class for all delegate types
-      const parent = multicastDelegate.getParent();
+      const parent = multicastDelegate.parent;
       assertNotNull(parent, "MulticastDelegate should have a parent class");
-      assert(parent.getName() === "Delegate", "MulticastDelegate parent should be Delegate");
+      assert(parent.name === "Delegate", "MulticastDelegate parent should be Delegate");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Delegate class base properties", () => {
-      const delegateClass = Mono.domain.class("System.Delegate");
+    await createMonoDependentTest("MonoDelegate - Delegate class base properties", () => {
+      const delegateClass = Mono.domain.tryClass("System.Delegate");
       assertNotNull(delegateClass, "System.Delegate class should exist");
 
       // Check Delegate class fields
-      const fields = delegateClass.getFields();
+      const fields = delegateClass.fields;
       console.log(`[INFO] System.Delegate has ${fields.length} fields`);
 
       // Common delegate internal fields: _target, _methodPtr, etc.
-      const fieldNames = fields.map(f => f.getName());
+      const fieldNames = fields.map(f => f.name);
       console.log(`[INFO] Delegate fields: ${fieldNames.slice(0, 5).join(", ")}${fieldNames.length > 5 ? "..." : ""}`);
     }),
   );
@@ -422,35 +420,35 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 11: Unity-Specific Delegate Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - UnityAction delegate (if available)", () => {
-      const unityAction = Mono.domain.class("UnityEngine.Events.UnityAction");
+    await createMonoDependentTest("MonoDelegate - UnityAction delegate (if available)", () => {
+      const unityAction = Mono.domain.tryClass("UnityEngine.Events.UnityAction");
       if (!unityAction) {
         console.log("[SKIP] UnityAction not found (may not be a Unity project)");
         return;
       }
 
-      assert(unityAction.isDelegate(), "UnityAction should be a delegate type");
+      assert(unityAction.isDelegate, "UnityAction should be a delegate type");
 
-      const invokeMethod = unityAction.tryGetMethod("Invoke", 0);
+      const invokeMethod = unityAction.tryMethod("Invoke", 0);
       assertNotNull(invokeMethod, "UnityAction should have Invoke method");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Find all delegate types in UnityEngine", () => {
-      const unityClasses = Mono.find.classes(Mono.api, "UnityEngine.*", true);
+    await createMonoDependentTest("MonoDelegate - Find all delegate types in UnityEngine", () => {
+      const unityClasses = Mono.find.classes("UnityEngine.*", { searchNamespace: true });
 
       if (unityClasses.length === 0) {
         console.log("[SKIP] No UnityEngine classes found");
         return;
       }
 
-      const delegateTypes = unityClasses.filter(c => c.isDelegate());
+      const delegateTypes = unityClasses.filter(c => c.isDelegate);
       console.log(`[INFO] Found ${delegateTypes.length} delegate types in UnityEngine namespace`);
 
       // List first few
       for (const delegate of delegateTypes.slice(0, 5)) {
-        console.log(`[INFO]   - ${delegate.getFullName()}`);
+        console.log(`[INFO]   - ${delegate.fullName}`);
       }
     }),
   );
@@ -459,36 +457,36 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 12: Event Handler Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - EventHandler signature", () => {
-      const eventHandler = Mono.domain.class("System.EventHandler");
+    await createMonoDependentTest("MonoDelegate - EventHandler signature", () => {
+      const eventHandler = Mono.domain.tryClass("System.EventHandler");
       if (!eventHandler) {
         console.log("[SKIP] EventHandler not found");
         return;
       }
 
       // EventHandler.Invoke takes (object sender, EventArgs e)
-      const invokeMethod = eventHandler.tryGetMethod("Invoke", 2);
+      const invokeMethod = eventHandler.tryMethod("Invoke", 2);
       assertNotNull(invokeMethod, "EventHandler should have Invoke with 2 parameters");
 
       if (invokeMethod) {
-        const paramCount = invokeMethod.getParameterCount();
+        const paramCount = invokeMethod.parameterCount;
         assert(paramCount === 2, `EventHandler.Invoke should have 2 parameters, got ${paramCount}`);
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - EventHandler<TEventArgs> exists", () => {
-      const eventHandlerT = Mono.domain.class("System.EventHandler`1");
+    await createMonoDependentTest("MonoDelegate - EventHandler<TEventArgs> exists", () => {
+      const eventHandlerT = Mono.domain.tryClass("System.EventHandler`1");
       if (!eventHandlerT) {
         console.log("[SKIP] EventHandler`1 not found");
         return;
       }
 
-      assert(eventHandlerT.isDelegate(), "EventHandler<TEventArgs> should be a delegate type");
+      assert(eventHandlerT.isDelegate, "EventHandler<TEventArgs> should be a delegate type");
 
       // Generic version also takes 2 parameters
-      const invokeMethod = eventHandlerT.tryGetMethod("Invoke", 2);
+      const invokeMethod = eventHandlerT.tryMethod("Invoke", 2);
       assertNotNull(invokeMethod, "EventHandler<T> should have Invoke with 2 parameters");
     }),
   );
@@ -497,32 +495,32 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 13: Edge Cases and Error Handling
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - Non-delegate class isDelegate returns false", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("MonoDelegate - Non-delegate class isDelegate returns false", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      assert(!stringClass.isDelegate(), "String should not be a delegate type");
+      assert(!stringClass.isDelegate, "String should not be a delegate type");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Value type isDelegate returns false", () => {
-      const intClass = Mono.domain.class("System.Int32");
+    await createMonoDependentTest("MonoDelegate - Value type isDelegate returns false", () => {
+      const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
-      assert(!intClass.isDelegate(), "Int32 should not be a delegate type");
+      assert(!intClass.isDelegate, "Int32 should not be a delegate type");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Interface isDelegate returns false", () => {
-      const iComparable = Mono.domain.class("System.IComparable");
+    await createMonoDependentTest("MonoDelegate - Interface isDelegate returns false", () => {
+      const iComparable = Mono.domain.tryClass("System.IComparable");
       if (!iComparable) {
         console.log("[SKIP] IComparable not found");
         return;
       }
 
-      assert(!iComparable.isDelegate(), "IComparable should not be a delegate type");
+      assert(!iComparable.isDelegate, "IComparable should not be a delegate type");
     }),
   );
 
@@ -530,32 +528,32 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 14: Performance Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - isDelegate() performance", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - isDelegate performance", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
       const iterations = 1000;
       const startTime = Date.now();
 
       for (let i = 0; i < iterations; i++) {
-        actionClass.isDelegate();
+        actionClass.isDelegate;
       }
 
       const elapsed = Date.now() - startTime;
-      console.log(`[INFO] ${iterations} isDelegate() calls took ${elapsed}ms`);
+      console.log(`[INFO] ${iterations} isDelegate calls took ${elapsed}ms`);
 
       // Should be fast (< 1 second for 1000 calls)
-      assert(elapsed < 1000, `isDelegate() performance too slow: ${elapsed}ms`);
+      assert(elapsed < 1000, `isDelegate performance too slow: ${elapsed}ms`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Delegate type enumeration performance", () => {
+    await createMonoDependentTest("MonoDelegate - Delegate type enumeration performance", () => {
       const startTime = Date.now();
 
       // Find all delegate types in mscorlib
-      const allClasses = Mono.find.classes(Mono.api, "*", { limit: 500 });
-      const delegateTypes = allClasses.filter(c => c.isDelegate());
+      const allClasses = Mono.find.classes("*", { limit: 500 });
+      const delegateTypes = allClasses.filter(c => c.isDelegate);
 
       const elapsed = Date.now() - startTime;
       console.log(`[INFO] Found ${delegateTypes.length} delegate types in ${elapsed}ms`);
@@ -566,32 +564,32 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 15: Delegate Methods Enumeration
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - Enumerate all methods of Action", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - Enumerate all methods of Action", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
-      const methods = actionClass.getMethods();
+      const methods = actionClass.methods;
       console.log(`[INFO] System.Action has ${methods.length} methods:`);
 
       for (const method of methods) {
-        const paramCount = method.getParameterCount();
-        console.log(`[INFO]   - ${method.getName()}(${paramCount} params)`);
+        const paramCount = method.parameterCount;
+        console.log(`[INFO]   - ${method.name}(${paramCount} params)`);
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Delegate method attributes", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - Delegate method attributes", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
-      const invokeMethod = actionClass.tryGetMethod("Invoke", 0);
+      const invokeMethod = actionClass.tryMethod("Invoke", 0);
       assertNotNull(invokeMethod, "Invoke method should exist");
 
       // Check method flags
-      const isVirtual = invokeMethod!.isVirtual();
-      const isStatic = invokeMethod!.isStatic();
-      const isAbstract = invokeMethod!.isAbstract();
+      const isVirtual = invokeMethod!.isVirtual;
+      const isStatic = invokeMethod!.isStatic;
+      const isAbstract = invokeMethod!.isAbstract;
 
       console.log(`[INFO] Invoke method: virtual=${isVirtual}, static=${isStatic}, abstract=${isAbstract}`);
 
@@ -605,61 +603,61 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 16: ABI Validation Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - validateAbi returns expected signature for Action", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - validateAbi returns expected signature for Action", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
       // Create a simple delegate (may fail if no valid method, but we can still test structure)
-      const invokeMethod = actionClass!.tryGetMethod("Invoke", 0);
+      const invokeMethod = actionClass!.tryMethod("Invoke", 0);
       assertNotNull(invokeMethod, "Invoke method should exist");
 
       // Action has void return and no parameters
-      const returnType = invokeMethod!.getReturnType();
-      const params = invokeMethod!.getParameterTypes();
+      const returnType = invokeMethod!.returnType;
+      const params = invokeMethod!.parameterTypes;
 
-      console.log(`[INFO] Action.Invoke: return=${returnType.getName()}, params=${params.length}`);
-      assert(returnType.getName().includes("Void") || returnType.isVoid(), "Action should return void");
+      console.log(`[INFO] Action.Invoke: return=${returnType.name}, params=${params.length}`);
+      assert(returnType.name.includes("Void") || returnType.isVoid, "Action should return void");
       assert(params.length === 0, "Action should have no parameters");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - getExpectedNativeSignature returns correct types", () => {
+    await createMonoDependentTest("MonoDelegate - getExpectedNativeSignature returns correct types", () => {
       // This test validates the signature extraction logic
-      const funcClass = Mono.domain.class("System.Func`1");
+      const funcClass = Mono.domain.tryClass("System.Func`1");
       if (!funcClass) {
         console.log("[SKIP] Func`1 not available");
         return;
       }
 
-      const invokeMethod = funcClass.tryGetMethod("Invoke", 0);
+      const invokeMethod = funcClass.tryMethod("Invoke", 0);
       if (!invokeMethod) {
         console.log("[SKIP] Invoke method not found");
         return;
       }
 
-      const returnType = invokeMethod.getReturnType();
-      const params = invokeMethod.getParameterTypes();
+      const returnType = invokeMethod.returnType;
+      const params = invokeMethod.parameterTypes;
 
-      console.log(`[INFO] Func<T>.Invoke: return=${returnType.getName()}, params=${params.length}`);
+      console.log(`[INFO] Func<T>.Invoke: return=${returnType.name}, params=${params.length}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - ABI validation detects wrong argument count", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - ABI validation detects wrong argument count", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
       // We cannot easily create a real delegate in unit tests,
       // but we can verify that the validation interfaces exist
       // and work correctly when delegates are created
 
-      const invokeMethod = actionClass!.tryGetMethod("Invoke", 0);
+      const invokeMethod = actionClass!.tryMethod("Invoke", 0);
       assertNotNull(invokeMethod, "Invoke method should exist");
 
       // Action.Invoke() takes no params, so expected native args should be
       // just ["pointer"] for the delegate instance
-      const params = invokeMethod!.getParameterTypes();
+      const params = invokeMethod!.parameterTypes;
       const expectedArgCount = params.length + 1; // +1 for delegate instance
 
       assert(expectedArgCount === 1, "Action should expect 1 native arg (delegate instance only)");
@@ -667,35 +665,35 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - Predicate<T> has correct parameter structure", () => {
-      const predicateClass = Mono.domain.class("System.Predicate`1");
+    await createMonoDependentTest("MonoDelegate - Predicate<T> has correct parameter structure", () => {
+      const predicateClass = Mono.domain.tryClass("System.Predicate`1");
       if (!predicateClass) {
         console.log("[SKIP] Predicate`1 not available");
         return;
       }
 
-      const invokeMethod = predicateClass.tryGetMethod("Invoke", 1);
+      const invokeMethod = predicateClass.tryMethod("Invoke", 1);
       if (!invokeMethod) {
         console.log("[SKIP] Invoke method not found");
         return;
       }
 
-      const returnType = invokeMethod.getReturnType();
-      const params = invokeMethod.getParameterTypes();
+      const returnType = invokeMethod.returnType;
+      const params = invokeMethod.parameterTypes;
 
-      console.log(`[INFO] Predicate<T>.Invoke: return=${returnType.getName()}, params=${params.length}`);
+      console.log(`[INFO] Predicate<T>.Invoke: return=${returnType.name}, params=${params.length}`);
 
-      assert(returnType.getName().includes("Boolean"), "Predicate should return Boolean");
+      assert(returnType.name.includes("Boolean"), "Predicate should return Boolean");
       assert(params.length === 1, "Predicate should have 1 parameter");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - CompileNativeOptions interface exists", () => {
+    await createMonoDependentTest("MonoDelegate - CompileNativeOptions interface exists", () => {
       // This is a type-level test to ensure the interface is exported
       // In runtime, we verify the options work
 
-      const actionClass = Mono.domain.class("System.Action");
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
       // The compileNative method should accept options object
@@ -705,7 +703,7 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - AbiValidationResult structure is correct", () => {
+    await createMonoDependentTest("MonoDelegate - AbiValidationResult structure is correct", () => {
       // Verify the ABI validation result structure
       // This ensures the validation return type is properly structured
 
@@ -718,25 +716,25 @@ export function createMonoDelegateTests(): TestResult[] {
   // Section 17: Multicast Delegate Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("MonoDelegate - getInvocationList exists", () => {
+    await createMonoDependentTest("MonoDelegate - getInvocationList exists", () => {
       // GetInvocationList is defined on System.Delegate base class
-      const delegateClass = Mono.domain.class("System.Delegate");
+      const delegateClass = Mono.domain.tryClass("System.Delegate");
       assertNotNull(delegateClass, "Delegate class should exist");
 
       // Check that the method exists on the base Delegate class
-      const getInvocationListMethod = delegateClass!.tryGetMethod("GetInvocationList", 0);
+      const getInvocationListMethod = delegateClass!.tryMethod("GetInvocationList", 0);
       assertNotNull(getInvocationListMethod, "GetInvocationList method should exist on Delegate");
-      console.log(`[INFO] GetInvocationList method found: ${getInvocationListMethod!.getName()}`);
+      console.log(`[INFO] GetInvocationList method found: ${getInvocationListMethod!.name}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - isMulticast method exists", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - isMulticast method exists", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
       // MulticastDelegate is the parent class of Action
-      const multicastDelegate = Mono.domain.class("System.MulticastDelegate");
+      const multicastDelegate = Mono.domain.tryClass("System.MulticastDelegate");
       assertNotNull(multicastDelegate, "MulticastDelegate class should exist");
 
       console.log(`[INFO] Action inherits from MulticastDelegate: ${actionClass!.isSubclassOf(multicastDelegate!)}`);
@@ -744,18 +742,18 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - getInvocationCount returns positive number", () => {
+    await createMonoDependentTest("MonoDelegate - getInvocationCount returns positive number", () => {
       // For this test we just verify the API exists and returns sensible values
       // GetInvocationList is defined on System.Delegate base class
-      const delegateClass = Mono.domain.class("System.Delegate");
+      const delegateClass = Mono.domain.tryClass("System.Delegate");
       assertNotNull(delegateClass, "Delegate class should exist");
 
-      const getInvocationListMethod = delegateClass!.tryGetMethod("GetInvocationList", 0);
+      const getInvocationListMethod = delegateClass!.tryMethod("GetInvocationList", 0);
       assertNotNull(getInvocationListMethod, "GetInvocationList should exist");
 
       // Check the return type is Delegate[]
-      const returnType = getInvocationListMethod!.getReturnType();
-      const typeName = returnType.getName();
+      const returnType = getInvocationListMethod!.returnType;
+      const typeName = returnType.name;
       assert(
         typeName.includes("Delegate") || typeName.includes("[]"),
         `GetInvocationList should return Delegate[], got ${typeName}`,
@@ -769,21 +767,21 @@ export function createMonoDelegateTests(): TestResult[] {
   // =====================================================
 
   results.push(
-    createMonoDependentTest("MonoDelegate - accessor properties exist", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - accessor properties exist", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
       // Verify the accessor properties are available on the class structure
       // by checking the Invoke method can be obtained
-      const invokeMethod = actionClass!.tryGetMethod("Invoke", 0);
+      const invokeMethod = actionClass!.tryMethod("Invoke", 0);
       assertNotNull(invokeMethod, "Invoke method should be accessible");
 
       // Check return type
-      const returnType = invokeMethod!.getReturnType();
+      const returnType = invokeMethod!.returnType;
       assertNotNull(returnType, "Return type should be accessible");
 
       // Check parameter types
-      const parameterTypes = invokeMethod!.getParameterTypes();
+      const parameterTypes = invokeMethod!.parameterTypes;
       assert(Array.isArray(parameterTypes), "Parameter types should be an array");
 
       console.log("[INFO] Delegate accessor properties verified");
@@ -791,18 +789,18 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - getReturnType returns correct type", () => {
+    await createMonoDependentTest("MonoDelegate - getReturnType returns correct type", () => {
       // Action returns void
-      const actionClass = Mono.domain.class("System.Action");
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
-      const invokeMethod = actionClass!.tryGetMethod("Invoke", 0);
+      const invokeMethod = actionClass!.tryMethod("Invoke", 0);
       assertNotNull(invokeMethod, "Invoke method should exist");
 
-      const returnType = invokeMethod!.getReturnType();
+      const returnType = invokeMethod!.returnType;
       assertNotNull(returnType, "Return type should not be null");
 
-      const typeName = returnType.getName();
+      const typeName = returnType.name;
       assert(typeName === "Void" || typeName === "System.Void", `Action.Invoke should return Void, got ${typeName}`);
 
       console.log(`[INFO] Action return type: ${typeName}`);
@@ -810,18 +808,18 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - getParameterTypes returns correct types", () => {
+    await createMonoDependentTest("MonoDelegate - getParameterTypes returns correct types", () => {
       // Action<T> has 1 parameter
-      const actionT = Mono.domain.class("System.Action`1");
+      const actionT = Mono.domain.tryClass("System.Action`1");
       if (!actionT) {
         console.log("[SKIP] Action`1 not found");
         return;
       }
 
-      const invokeMethod = actionT.tryGetMethod("Invoke", 1);
+      const invokeMethod = actionT.tryMethod("Invoke", 1);
       assertNotNull(invokeMethod, "Action<T>.Invoke should exist");
 
-      const parameterTypes = invokeMethod!.getParameterTypes();
+      const parameterTypes = invokeMethod!.parameterTypes;
       assert(parameterTypes.length === 1, `Action<T>.Invoke should have 1 parameter, got ${parameterTypes.length}`);
 
       console.log(`[INFO] Action<T> parameter types count: ${parameterTypes.length}`);
@@ -829,7 +827,7 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - getParameterCount returns correct count", () => {
+    await createMonoDependentTest("MonoDelegate - getParameterCount returns correct count", () => {
       // Test with various delegate types
       const testCases = [
         { name: "System.Action", expectedParams: 0 },
@@ -839,15 +837,15 @@ export function createMonoDelegateTests(): TestResult[] {
       ];
 
       for (const { name, expectedParams } of testCases) {
-        const klass = Mono.domain.class(name);
+        const klass = Mono.domain.tryClass(name);
         if (!klass) {
           console.log(`[SKIP] ${name} not found`);
           continue;
         }
 
-        const invokeMethod = klass.tryGetMethod("Invoke", expectedParams);
+        const invokeMethod = klass.tryMethod("Invoke", expectedParams);
         if (invokeMethod) {
-          const paramCount = invokeMethod.getParameterCount();
+          const paramCount = invokeMethod.parameterCount;
           assert(
             paramCount === expectedParams,
             `${name}.Invoke should have ${expectedParams} params, got ${paramCount}`,
@@ -859,18 +857,18 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - getExpectedNativeSignature returns correct structure", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - getExpectedNativeSignature returns correct structure", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
       // Use the type definition to verify structure
       // Since we can't create actual delegate instance easily,
       // verify the Invoke method signature
-      const invokeMethod = actionClass!.tryGetMethod("Invoke", 0);
+      const invokeMethod = actionClass!.tryMethod("Invoke", 0);
       assertNotNull(invokeMethod, "Invoke method should exist");
 
-      const returnType = invokeMethod!.getReturnType();
-      const paramTypes = invokeMethod!.getParameterTypes();
+      const returnType = invokeMethod!.returnType;
+      const paramTypes = invokeMethod!.parameterTypes;
 
       // Expected signature for Action: void(pointer)
       // pointer for delegate instance + 0 managed params
@@ -887,43 +885,40 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - getSummary interface validation", () => {
+    await createMonoDependentTest("MonoDelegate - getSummary interface validation", () => {
       // Verify the MonoDelegateSummary interface properties exist
       // by checking delegate class metadata
-      const actionClass = Mono.domain.class("System.Action");
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
       // Verify we can get all required summary information
-      const typeName = actionClass!.getName();
-      const fullTypeName = actionClass!.getFullName();
-      const invokeMethod = actionClass!.tryGetMethod("Invoke", 0);
+      const typeName = actionClass!.name;
+      const fullTypeName = actionClass!.fullName;
+      const invokeMethod = actionClass!.tryMethod("Invoke", 0);
 
       assertNotNull(typeName, "Type name should exist");
       assertNotNull(fullTypeName, "Full type name should exist");
       assertNotNull(invokeMethod, "Invoke method should exist");
 
-      const returnTypeName = invokeMethod!.getReturnType().getName();
-      const parameterTypes = invokeMethod!.getParameterTypes();
+      const returnTypeName = invokeMethod!.returnType.name;
+      const parameterTypes = invokeMethod!.parameterTypes;
 
       console.log(`[INFO] Summary data: type=${typeName}, return=${returnTypeName}, params=${parameterTypes.length}`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - describe format validation", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - describe format validation", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
-      const invokeMethod = actionClass!.tryGetMethod("Invoke", 0);
+      const invokeMethod = actionClass!.tryMethod("Invoke", 0);
       assertNotNull(invokeMethod, "Invoke method should exist");
 
       // Build expected describe format: "TypeName(params) -> ReturnType"
-      const typeName = actionClass!.getName();
-      const returnType = invokeMethod!.getReturnType().getName();
-      const params = invokeMethod!
-        .getParameterTypes()
-        .map(t => t.getName())
-        .join(", ");
+      const typeName = actionClass!.name;
+      const returnType = invokeMethod!.returnType.name;
+      const params = invokeMethod!.parameterTypes.map(t => t.name).join(", ");
 
       const expectedFormat = `${typeName}(${params}) -> ${returnType}`;
 
@@ -936,25 +931,24 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - getTargetInfo structure validation", () => {
+    await createMonoDependentTest("MonoDelegate - getTargetInfo structure validation", () => {
       // DelegateTargetInfo should have: hasTarget, target, method
-      const delegateClass = Mono.domain.class("System.Delegate");
+      const delegateClass = Mono.domain.tryClass("System.Delegate");
       assertNotNull(delegateClass, "Delegate class should exist");
 
       // Check for internal target field (_target or m_target)
-      const targetField = delegateClass!.tryGetField("_target") || delegateClass!.tryGetField("m_target");
-
+      const targetField = delegateClass!.tryField("_target") || delegateClass!.tryField("m_target");
       if (targetField) {
-        console.log(`[INFO] Found target field: ${targetField.getName()}`);
+        console.log(`[INFO] Found target field: ${targetField.name}`);
       } else {
         console.log("[INFO] Target field not directly accessible (implementation detail)");
       }
 
       // Verify Invoke method exists for method part of TargetInfo
-      const invokeMethod = delegateClass!.tryGetMethod("Invoke", -1); // -1 for any param count
+      const invokeMethod = delegateClass!.tryMethod("Invoke", -1); // -1 for any param count
       if (!invokeMethod) {
         // Try with specific counts
-        const anyInvoke = delegateClass!.methods.find(m => m.getName() === "Invoke");
+        const anyInvoke = delegateClass!.methods.find(m => m.name === "Invoke");
         if (anyInvoke) {
           console.log(`[INFO] Found Invoke method on Delegate`);
         }
@@ -963,36 +957,36 @@ export function createMonoDelegateTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - toString format validation", () => {
-      const actionClass = Mono.domain.class("System.Action");
+    await createMonoDependentTest("MonoDelegate - toString format validation", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
       // toString should return same format as describe
       // Format: "TypeName(params) -> ReturnType"
-      const typeName = actionClass!.getName();
-      const invokeMethod = actionClass!.tryGetMethod("Invoke", 0);
+      const typeName = actionClass!.name;
+      const invokeMethod = actionClass!.tryMethod("Invoke", 0);
 
       if (invokeMethod) {
-        const returnType = invokeMethod.getReturnType().getName();
+        const returnType = invokeMethod.returnType.name;
         console.log(`[INFO] Expected toString: ${typeName}() -> ${returnType}`);
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoDelegate - hasTarget method validation", () => {
+    await createMonoDependentTest("MonoDelegate - hasTarget method validation", () => {
       // Static method delegates should not have target
       // Instance method delegates should have target
 
-      const delegateClass = Mono.domain.class("System.Delegate");
+      const delegateClass = Mono.domain.tryClass("System.Delegate");
       assertNotNull(delegateClass, "Delegate class should exist");
 
       // Check Target property exists
-      const targetProperty = delegateClass!.tryGetProperty("Target");
+      const targetProperty = delegateClass!.tryProperty("Target");
       if (targetProperty) {
-        console.log(`[INFO] Found Target property: ${targetProperty.getName()}`);
-        const propType = targetProperty.getType();
-        console.log(`[INFO] Target property type: ${propType.getName()}`);
+        console.log(`[INFO] Found Target property: ${targetProperty.name}`);
+        const propType = targetProperty.type;
+        console.log(`[INFO] Target property type: ${propType.name}`);
       } else {
         console.log("[INFO] Target property not found (may be named differently)");
       }

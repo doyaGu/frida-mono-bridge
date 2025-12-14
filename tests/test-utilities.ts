@@ -4,29 +4,27 @@
  * This file consolidates functionality from multiple specialized helper files for consistency
  */
 
-import {
-  TestResult,
-  TestCategory,
-  createTest,
-  createMonoTest,
-  createMonoDependentTest,
-  createErrorHandlingTest,
-  assert,
-  assertNotNull,
-  assertThrows,
-  fail,
-} from "./test-framework";
 import Mono from "../src";
 import { readUtf16String } from "../src/utils/string";
 import {
+  DEFAULT_PERFORMANCE_OPTIONS,
   PerformanceMetrics,
   PerformanceTestOptions,
-  DEFAULT_PERFORMANCE_OPTIONS,
   UNITY_TEST_DATA,
-  setupCommonTestEnvironment,
-  setupUnityTestEnvironment,
   measureMemory,
 } from "./test-common";
+import {
+  TestCategory,
+  TestResult,
+  assert,
+  assertNotNull,
+  assertThrows,
+  createErrorHandlingTest,
+  createMonoDependentTest,
+  createMonoTestAsync,
+  createTest,
+  fail,
+} from "./test-framework";
 
 // Re-export UNITY_TEST_DATA for use in other files
 export { UNITY_TEST_DATA };
@@ -36,18 +34,16 @@ export { UNITY_TEST_DATA };
 /**
  * Creates a test that verifies a Unity assembly is loaded
  */
-export function createUnityAssemblyTest(assemblyName: string, testFn?: (assembly: any) => void): TestResult {
-  return createMonoTest(`Unity assembly ${assemblyName} should be loaded`, () => {
-    const setup = setupUnityTestEnvironment();
-    assertNotNull(setup.domain, "Mono domain should be available");
+export function createUnityAssemblyTest(assemblyName: string, testFn?: (assembly: any) => void): Promise<TestResult> {
+  return createMonoDependentTest(`Unity assembly ${assemblyName} should be loaded`, () => {
+    const domain = Mono.domain;
+    assertNotNull(domain, "Mono domain should be available");
 
     try {
-      const assembly = setup.domain.getAssembly(assemblyName);
+      const assembly = domain.getAssembly(assemblyName);
       assertNotNull(assembly, `Unity assembly ${assemblyName} should be loaded`);
 
-      if (testFn) {
-        testFn(assembly);
-      }
+      testFn?.(assembly);
     } catch (error) {
       fail(`Could not load Unity assembly ${assemblyName}: ${error}`);
     }
@@ -62,18 +58,18 @@ export function createUnityTypeTest(
   expectedMethods?: string[],
   expectedProperties?: string[],
   testFn?: (type: any) => void,
-): TestResult {
-  return createMonoTest(`Unity type ${typeName} should be accessible`, () => {
-    const setup = setupUnityTestEnvironment();
-    assertNotNull(setup.domain, "Mono domain should be available");
+): Promise<TestResult> {
+  return createMonoDependentTest(`Unity type ${typeName} should be accessible`, () => {
+    const domain = Mono.domain;
+    assertNotNull(domain, "Mono domain should be available");
 
     try {
-      const type = setup.domain.class(typeName);
+      const type = domain.tryClass(typeName);
       assertNotNull(type, `Unity type ${typeName} should be accessible`);
 
       if (expectedMethods) {
         for (const method of expectedMethods) {
-          const methodObj = type.method(method);
+          const methodObj = type.tryMethod(method);
           assertNotNull(methodObj, `Unity type ${typeName} should have method ${method}`);
         }
       }
@@ -85,9 +81,7 @@ export function createUnityTypeTest(
         }
       }
 
-      if (testFn) {
-        testFn(type);
-      }
+      testFn?.(type);
     } catch (error) {
       fail(`Could not access Unity type ${typeName}: ${error}`);
     }
@@ -101,10 +95,11 @@ export function createGameObjectTest(
   testName: string,
   testFn: (gameObjectClass: any, gameObject?: any) => void,
   createInstance = false,
-): TestResult {
-  return createMonoTest(testName, () => {
-    const setup = setupUnityTestEnvironment();
-    const gameObjectClass = setup.domain?.class(UNITY_TEST_DATA.TYPES.GAMEOBJECT);
+): Promise<TestResult> {
+  return createMonoDependentTest(testName, () => {
+    const domain = Mono.domain;
+    assertNotNull(domain, "Mono domain should be available");
+    const gameObjectClass = domain.tryClass(UNITY_TEST_DATA.TYPES.GAMEOBJECT);
     assertNotNull(gameObjectClass, "GameObject class should be available");
 
     let gameObject;
@@ -128,11 +123,12 @@ export function createGameObjectTest(
 export function createComponentTest(
   testName: string,
   testFn: (componentClass: any, gameObjectClass: any) => void,
-): TestResult {
-  return createMonoTest(testName, () => {
-    const setup = setupUnityTestEnvironment();
-    const componentClass = setup.domain?.class(UNITY_TEST_DATA.TYPES.COMPONENT);
-    const gameObjectClass = setup.domain?.class(UNITY_TEST_DATA.TYPES.GAMEOBJECT);
+): Promise<TestResult> {
+  return createMonoDependentTest(testName, () => {
+    const domain = Mono.domain;
+    assertNotNull(domain, "Mono domain should be available");
+    const componentClass = domain.tryClass(UNITY_TEST_DATA.TYPES.COMPONENT);
+    const gameObjectClass = domain.tryClass(UNITY_TEST_DATA.TYPES.GAMEOBJECT);
     assertNotNull(componentClass, "Component class should be available");
     assertNotNull(gameObjectClass, "GameObject class should be available");
 
@@ -146,16 +142,17 @@ export function createComponentTest(
 export function createTransformTest(
   testName: string,
   testFn: (transformClass: any, vector3Class?: any) => void,
-): TestResult {
-  return createMonoTest(testName, () => {
-    const setup = setupUnityTestEnvironment();
-    const transformClass = setup.domain?.class(UNITY_TEST_DATA.TYPES.TRANSFORM);
+): Promise<TestResult> {
+  return createMonoDependentTest(testName, () => {
+    const domain = Mono.domain;
+    assertNotNull(domain, "Mono domain should be available");
+    const transformClass = domain.tryClass(UNITY_TEST_DATA.TYPES.TRANSFORM);
     assertNotNull(transformClass, "Transform class should be available");
 
     // Try to get Vector3 class for position/rotation/scale tests
     let vector3Class;
     try {
-      vector3Class = setup.domain?.class(UNITY_TEST_DATA.TYPES.VECTOR3);
+      vector3Class = domain.tryClass(UNITY_TEST_DATA.TYPES.VECTOR3);
     } catch (error) {
       // Vector3 might not be available, but that's ok for some tests
     }
@@ -170,11 +167,12 @@ export function createTransformTest(
 export function createMonoBehaviourTest(
   testName: string,
   testFn: (monoBehaviourClass: any, componentClass?: any) => void,
-): TestResult {
-  return createMonoTest(testName, () => {
-    const setup = setupUnityTestEnvironment();
-    const monoBehaviourClass = setup.domain?.class(UNITY_TEST_DATA.TYPES.MONO_BEHAVIOUR);
-    const componentClass = setup.domain?.class(UNITY_TEST_DATA.TYPES.COMPONENT);
+): Promise<TestResult> {
+  return createMonoDependentTest(testName, () => {
+    const domain = Mono.domain;
+    assertNotNull(domain, "Mono domain should be available");
+    const monoBehaviourClass = domain.tryClass(UNITY_TEST_DATA.TYPES.MONO_BEHAVIOUR);
+    const componentClass = domain.tryClass(UNITY_TEST_DATA.TYPES.COMPONENT);
     assertNotNull(monoBehaviourClass, "MonoBehaviour class should be available");
     assertNotNull(componentClass, "Component class should be available");
 
@@ -189,21 +187,19 @@ export function createUnityStaticMethodTest(
   typeName: string,
   methodName: string,
   testFn?: (method: any) => void,
-): TestResult {
-  return createMonoTest(`Unity static method ${typeName}.${methodName} should be callable`, () => {
-    const setup = setupUnityTestEnvironment();
-    assertNotNull(setup.domain, "Mono domain should be available");
+): Promise<TestResult> {
+  return createMonoDependentTest(`Unity static method ${typeName}.${methodName} should be callable`, () => {
+    const domain = Mono.domain;
+    assertNotNull(domain, "Mono domain should be available");
 
     try {
-      const type = setup.domain.class(typeName);
+      const type = domain.tryClass(typeName);
       assertNotNull(type, `Unity type ${typeName} should be accessible`);
 
-      const method = type.method(methodName);
+      const method = type.tryMethod(methodName);
       assertNotNull(method, `Unity type ${typeName} should have static method ${methodName}`);
 
-      if (testFn) {
-        testFn(method);
-      }
+      testFn?.(method);
     } catch (error) {
       fail(`Could not access Unity static method ${typeName}.${methodName}: ${error}`);
     }
@@ -217,21 +213,19 @@ export function createUnityPropertyTest(
   typeName: string,
   propertyName: string,
   testFn?: (property: any) => void,
-): TestResult {
-  return createMonoTest(`Unity property ${typeName}.${propertyName} should be accessible`, () => {
-    const setup = setupUnityTestEnvironment();
-    assertNotNull(setup.domain, "Mono domain should be available");
+): Promise<TestResult> {
+  return createMonoDependentTest(`Unity property ${typeName}.${propertyName} should be accessible`, () => {
+    const domain = Mono.domain;
+    assertNotNull(domain, "Mono domain should be available");
 
     try {
-      const type = setup.domain.class(typeName);
+      const type = domain.tryClass(typeName);
       assertNotNull(type, `Unity type ${typeName} should be accessible`);
 
       const property = type.property(propertyName);
       assertNotNull(property, `Unity type ${typeName} should have property ${propertyName}`);
 
-      if (testFn) {
-        testFn(property);
-      }
+      testFn?.(property);
     } catch (error) {
       fail(`Could not access Unity property ${typeName}.${propertyName}: ${error}`);
     }
@@ -242,39 +236,48 @@ export function createUnityPropertyTest(
  * Creates a test for Unity namespace verification
  */
 export function createUnityNamespaceTest(namespace: string, expectedTypes?: string[]): TestResult {
-  return createMonoTest(`Unity namespace ${namespace} should be accessible`, () => {
-    const setup = setupUnityTestEnvironment();
-    assertNotNull(setup.domain, "Mono domain should be available");
+  return createTest(
+    `Unity namespace ${namespace} should be accessible`,
+    () => {
+      // Note: this helper is intentionally synchronous and does not call Mono.perform.
+      // Prefer using direct domain-based tests (createMonoDependentTest) in suites.
+      const domain = Mono.domain;
+      assertNotNull(domain, "Mono domain should be available");
 
-    try {
-      const rootNamespaces = setup.domain.getRootNamespaces();
-      assert(rootNamespaces.includes(namespace), `Unity namespace ${namespace} should be in root namespaces`);
+      try {
+        const rootNamespaces = domain.rootNamespaces;
+        assert(rootNamespaces.includes(namespace), `Unity namespace ${namespace} should be in root namespaces`);
 
-      if (expectedTypes) {
-        for (const typeName of expectedTypes) {
-          const fullTypeName = `${namespace}.${typeName}`;
-          const type = setup.domain.class(fullTypeName);
-          assertNotNull(type, `Type ${fullTypeName} should be accessible in namespace ${namespace}`);
+        if (expectedTypes) {
+          for (const typeName of expectedTypes) {
+            const fullTypeName = `${namespace}.${typeName}`;
+            const type = domain.tryClass(fullTypeName);
+            assertNotNull(type, `Type ${fullTypeName} should be accessible in namespace ${namespace}`);
+          }
         }
+      } catch (error) {
+        fail(`Could not verify Unity namespace ${namespace}: ${error}`);
       }
-    } catch (error) {
-      fail(`Could not verify Unity namespace ${namespace}: ${error}`);
-    }
-  });
+    },
+    {
+      category: TestCategory.MONO_DEPENDENT,
+      requiresMono: true,
+    },
+  );
 }
 
 /**
  * Creates a test for Unity version compatibility
  */
-export function createUnityVersionTest(): TestResult {
-  return createMonoTest("Unity version should be detectable", () => {
-    const setup = setupUnityTestEnvironment();
-    assertNotNull(setup.domain, "Mono domain should be available");
+export function createUnityVersionTest(): Promise<TestResult> {
+  return createMonoDependentTest("Unity version should be detectable", () => {
+    const domain = Mono.domain;
+    assertNotNull(domain, "Mono domain should be available");
 
     try {
       // Try to get Unity version - this is a simplified version
       // Real implementation would depend on actual Unity API
-      const versionType = setup.domain.class("UnityEngine.Application");
+      const versionType = domain.tryClass("UnityEngine.Application");
       assertNotNull(versionType, "Application class should be available");
 
       const versionProperty = versionType.property("unityVersion");
@@ -302,7 +305,6 @@ export function createPerformanceTest(
   return createTest(
     testName,
     () => {
-      const setup = setupCommonTestEnvironment();
       const memoryBefore = measureMemory();
 
       // Warmup phase
@@ -409,111 +411,113 @@ export function createMonoPerformanceTest(
   testName: string,
   testFn: () => void,
   options: PerformanceTestOptions = {},
-): TestResult {
-  return createMonoTest(testName, () => {
-    const setup = setupCommonTestEnvironment();
-    assertNotNull(setup.domain, "Mono domain should be available");
-    assertNotNull(setup.api, "Mono API should be available");
+): Promise<TestResult> {
+  return createMonoTestAsync(
+    testName,
+    () => {
+      // Already executing inside Mono.perform() (via createMonoTestAsync).
+      // Do NOT call Mono.perform() again per-iteration (fire-and-forget).
+      assertNotNull(Mono.domain, "Mono domain should be available");
+      assertNotNull(Mono.api, "Mono API should be available");
 
-    // Create a wrapped test function that includes Mono setup
-    const wrappedTestFn = () => {
-      Mono.perform(() => {
+      const mergedOptions = { ...DEFAULT_PERFORMANCE_OPTIONS, ...options };
+      const memoryBefore = measureMemory();
+
+      // Warmup phase
+      for (let i = 0; i < mergedOptions.warmupIterations!; i++) {
         testFn();
-      });
-    };
+      }
 
-    // Run performance test with wrapped function
-    const mergedOptions = { ...DEFAULT_PERFORMANCE_OPTIONS, ...options };
-    const memoryBefore = measureMemory();
-
-    // Warmup phase
-    for (let i = 0; i < mergedOptions.warmupIterations!; i++) {
-      wrappedTestFn();
-    }
-
-    // Force garbage collection before actual test if requested
-    if (mergedOptions.collectGarbage) {
-      try {
-        if (typeof globalThis !== "undefined" && (globalThis as any).gc) {
-          (globalThis as any).gc();
+      // Force garbage collection before actual test if requested
+      if (mergedOptions.collectGarbage) {
+        try {
+          if (typeof globalThis !== "undefined" && (globalThis as any).gc) {
+            (globalThis as any).gc();
+          }
+        } catch (_e) {
+          // Ignore in Frida environment
         }
-      } catch (_e) {
-        // Ignore in Frida environment
       }
-    }
 
-    // Performance measurement phase
-    const times: number[] = [];
-    const startTime = Date.now();
+      // Performance measurement phase
+      const times: number[] = [];
+      const startTime = Date.now();
 
-    for (let i = 0; i < mergedOptions.iterations!; i++) {
-      const iterationStart = Date.now();
-      wrappedTestFn();
-      const iterationEnd = Date.now();
-      times.push(iterationEnd - iterationStart);
+      for (let i = 0; i < mergedOptions.iterations!; i++) {
+        const iterationStart = Date.now();
+        testFn();
+        const iterationEnd = Date.now();
+        times.push(iterationEnd - iterationStart);
 
-      // Check timeout
-      if (Date.now() - startTime > mergedOptions.timeout!) {
-        fail(`Performance test timed out after ${mergedOptions.timeout}ms`);
+        // Check timeout
+        if (Date.now() - startTime > mergedOptions.timeout!) {
+          fail(`Performance test timed out after ${mergedOptions.timeout}ms`);
+        }
       }
-    }
 
-    const memoryAfter = measureMemory();
+      const memoryAfter = measureMemory();
 
-    // Calculate metrics
-    const totalTime = times.reduce((sum, time) => sum + time, 0);
-    const averageTime = totalTime / times.length;
-    const minTime = Math.min(...times);
-    const maxTime = Math.max(...times);
-    const memoryDelta = memoryAfter - memoryBefore;
-    const opsPerSecond = 1000 / averageTime;
+      // Calculate metrics
+      const totalTime = times.reduce((sum, time) => sum + time, 0);
+      const averageTime = totalTime / times.length;
+      const minTime = Math.min(...times);
+      const maxTime = Math.max(...times);
+      const memoryDelta = memoryAfter - memoryBefore;
+      const opsPerSecond = 1000 / averageTime;
 
-    const metrics: PerformanceMetrics = {
-      iterations: mergedOptions.iterations!,
-      totalTime,
-      averageTime,
-      minTime,
-      maxTime,
-      memoryBefore,
-      memoryAfter,
-      memoryDelta,
-      opsPerSecond,
-    };
+      const metrics: PerformanceMetrics = {
+        iterations: mergedOptions.iterations!,
+        totalTime,
+        averageTime,
+        minTime,
+        maxTime,
+        memoryBefore,
+        memoryAfter,
+        memoryDelta,
+        opsPerSecond,
+      };
 
-    // Validate against thresholds
-    const errors: string[] = [];
+      // Validate against thresholds
+      const errors: string[] = [];
 
-    if (mergedOptions.maxAverageTime && averageTime > mergedOptions.maxAverageTime) {
-      errors.push(`Average time ${averageTime.toFixed(2)}ms exceeds threshold ${mergedOptions.maxAverageTime}ms`);
-    }
+      if (mergedOptions.maxAverageTime && averageTime > mergedOptions.maxAverageTime) {
+        errors.push(`Average time ${averageTime.toFixed(2)}ms exceeds threshold ${mergedOptions.maxAverageTime}ms`);
+      }
 
-    if (mergedOptions.minOpsPerSecond && opsPerSecond < mergedOptions.minOpsPerSecond) {
-      errors.push(`Operations per second ${opsPerSecond.toFixed(0)} below threshold ${mergedOptions.minOpsPerSecond}`);
-    }
+      if (mergedOptions.minOpsPerSecond && opsPerSecond < mergedOptions.minOpsPerSecond) {
+        errors.push(
+          `Operations per second ${opsPerSecond.toFixed(0)} below threshold ${mergedOptions.minOpsPerSecond}`,
+        );
+      }
 
-    if (mergedOptions.memoryThreshold && memoryDelta > mergedOptions.memoryThreshold) {
-      errors.push(
-        `Memory delta ${(memoryDelta / 1024 / 1024).toFixed(2)}MB exceeds threshold ${(mergedOptions.memoryThreshold / 1024 / 1024).toFixed(2)}MB`,
-      );
-    }
+      if (mergedOptions.memoryThreshold && memoryDelta > mergedOptions.memoryThreshold) {
+        errors.push(
+          `Memory delta ${(memoryDelta / 1024 / 1024).toFixed(2)}MB exceeds threshold ${(mergedOptions.memoryThreshold / 1024 / 1024).toFixed(2)}MB`,
+        );
+      }
 
-    // Log performance metrics
-    console.log(`Mono performance metrics for ${testName}:`);
-    console.log(`  Iterations: ${metrics.iterations}`);
-    console.log(`  Total time: ${metrics.totalTime.toFixed(2)}ms`);
-    console.log(`  Average time: ${metrics.averageTime.toFixed(2)}ms`);
-    console.log(`  Min time: ${metrics.minTime.toFixed(2)}ms`);
-    console.log(`  Max time: ${metrics.maxTime.toFixed(2)}ms`);
-    console.log(`  Ops/sec: ${metrics.opsPerSecond?.toFixed(0)}`);
-    if (metrics.memoryDelta !== undefined) {
-      console.log(`  Memory delta: ${(metrics.memoryDelta / 1024 / 1024).toFixed(2)}MB`);
-    }
+      // Log performance metrics
+      console.log(`Mono performance metrics for ${testName}:`);
+      console.log(`  Iterations: ${metrics.iterations}`);
+      console.log(`  Total time: ${metrics.totalTime.toFixed(2)}ms`);
+      console.log(`  Average time: ${metrics.averageTime.toFixed(2)}ms`);
+      console.log(`  Min time: ${metrics.minTime.toFixed(2)}ms`);
+      console.log(`  Max time: ${metrics.maxTime.toFixed(2)}ms`);
+      console.log(`  Ops/sec: ${metrics.opsPerSecond?.toFixed(0)}`);
+      if (metrics.memoryDelta !== undefined) {
+        console.log(`  Memory delta: ${(metrics.memoryDelta / 1024 / 1024).toFixed(2)}MB`);
+      }
 
-    if (errors.length > 0) {
-      console.log(`  Errors: ${errors.join(", ")}`);
-      fail(`Mono performance test failed: ${errors.join(", ")}`);
-    }
-  });
+      if (errors.length > 0) {
+        console.log(`  Errors: ${errors.join(", ")}`);
+        fail(`Mono performance test failed: ${errors.join(", ")}`);
+      }
+    },
+    {
+      category: TestCategory.PERFORMANCE,
+      requiresMono: true,
+    },
+  );
 }
 
 /**
@@ -589,9 +593,9 @@ export function createMethodLookupPerformanceTest(
 ): TestResult {
   return createBasicLookupPerformanceTest(`Method lookup performance for ${className}.${methodName}`, () => {
     const domain = Mono.domain;
-    const targetClass = domain.class(className);
+    const targetClass = domain.tryClass(className);
     if (targetClass) {
-      targetClass.getMethod(methodName, paramCount);
+      targetClass.tryMethod(methodName, paramCount);
     }
   });
 }
@@ -602,9 +606,9 @@ export function createMethodLookupPerformanceTest(
 export function createFieldLookupPerformanceTest(className: string, fieldName: string): TestResult {
   return createBasicLookupPerformanceTest(`Field lookup performance for ${className}.${fieldName}`, () => {
     const domain = Mono.domain;
-    const targetClass = domain.class(className);
+    const targetClass = domain.tryClass(className);
     if (targetClass) {
-      targetClass.tryGetField(fieldName);
+      targetClass.tryField(fieldName);
     }
   });
 }
@@ -615,9 +619,9 @@ export function createFieldLookupPerformanceTest(className: string, fieldName: s
 export function createPropertyLookupPerformanceTest(className: string, propertyName: string): TestResult {
   return createBasicLookupPerformanceTest(`Property lookup performance for ${className}.${propertyName}`, () => {
     const domain = Mono.domain;
-    const targetClass = domain.class(className);
+    const targetClass = domain.tryClass(className);
     if (targetClass) {
-      targetClass.tryGetProperty(propertyName);
+      targetClass.tryProperty(propertyName);
     }
   });
 }
@@ -627,8 +631,8 @@ export function createPropertyLookupPerformanceTest(className: string, propertyN
 /**
  * Creates a test for basic string creation
  */
-export function createBasicStringCreationTest(): TestResult {
-  return createMonoDependentTest("String creation should work correctly", () => {
+export async function createBasicStringCreationTest(): Promise<TestResult> {
+  return await createMonoDependentTest("String creation should work correctly", () => {
     const testCases = ["Hello World", "", "Special chars: !@#$%^&*()", "Unicode: αβγδε", "Numbers: 1234567890"];
 
     for (const testCase of testCases) {
@@ -644,8 +648,8 @@ export function createBasicStringCreationTest(): TestResult {
 /**
  * Creates a test for string manipulation operations
  */
-export function createStringManipulationTest(): TestResult {
-  return createMonoDependentTest("Should test string manipulation operations", () => {
+export async function createStringManipulationTest(): Promise<TestResult> {
+  return await createMonoDependentTest("Should test string manipulation operations", () => {
     const testString = Mono.api.stringNew("Hello, World! This is a test string.");
     assertNotNull(testString, "Test string should be created");
 
@@ -674,8 +678,8 @@ export function createStringManipulationTest(): TestResult {
 /**
  * Creates a test for string encoding and UTF handling
  */
-export function createStringEncodingTest(): TestResult {
-  return createMonoDependentTest("Should test string encoding and UTF handling", () => {
+export async function createStringEncodingTest(): Promise<TestResult> {
+  return await createMonoDependentTest("Should test string encoding and UTF handling", () => {
     const encodingTests = [
       "ASCII only",
       "Café résumé", // Accented characters
@@ -716,8 +720,8 @@ export function createStringEncodingTest(): TestResult {
 /**
  * Creates a test for string comparison and searching
  */
-export function createStringComparisonTest(): TestResult {
-  return createMonoDependentTest("Should test string comparison and searching", () => {
+export async function createStringComparisonTest(): Promise<TestResult> {
+  return await createMonoDependentTest("Should test string comparison and searching", () => {
     const testStrings = [
       "Hello World",
       "hello world", // Different case
@@ -761,22 +765,22 @@ export function createStringComparisonTest(): TestResult {
 /**
  * Creates parameterized tests for invalid method/field/property access
  */
-export function createInvalidNameTests(
+export async function createInvalidNameTests(
   testType: string,
   accessFunction: (name: string) => any,
   invalidNames: string[],
-): TestResult[] {
+): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   results.push(
-    createErrorHandlingTest(`${testType} should handle empty names gracefully`, () => {
+    await createErrorHandlingTest(`${testType} should handle empty names gracefully`, () => {
       const result = accessFunction("");
       assert(result === null, `Empty ${testType} name should return null`);
     }),
   );
 
   results.push(
-    createErrorHandlingTest(`${testType} should handle null names gracefully`, () => {
+    await createErrorHandlingTest(`${testType} should handle null names gracefully`, () => {
       try {
         const result = accessFunction(null as any);
         assert(result === null, `Null ${testType} name should return null`);
@@ -787,14 +791,15 @@ export function createInvalidNameTests(
     }),
   );
 
-  invalidNames.forEach((invalidName, index) => {
+  for (let index = 0; index < invalidNames.length; index++) {
+    const invalidName = invalidNames[index];
     results.push(
-      createErrorHandlingTest(`${testType} should handle invalid name ${index + 1}`, () => {
+      await createErrorHandlingTest(`${testType} should handle invalid name ${index + 1}`, () => {
         const result = accessFunction(invalidName);
         assert(result === null, `Invalid ${testType} name should return null`);
       }),
     );
-  });
+  }
 
   return results;
 }
@@ -802,15 +807,15 @@ export function createInvalidNameTests(
 /**
  * Creates parameterized tests for required method/field/property access
  */
-export function createRequiredAccessTests(
+export async function createRequiredAccessTests(
   testType: string,
   requiredAccessFunction: (name: string) => any,
   invalidNames: string[],
-): TestResult[] {
+): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   results.push(
-    createErrorHandlingTest(`${testType} should throw for empty required names`, () => {
+    await createErrorHandlingTest(`${testType} should throw for empty required names`, () => {
       assertThrows(() => {
         requiredAccessFunction("");
       }, `Should throw when required ${testType} name is empty`);
@@ -818,22 +823,23 @@ export function createRequiredAccessTests(
   );
 
   results.push(
-    createErrorHandlingTest(`${testType} should throw for null required names`, () => {
+    await createErrorHandlingTest(`${testType} should throw for null required names`, () => {
       assertThrows(() => {
         requiredAccessFunction(null as any);
       }, `Should throw when required ${testType} name is null`);
     }),
   );
 
-  invalidNames.forEach((invalidName, index) => {
+  for (let index = 0; index < invalidNames.length; index++) {
+    const invalidName = invalidNames[index];
     results.push(
-      createErrorHandlingTest(`${testType} should throw for invalid required name ${index + 1}`, () => {
+      await createErrorHandlingTest(`${testType} should throw for invalid required name ${index + 1}`, () => {
         assertThrows(() => {
           requiredAccessFunction(invalidName);
         }, `Should throw when required ${testType} name is invalid`);
       }),
     );
-  });
+  }
 
   return results;
 }
@@ -841,19 +847,20 @@ export function createRequiredAccessTests(
 /**
  * Creates parameterized tests for boundary values
  */
-export function createBoundaryValueTests(
+export async function createBoundaryValueTests(
   testName: string,
   testFunction: (value: any) => void,
   boundaryValues: any[],
   expectedResults?: any[],
-): TestResult[] {
+): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
-  boundaryValues.forEach((value, index) => {
+  for (let index = 0; index < boundaryValues.length; index++) {
+    const value = boundaryValues[index];
     const description = `${testName} - boundary value ${index + 1}`;
 
     results.push(
-      createMonoDependentTest(description, () => {
+      await createMonoDependentTest(description, () => {
         try {
           testFunction(value);
 
@@ -872,7 +879,7 @@ export function createBoundaryValueTests(
         }
       }),
     );
-  });
+  }
 
   return results;
 }
@@ -880,19 +887,20 @@ export function createBoundaryValueTests(
 /**
  * Creates parameterized tests for null/undefined value handling
  */
-export function createNullValueTests(
+export async function createNullValueTests(
   testName: string,
   testFunction: (value: any) => void,
   testValues: any[] = [null, undefined],
-): TestResult[] {
+): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
-  testValues.forEach((value, index) => {
+  for (let index = 0; index < testValues.length; index++) {
+    const value = testValues[index];
     const valueName = value === null ? "null" : "undefined";
     const description = `${testName} - ${valueName} value ${index + 1}`;
 
     results.push(
-      createMonoDependentTest(description, () => {
+      await createMonoDependentTest(description, () => {
         try {
           testFunction(value);
           console.log(`    ${valueName} value test ${index + 1} completed`);
@@ -902,7 +910,7 @@ export function createNullValueTests(
         }
       }),
     );
-  });
+  }
 
   return results;
 }
@@ -912,25 +920,25 @@ export function createNullValueTests(
 /**
  * Creates a comprehensive Unity test suite
  */
-export function createUnityTestSuite(): TestResult[] {
+export async function createUnityTestSuite(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // Test Unity assemblies
-  results.push(createUnityAssemblyTest(UNITY_TEST_DATA.ASSEMBLIES.UNITY_ENGINE));
-  results.push(createUnityAssemblyTest(UNITY_TEST_DATA.ASSEMBLIES.UNITY_CORE_MODULE));
+  results.push(await createUnityAssemblyTest(UNITY_TEST_DATA.ASSEMBLIES.UNITY_ENGINE));
+  results.push(await createUnityAssemblyTest(UNITY_TEST_DATA.ASSEMBLIES.UNITY_CORE_MODULE));
 
   // Test core Unity types
-  results.push(createUnityTypeTest(UNITY_TEST_DATA.TYPES.GAMEOBJECT, ["Find", "Instantiate"]));
-  results.push(createUnityTypeTest(UNITY_TEST_DATA.TYPES.COMPONENT, ["GetComponent"]));
-  results.push(createUnityTypeTest(UNITY_TEST_DATA.TYPES.TRANSFORM, ["Find", "GetChild"]));
-  results.push(createUnityTypeTest(UNITY_TEST_DATA.TYPES.MONO_BEHAVIOUR, ["Invoke"]));
+  results.push(await createUnityTypeTest(UNITY_TEST_DATA.TYPES.GAMEOBJECT, ["Find", "Instantiate"]));
+  results.push(await createUnityTypeTest(UNITY_TEST_DATA.TYPES.COMPONENT, ["GetComponent"]));
+  results.push(await createUnityTypeTest(UNITY_TEST_DATA.TYPES.TRANSFORM, ["Find", "GetChild"]));
+  results.push(await createUnityTypeTest(UNITY_TEST_DATA.TYPES.MONO_BEHAVIOUR, ["Invoke"]));
 
   // Test Unity namespaces
   results.push(createUnityNamespaceTest(UNITY_TEST_DATA.NAMESPACES.UNITY_ENGINE));
   results.push(createUnityNamespaceTest(UNITY_TEST_DATA.NAMESPACES.UNITY_SCENE_MANAGEMENT));
 
   // Test Unity version
-  results.push(createUnityVersionTest());
+  results.push(await createUnityVersionTest());
 
   return results;
 }
@@ -938,16 +946,16 @@ export function createUnityTestSuite(): TestResult[] {
 /**
  * Creates a comprehensive set of string operation tests
  */
-export function createComprehensiveStringTests(): TestResult[] {
+export async function createComprehensiveStringTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // Basic string creation tests
-  results.push(createBasicStringCreationTest());
+  results.push(await createBasicStringCreationTest());
 
   // String manipulation tests
-  results.push(createStringManipulationTest());
-  results.push(createStringEncodingTest());
-  results.push(createStringComparisonTest());
+  results.push(await createStringManipulationTest());
+  results.push(await createStringEncodingTest());
+  results.push(await createStringComparisonTest());
 
   return results;
 }
@@ -955,11 +963,11 @@ export function createComprehensiveStringTests(): TestResult[] {
 /**
  * Creates a basic set of string tests (for API-focused test files)
  */
-export function createBasicStringTests(): TestResult[] {
+export async function createBasicStringTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // Basic string creation tests
-  results.push(createBasicStringCreationTest());
+  results.push(await createBasicStringCreationTest());
 
   return results;
 }
@@ -967,13 +975,13 @@ export function createBasicStringTests(): TestResult[] {
 /**
  * Creates an advanced set of string tests (for data-focused test files)
  */
-export function createAdvancedStringTests(): TestResult[] {
+export async function createAdvancedStringTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // String manipulation tests
-  results.push(createStringManipulationTest());
-  results.push(createStringEncodingTest());
-  results.push(createStringComparisonTest());
+  results.push(await createStringManipulationTest());
+  results.push(await createStringEncodingTest());
+  results.push(await createStringComparisonTest());
 
   return results;
 }

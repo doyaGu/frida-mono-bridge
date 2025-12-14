@@ -6,7 +6,7 @@
 
 import { createMonoDelegateTests } from "../test-mono-delegate";
 
-const results = createMonoDelegateTests();
+const results = await createMonoDelegateTests();
 
 // Print summary
 const passed = results.filter(r => r.passed).length;

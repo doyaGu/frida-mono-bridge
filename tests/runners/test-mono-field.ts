@@ -7,8 +7,8 @@ import { createMonoFieldTests } from "../test-mono-field";
 import { runTestCategory, TestResult } from "../test-runner-base";
 
 // Wrapper function to convert array of results to single result
-function runMonoFieldTests(): TestResult {
-  const results = createMonoFieldTests();
+async function runMonoFieldTests(): Promise<TestResult> {
+  const results = await createMonoFieldTests();
   const passed = results.filter(r => r.passed).length;
   const failed = results.filter(r => r.failed).length;
   const skipped = results.filter(r => r.skipped).length;

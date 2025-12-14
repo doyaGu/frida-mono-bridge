@@ -9,35 +9,36 @@
  * - MonoProperty
  */
 
-import Mono, { CustomAttribute } from "../src";
-import { TestResult, createMonoDependentTest, assert } from "./test-framework";
+import Mono from "../src";
+import type { CustomAttribute } from "../src/model/base";
+import { TestResult, assert, createMonoDependentTest } from "./test-framework";
 
-export function createCustomAttributeTests(): TestResult[] {
+export async function createCustomAttributeTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // ===== ASSEMBLY TESTS =====
 
   results.push(
-    createMonoDependentTest("Assembly.getCustomAttributes() returns array", () => {
+    await createMonoDependentTest("Assembly.customAttributes returns array", () => {
       const domain = Mono.domain;
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
       assert(assemblies.length > 0, "No assemblies found");
 
       const assembly = assemblies[0];
-      const attrs = assembly.getCustomAttributes();
+      const attrs = assembly.customAttributes;
 
       assert(Array.isArray(attrs), "getCustomAttributes should return an array");
-      console.log(`  [INFO] Assembly '${assembly.getName()}' has ${attrs.length} custom attributes`);
+      console.log(`  [INFO] Assembly '${assembly.name}' has ${attrs.length} custom attributes`);
     }),
   );
 
   results.push(
-    createMonoDependentTest("Assembly.getCustomAttributes() attribute structure", () => {
+    await createMonoDependentTest("Assembly.customAttributes attribute structure", () => {
       const domain = Mono.domain;
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
 
       for (const assembly of assemblies) {
-        const attrs = assembly.getCustomAttributes();
+        const attrs = assembly.customAttributes;
         if (attrs.length > 0) {
           const attr = attrs[0];
           assert(typeof attr.name === "string", "Attribute should have a name");
@@ -56,19 +57,19 @@ export function createCustomAttributeTests(): TestResult[] {
   // ===== CLASS TESTS =====
 
   results.push(
-    createMonoDependentTest("Class.getCustomAttributes() returns array", () => {
+    await createMonoDependentTest("Class.customAttributes returns array", () => {
       const domain = Mono.domain;
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
 
       for (const assembly of assemblies) {
         try {
-          const classes = assembly.image.getClasses().slice(0, 50); // Check first 50 classes
+          const classes = assembly.image.classes.slice(0, 50); // Check first 50 classes
           for (const klass of classes) {
-            const attrs = klass.getCustomAttributes();
+            const attrs = klass.customAttributes;
             assert(Array.isArray(attrs), "getCustomAttributes should return an array");
 
             if (attrs.length > 0) {
-              console.log(`  [INFO] Class '${klass.getFullName()}' has ${attrs.length} custom attributes`);
+              console.log(`  [INFO] Class '${klass.fullName}' has ${attrs.length} custom attributes`);
               console.log(`  [INFO] Attributes: ${attrs.map((a: CustomAttribute) => a.name).join(", ")}`);
               return;
             }
@@ -82,16 +83,16 @@ export function createCustomAttributeTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Class.getCustomAttributes() common Unity attributes", () => {
+    await createMonoDependentTest("Class.customAttributes common Unity attributes", () => {
       const domain = Mono.domain;
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
       const foundAttributes: string[] = [];
 
       for (const assembly of assemblies) {
         try {
-          const classes = assembly.image.getClasses().slice(0, 100);
+          const classes = assembly.image.classes.slice(0, 100);
           for (const klass of classes) {
-            const attrs = klass.getCustomAttributes();
+            const attrs = klass.customAttributes;
             for (const attr of attrs) {
               if (!foundAttributes.includes(attr.name)) {
                 foundAttributes.push(attr.name);
@@ -112,23 +113,21 @@ export function createCustomAttributeTests(): TestResult[] {
   // ===== METHOD TESTS =====
 
   results.push(
-    createMonoDependentTest("Method.getCustomAttributes() returns array", () => {
+    await createMonoDependentTest("Method.customAttributes returns array", () => {
       const domain = Mono.domain;
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
 
       for (const assembly of assemblies) {
         try {
-          const classes = assembly.image.getClasses().slice(0, 20);
+          const classes = assembly.image.classes.slice(0, 20);
           for (const klass of classes) {
-            const methods = klass.getMethods().slice(0, 20);
+            const methods = klass.methods.slice(0, 20);
             for (const method of methods) {
-              const attrs = method.getCustomAttributes();
+              const attrs = method.customAttributes;
               assert(Array.isArray(attrs), "getCustomAttributes should return an array");
 
               if (attrs.length > 0) {
-                console.log(
-                  `  [INFO] Method '${method.getName()}' in '${klass.getName()}' has ${attrs.length} attributes`,
-                );
+                console.log(`  [INFO] Method '${method.name}' in '${klass.name}' has ${attrs.length} attributes`);
                 console.log(`  [INFO] Attributes: ${attrs.map((a: CustomAttribute) => a.name).join(", ")}`);
                 return;
               }
@@ -145,23 +144,21 @@ export function createCustomAttributeTests(): TestResult[] {
   // ===== FIELD TESTS =====
 
   results.push(
-    createMonoDependentTest("Field.getCustomAttributes() returns array", () => {
+    await createMonoDependentTest("Field.customAttributes returns array", () => {
       const domain = Mono.domain;
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
 
       for (const assembly of assemblies) {
         try {
-          const classes = assembly.image.getClasses().slice(0, 30);
+          const classes = assembly.image.classes.slice(0, 30);
           for (const klass of classes) {
-            const fields = klass.getFields();
+            const fields = klass.fields;
             for (const field of fields) {
-              const attrs = field.getCustomAttributes();
+              const attrs = field.customAttributes;
               assert(Array.isArray(attrs), "getCustomAttributes should return an array");
 
               if (attrs.length > 0) {
-                console.log(
-                  `  [INFO] Field '${field.getName()}' in '${klass.getName()}' has ${attrs.length} attributes`,
-                );
+                console.log(`  [INFO] Field '${field.name}' in '${klass.name}' has ${attrs.length} attributes`);
                 console.log(`  [INFO] Attributes: ${attrs.map((a: CustomAttribute) => a.name).join(", ")}`);
                 return;
               }
@@ -178,23 +175,21 @@ export function createCustomAttributeTests(): TestResult[] {
   // ===== PROPERTY TESTS =====
 
   results.push(
-    createMonoDependentTest("Property.getCustomAttributes() returns array", () => {
+    await createMonoDependentTest("Property.customAttributes returns array", () => {
       const domain = Mono.domain;
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
 
       for (const assembly of assemblies) {
         try {
-          const classes = assembly.image.getClasses().slice(0, 30);
+          const classes = assembly.image.classes.slice(0, 30);
           for (const klass of classes) {
-            const properties = klass.getProperties();
+            const properties = klass.properties;
             for (const prop of properties) {
-              const attrs = prop.getCustomAttributes();
+              const attrs = prop.customAttributes;
               assert(Array.isArray(attrs), "getCustomAttributes should return an array");
 
               if (attrs.length > 0) {
-                console.log(
-                  `  [INFO] Property '${prop.getName()}' in '${klass.getName()}' has ${attrs.length} attributes`,
-                );
+                console.log(`  [INFO] Property '${prop.name}' in '${klass.name}' has ${attrs.length} attributes`);
                 console.log(`  [INFO] Attributes: ${attrs.map((a: CustomAttribute) => a.name).join(", ")}`);
                 return;
               }
@@ -211,7 +206,7 @@ export function createCustomAttributeTests(): TestResult[] {
   // ===== API AVAILABILITY TESTS =====
 
   results.push(
-    createMonoDependentTest("Custom attributes API availability check", () => {
+    await createMonoDependentTest("Custom attributes API availability check", () => {
       const api = Mono.api;
       const apis = [
         "mono_custom_attrs_from_assembly",
@@ -246,7 +241,7 @@ export function createCustomAttributeTests(): TestResult[] {
   // ===== STATISTICS TEST =====
 
   results.push(
-    createMonoDependentTest("Collect custom attribute statistics", () => {
+    await createMonoDependentTest("Collect custom attribute statistics", () => {
       const domain = Mono.domain;
       const stats = {
         assembliesChecked: 0,
@@ -261,34 +256,34 @@ export function createCustomAttributeTests(): TestResult[] {
         propertyAttrs: 0,
       };
 
-      const assemblies = domain.getAssemblies().slice(0, 5);
+      const assemblies = domain.assemblies.slice(0, 5);
 
       for (const assembly of assemblies) {
         stats.assembliesChecked++;
-        stats.assemblyAttrs += assembly.getCustomAttributes().length;
+        stats.assemblyAttrs += assembly.customAttributes.length;
 
         try {
-          const classes = assembly.image.getClasses().slice(0, 20);
+          const classes = assembly.image.classes.slice(0, 20);
           for (const klass of classes) {
             stats.classesChecked++;
-            stats.classAttrs += klass.getCustomAttributes().length;
+            stats.classAttrs += klass.customAttributes.length;
 
-            const methods = klass.getMethods().slice(0, 10);
+            const methods = klass.methods.slice(0, 10);
             for (const method of methods) {
               stats.methodsChecked++;
-              stats.methodAttrs += method.getCustomAttributes().length;
+              stats.methodAttrs += method.customAttributes.length;
             }
 
-            const fields = klass.getFields();
+            const fields = klass.fields;
             for (const field of fields) {
               stats.fieldsChecked++;
-              stats.fieldAttrs += field.getCustomAttributes().length;
+              stats.fieldAttrs += field.customAttributes.length;
             }
 
-            const properties = klass.getProperties();
+            const properties = klass.properties;
             for (const prop of properties) {
               stats.propertiesChecked++;
-              stats.propertyAttrs += prop.getCustomAttributes().length;
+              stats.propertyAttrs += prop.customAttributes.length;
             }
           }
         } catch {

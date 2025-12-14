@@ -7,12 +7,12 @@
 
 import Mono from "../src";
 import * as Trace from "../src/utils/trace";
-import { TestResult, createMonoDependentTest, createStandaloneTest, assert, assertNotNull } from "./test-framework";
+import { TestResult, assert, assertNotNull, createMonoDependentTest, createStandaloneTest } from "./test-framework";
 
 /**
  * Create Trace Tools test suite
  */
-export function createTraceToolsTests(): TestResult[] {
+export async function createTraceToolsTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // ============================================
@@ -64,11 +64,11 @@ export function createTraceToolsTests(): TestResult[] {
   // Trace.method Tests
   // ============================================
   results.push(
-    createMonoDependentTest("Trace.method - Hook System.String.get_Length", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace.method - Hook System.String.get_Length", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
       let detach: (() => void) | null = null;
@@ -90,28 +90,28 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace.method - returns detach function", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace.method - returns detach function", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.method(getLengthMethod!, {});
+      const detach = Trace.tryMethod(getLengthMethod!, {});
       assert(typeof detach === "function", "Expected detach to be a function");
       detach();
     }),
   );
 
   results.push(
-    createMonoDependentTest("Trace.method - onEnter callback setup", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace.method - onEnter callback setup", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.method(getLengthMethod!, {
+      const detach = Trace.tryMethod(getLengthMethod!, {
         onEnter: _args => {
           // Callback set up
         },
@@ -122,14 +122,14 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace.method - onLeave callback setup", () => {
-      const objectClass = Mono.domain.class("System.Object");
+    await createMonoDependentTest("Trace.method - onLeave callback setup", () => {
+      const objectClass = Mono.domain.tryClass("System.Object");
       assertNotNull(objectClass, "Object class should exist");
 
-      const getHashCodeMethod = objectClass.getMethod("GetHashCode");
+      const getHashCodeMethod = objectClass.tryMethod("GetHashCode");
       assertNotNull(getHashCodeMethod, "GetHashCode method should exist");
 
-      const detach = Trace.method(getHashCodeMethod!, {
+      const detach = Trace.tryMethod(getHashCodeMethod!, {
         onLeave: _retval => {
           // Callback set up
         },
@@ -140,14 +140,14 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace.method - multiple detach calls safe", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace.method - multiple detach calls safe", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.method(getLengthMethod!, {});
+      const detach = Trace.tryMethod(getLengthMethod!, {});
 
       // Call detach multiple times - should be safe
       detach();
@@ -160,11 +160,11 @@ export function createTraceToolsTests(): TestResult[] {
   // Trace.methodExtended Tests
   // ============================================
   results.push(
-    createMonoDependentTest("Trace.methodExtended - Hook with context", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace.methodExtended - Hook with context", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
       const detach = Trace.methodExtended(getLengthMethod!, {
@@ -179,11 +179,11 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace.methodExtended - returns detach function", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace.methodExtended - returns detach function", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
       const detach = Trace.methodExtended(getLengthMethod!, {});
@@ -197,11 +197,11 @@ export function createTraceToolsTests(): TestResult[] {
   // Trace.replaceReturnValue Tests
   // ============================================
   results.push(
-    createMonoDependentTest("Trace.replaceReturnValue - setup replacement", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace.replaceReturnValue - setup replacement", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
       const detach = Trace.replaceReturnValue(getLengthMethod!, (_originalRetval, _thisPtr, _args) => {
@@ -214,11 +214,11 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace.replaceReturnValue - undefined keeps original", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace.replaceReturnValue - undefined keeps original", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
       const detach = Trace.replaceReturnValue(getLengthMethod!, (_originalRetval, _thisPtr, _args) => {
@@ -233,8 +233,8 @@ export function createTraceToolsTests(): TestResult[] {
   // Trace.classAll Tests
   // ============================================
   results.push(
-    createMonoDependentTest("Trace.classAll - Hook all methods in class", () => {
-      const objectClass = Mono.domain.class("System.Object");
+    await createMonoDependentTest("Trace.classAll - Hook all methods in class", () => {
+      const objectClass = Mono.domain.tryClass("System.Object");
       assertNotNull(objectClass, "Object class should exist");
 
       const detach = Trace.classAll(objectClass, {
@@ -247,8 +247,8 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace.classAll - detach removes all hooks", () => {
-      const objectClass = Mono.domain.class("System.Object");
+    await createMonoDependentTest("Trace.classAll - detach removes all hooks", () => {
+      const objectClass = Mono.domain.tryClass("System.Object");
       assertNotNull(objectClass, "Object class should exist");
 
       const detach = Trace.classAll(objectClass, {
@@ -263,7 +263,7 @@ export function createTraceToolsTests(): TestResult[] {
   // Trace.methodsByPattern Tests
   // ============================================
   results.push(
-    createMonoDependentTest("Trace.methodsByPattern - Hook by pattern", () => {
+    await createMonoDependentTest("Trace.methodsByPattern - Hook by pattern", () => {
       const api = Mono.api;
       const detach = Trace.methodsByPattern(api, "System.String.get_Length", {
         onEnter: _args => {},
@@ -275,7 +275,7 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace.methodsByPattern - no match returns empty detach", () => {
+    await createMonoDependentTest("Trace.methodsByPattern - no match returns empty detach", () => {
       const api = Mono.api;
       const detach = Trace.methodsByPattern(api, "NonExistent.Fake.Method12345", {});
 
@@ -289,7 +289,7 @@ export function createTraceToolsTests(): TestResult[] {
   // Trace.classesByPattern Tests
   // ============================================
   results.push(
-    createMonoDependentTest("Trace.classesByPattern - Hook classes by pattern", () => {
+    await createMonoDependentTest("Trace.classesByPattern - Hook classes by pattern", () => {
       const api = Mono.api;
       const detach = Trace.classesByPattern(api, "System.Object", {
         onEnter: _args => {},
@@ -301,7 +301,7 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace.classesByPattern - no match returns empty detach", () => {
+    await createMonoDependentTest("Trace.classesByPattern - no match returns empty detach", () => {
       const api = Mono.api;
       const detach = Trace.classesByPattern(api, "FakeNamespace.FakeClass12345", {});
 
@@ -315,14 +315,14 @@ export function createTraceToolsTests(): TestResult[] {
   // Callback Tests
   // ============================================
   results.push(
-    createMonoDependentTest("Trace - onEnter receives args array", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace - onEnter receives args array", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.method(getLengthMethod!, {
+      const detach = Trace.tryMethod(getLengthMethod!, {
         onEnter: args => {
           assert(Array.isArray(args), "args should be an array");
         },
@@ -333,14 +333,14 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace - instance method extracts this pointer", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace - instance method extracts this pointer", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      assert(getLengthMethod!.isInstanceMethod(), "get_Length should be instance method");
+      assert(getLengthMethod!.isInstanceMethod, "get_Length should be instance method");
 
       const detach = Trace.replaceReturnValue(getLengthMethod!, (_retval, _thisPtr, _args) => {
         return undefined;
@@ -351,27 +351,27 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace - static method handling", () => {
+    await createMonoDependentTest("Trace - static method handling", () => {
       // Note: Many static methods may not be JIT compiled yet
       // mono_compile_method returns a trampoline address for uncompiled methods
       // which causes access violations when Frida tries to attach.
       // This test uses methods that are commonly called and likely to be compiled.
-      const stringClass = Mono.domain.class("System.String");
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
       // Find static methods and try each one until we find one that's compiled
-      const methods = stringClass.getMethods();
+      const methods = stringClass.methods;
       let hooked = false;
 
       for (const m of methods) {
         if (hooked) break;
-        if (m.isInstanceMethod() || !m.canBeHooked()) continue;
+        if (m.isInstanceMethod || !m.canBeHooked) continue;
 
         try {
           const detach = Trace.replaceReturnValue(m, (_retval, _thisPtr, _args) => {
             return undefined;
           });
-          console.log(`[INFO] Successfully hooked static method: ${m.getName()}`);
+          console.log(`[INFO] Successfully hooked static method: ${m.name}`);
           detach();
           hooked = true;
         } catch (_e: unknown) {
@@ -393,18 +393,18 @@ export function createTraceToolsTests(): TestResult[] {
   // Integration Tests
   // ============================================
   results.push(
-    createMonoDependentTest("Trace - multiple hooks coexist", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace - multiple hooks coexist", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
       // Test that multiple hooks on different callbacks work
-      const detach1 = Trace.method(getLengthMethod!, {
+      const detach1 = Trace.tryMethod(getLengthMethod!, {
         onEnter: () => {},
       });
-      const detach2 = Trace.method(getLengthMethod!, {
+      const detach2 = Trace.tryMethod(getLengthMethod!, {
         onLeave: () => {},
       });
 
@@ -414,18 +414,18 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace - same method can be hooked multiple times", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace - same method can be hooked multiple times", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach1 = Trace.method(getLengthMethod!, {
+      const detach1 = Trace.tryMethod(getLengthMethod!, {
         onEnter: () => {},
       });
 
-      const detach2 = Trace.method(getLengthMethod!, {
+      const detach2 = Trace.tryMethod(getLengthMethod!, {
         onEnter: () => {},
       });
 
@@ -435,16 +435,16 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace - detach order independent", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace - detach order independent", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach1 = Trace.method(getLengthMethod!, {});
-      const detach2 = Trace.method(getLengthMethod!, {});
-      const detach3 = Trace.method(getLengthMethod!, {});
+      const detach1 = Trace.tryMethod(getLengthMethod!, {});
+      const detach2 = Trace.tryMethod(getLengthMethod!, {});
+      const detach3 = Trace.tryMethod(getLengthMethod!, {});
 
       // Detach in random order
       detach2();
@@ -454,14 +454,14 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace - program continues after detach", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace - program continues after detach", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const getLengthMethod = stringClass.getMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.method(getLengthMethod!, {
+      const detach = Trace.tryMethod(getLengthMethod!, {
         onEnter: () => {},
       });
 
@@ -485,12 +485,12 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace.field - returns null for non-traceable field", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace.field - returns null for non-traceable field", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
       // Try to find a private field that won't have property accessors
-      const fields = stringClass!.getFields();
+      const fields = stringClass!.fields;
       if (fields.length > 0) {
         const result = Trace.field(fields[0], {
           onRead: () => {},
@@ -503,7 +503,7 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace.fieldsByPattern - handles empty results", () => {
+    await createMonoDependentTest("Trace.fieldsByPattern - handles empty results", () => {
       // Use a pattern that won't match anything
       const detach = Trace.fieldsByPattern(Mono.api, "NonExistentFieldXYZ*", {
         onRead: () => {},
@@ -531,11 +531,11 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace.propertyTrace - hooks Length property", () => {
-      const stringClass = Mono.domain.class("System.String");
+    await createMonoDependentTest("Trace.propertyTrace - hooks Length property", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
-      const lengthProperty = stringClass!.tryGetProperty("Length");
+      const lengthProperty = stringClass!.tryProperty("Length");
       assertNotNull(lengthProperty, "Length property should exist");
 
       let _getterCalled = false;
@@ -552,7 +552,7 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace.propertiesByPattern - traces matching properties", () => {
+    await createMonoDependentTest("Trace.propertiesByPattern - traces matching properties", () => {
       // Trace specific Length properties - use more specific pattern to avoid timeout
       // Instead of "*Length*" which matches 380+ properties
       const detach = Trace.propertiesByPattern(Mono.api, "System.String.Length", {
@@ -565,7 +565,7 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace - FieldAccessCallbacks interface works", () => {
+    await createMonoDependentTest("Trace - FieldAccessCallbacks interface works", () => {
       // Type-level test
       const callbacks: Trace.FieldAccessCallbacks = {
         onRead: (instance, value) => {
@@ -582,7 +582,7 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace - PropertyAccessCallbacks interface works", () => {
+    await createMonoDependentTest("Trace - PropertyAccessCallbacks interface works", () => {
       // Type-level test
       const callbacks: Trace.PropertyAccessCallbacks = {
         onGet: (instance, value) => {
@@ -602,14 +602,14 @@ export function createTraceToolsTests(): TestResult[] {
   // Section 8: Performance Tracking Tests
   // =====================================================
   results.push(
-    createMonoDependentTest("Trace - createPerformanceTracker exists", () => {
+    await createMonoDependentTest("Trace - createPerformanceTracker exists", () => {
       assertNotNull(Trace.createPerformanceTracker, "createPerformanceTracker should exist");
       assert(typeof Trace.createPerformanceTracker === "function", "createPerformanceTracker should be a function");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Trace - PerformanceTracker can be instantiated", () => {
+    await createMonoDependentTest("Trace - PerformanceTracker can be instantiated", () => {
       const tracker = Trace.createPerformanceTracker();
       assertNotNull(tracker, "Tracker should be created");
 
@@ -627,7 +627,7 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace - PerformanceTracker.getReport returns string", () => {
+    await createMonoDependentTest("Trace - PerformanceTracker.getReport returns string", () => {
       const tracker = Trace.createPerformanceTracker();
       const report = tracker.getReport();
 
@@ -640,14 +640,14 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace - methodWithCallStack exists", () => {
+    await createMonoDependentTest("Trace - methodWithCallStack exists", () => {
       assertNotNull(Trace.methodWithCallStack, "methodWithCallStack should exist");
       assert(typeof Trace.methodWithCallStack === "function", "methodWithCallStack should be a function");
     }),
   );
 
   results.push(
-    createMonoDependentTest("Trace - MethodCallbacksTimed interface works", () => {
+    await createMonoDependentTest("Trace - MethodCallbacksTimed interface works", () => {
       // Type-level test
       const callbacks: Trace.MethodCallbacksTimed = {
         onEnter: (args, callStack) => {
@@ -664,7 +664,7 @@ export function createTraceToolsTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Trace - MethodStats interface structure", () => {
+    await createMonoDependentTest("Trace - MethodStats interface structure", () => {
       // Type-level test for MethodStats
       const mockStats: Trace.MethodStats = {
         callCount: 10,

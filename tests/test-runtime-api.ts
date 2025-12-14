@@ -5,7 +5,6 @@
  */
 
 import Mono from "../src";
-import { MonoManagedExceptionError } from "../src/runtime/api";
 import {
   TestResult,
   assert,
@@ -14,21 +13,31 @@ import {
   createErrorHandlingTest,
   createMonoDependentTest,
 } from "./test-framework";
+// MonoManagedExceptionError is not exported from the module - using duck typing instead
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
+class MonoManagedExceptionError extends Error {
+  exception?: NativePointer;
+  exceptionType?: string;
+  exceptionMessage?: string;
+  static [Symbol.hasInstance](obj: unknown): boolean {
+    return obj instanceof Error && (obj as Error).name === "MonoManagedExceptionError";
+  }
+}
 
-export function createRuntimeApiTests(): TestResult[] {
+export async function createRuntimeApiTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // ===== BASIC API INITIALIZATION TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi should be available after Mono.perform", () => {
+    await createMonoDependentTest("MonoApi should be available after Mono.perform", () => {
       assertNotNull(Mono.api, "Mono.api should be available");
       assertNotNull(Mono.api.native, "Mono.api.native bindings should be available");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoApi should provide root domain", () => {
+    await createMonoDependentTest("MonoApi should provide root domain", () => {
       const rootDomain = Mono.api.getRootDomain();
       assertNotNull(rootDomain, "Root domain should be available");
       assert(!rootDomain.isNull(), "Root domain should not be null pointer");
@@ -36,7 +45,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi should cache root domain", () => {
+    await createMonoDependentTest("MonoApi should cache root domain", () => {
       const domain1 = Mono.api.getRootDomain();
       const domain2 = Mono.api.getRootDomain();
 
@@ -47,7 +56,7 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== STRING CREATION TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi.stringNew should create managed strings", () => {
+    await createMonoDependentTest("MonoApi.stringNew should create managed strings", () => {
       const testStr = "Hello, Mono World!";
       const monoStr = Mono.api.stringNew(testStr);
 
@@ -57,7 +66,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.stringNew should handle empty string", () => {
+    await createMonoDependentTest("MonoApi.stringNew should handle empty string", () => {
       const monoStr = Mono.api.stringNew("");
 
       assertNotNull(monoStr, "stringNew should handle empty string");
@@ -66,7 +75,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.stringNew should handle Unicode strings", () => {
+    await createMonoDependentTest("MonoApi.stringNew should handle Unicode strings", () => {
       const unicodeStr = "Hello 世界 🌍 مرحبا";
       const monoStr = Mono.api.stringNew(unicodeStr);
 
@@ -76,7 +85,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.stringNew should handle special characters", () => {
+    await createMonoDependentTest("MonoApi.stringNew should handle special characters", () => {
       const specialStr = "Line1\nLine2\tTabbed\r\nWindows\0Null";
       const monoStr = Mono.api.stringNew(specialStr);
 
@@ -85,7 +94,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.stringNew should handle long strings", () => {
+    await createMonoDependentTest("MonoApi.stringNew should handle long strings", () => {
       const longStr = "x".repeat(10000);
       const monoStr = Mono.api.stringNew(longStr);
 
@@ -97,10 +106,10 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== RUNTIME INVOKE TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi.runtimeInvoke should call static methods", () => {
+    await createMonoDependentTest("MonoApi.runtimeInvoke should call static methods", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
-      const concatMethod = stringClass!.getMethod("Concat", 2);
+      const stringClass = domain.tryClass("System.String");
+      const concatMethod = stringClass!.tryMethod("Concat", 2);
 
       const str1 = Mono.api.stringNew("Hello");
       const str2 = Mono.api.stringNew(" World");
@@ -111,12 +120,12 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.runtimeInvoke should handle null arguments array", () => {
+    await createMonoDependentTest("MonoApi.runtimeInvoke should handle null arguments array", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       // Try to call ToString() with no arguments
-      const toStringMethod = int32Class!.tryGetMethod("ToString", 0);
+      const toStringMethod = int32Class!.tryMethod("ToString", 0);
       if (toStringMethod) {
         // For value types, we need a boxed instance
         try {
@@ -137,10 +146,10 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== EXCEPTION HANDLING TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi.runtimeInvoke should capture managed exceptions", () => {
+    await createMonoDependentTest("MonoApi.runtimeInvoke should capture managed exceptions", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
-      const parseMethod = int32Class!.tryGetMethod("Parse", 1);
+      const int32Class = domain.tryClass("System.Int32");
+      const parseMethod = int32Class!.tryMethod("Parse", 1);
 
       if (parseMethod) {
         const invalidStr = Mono.api.stringNew("not_a_number");
@@ -171,10 +180,10 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoManagedExceptionError should contain exception pointer", () => {
+    await createMonoDependentTest("MonoManagedExceptionError should contain exception pointer", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
-      const parseMethod = int32Class!.tryGetMethod("Parse", 1);
+      const int32Class = domain.tryClass("System.Int32");
+      const parseMethod = int32Class!.tryMethod("Parse", 1);
 
       if (parseMethod) {
         const invalidStr = Mono.api.stringNew("invalid");
@@ -196,15 +205,15 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoManagedExceptionError should extract exception type name", () => {
+    await createMonoDependentTest("MonoManagedExceptionError should extract exception type name", () => {
       const domain = Mono.domain;
 
       // Try to trigger different exception types
       const testCases = [{ method: "Parse", args: ["not_a_number"], expectedType: "FormatException" }];
 
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
       if (int32Class) {
-        const parseMethod = int32Class.tryGetMethod("Parse", 1);
+        const parseMethod = int32Class.tryMethod("Parse", 1);
         if (parseMethod) {
           try {
             const invalidStr = Mono.api.stringNew("xyz");
@@ -221,12 +230,12 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoManagedExceptionError should extract exception message", () => {
+    await createMonoDependentTest("MonoManagedExceptionError should extract exception message", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const parseMethod = int32Class.tryGetMethod("Parse", 1);
+        const parseMethod = int32Class.tryMethod("Parse", 1);
         if (parseMethod) {
           try {
             const invalidStr = Mono.api.stringNew("not_valid_int32");
@@ -246,12 +255,12 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("Multiple exceptions should have separate details", () => {
+    await createMonoDependentTest("Multiple exceptions should have separate details", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const parseMethod = int32Class.tryGetMethod("Parse", 1);
+        const parseMethod = int32Class.tryMethod("Parse", 1);
         if (parseMethod) {
           const testInputs = ["abc", "xyz", "!@#"];
           const exceptions: any[] = [];
@@ -279,7 +288,7 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== HAS EXPORT TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi.hasExport should detect available exports", () => {
+    await createMonoDependentTest("MonoApi.hasExport should detect available exports", () => {
       // These should always be available
       const commonExports = [
         "mono_get_root_domain",
@@ -296,7 +305,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.hasExport should return false for missing exports", () => {
+    await createMonoDependentTest("MonoApi.hasExport should return false for missing exports", () => {
       const fakeExport = "mono_this_function_does_not_exist_12345";
       const hasIt = Mono.api.hasExport(fakeExport as any);
 
@@ -305,7 +314,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.hasExport should handle string conversion APIs", () => {
+    await createMonoDependentTest("MonoApi.hasExport should handle string conversion APIs", () => {
       const stringExports = ["mono_string_to_utf8", "mono_string_to_utf16", "mono_string_chars", "mono_string_length"];
 
       let availableCount = 0;
@@ -323,7 +332,7 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== TRY FREE TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi.tryFree should not crash on NULL pointer", () => {
+    await createMonoDependentTest("MonoApi.tryFree should not crash on NULL pointer", () => {
       // tryFree should safely handle NULL
       Mono.api.tryFree(NULL);
       console.log("  - tryFree(NULL) completed without crash");
@@ -331,7 +340,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.tryFree should handle mono_string_to_utf8 result", () => {
+    await createMonoDependentTest("MonoApi.tryFree should handle mono_string_to_utf8 result", () => {
       if (Mono.api.hasExport("mono_string_to_utf8")) {
         const testStr = Mono.api.stringNew("Test string for free");
         const utf8Ptr = Mono.api.native.mono_string_to_utf8(testStr);
@@ -353,7 +362,7 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== THREAD ATTACHMENT TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi.attachThread should return thread handle", () => {
+    await createMonoDependentTest("MonoApi.attachThread should return thread handle", () => {
       const thread = Mono.api.attachThread();
       assertNotNull(thread, "attachThread should return handle");
       assert(!thread.isNull(), "Thread handle should not be null");
@@ -362,7 +371,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.attachThread should be idempotent", () => {
+    await createMonoDependentTest("MonoApi.attachThread should be idempotent", () => {
       const thread1 = Mono.api.attachThread();
       const thread2 = Mono.api.attachThread();
 
@@ -375,7 +384,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.detachThread should not crash", () => {
+    await createMonoDependentTest("MonoApi.detachThread should not crash", () => {
       const thread = Mono.api.attachThread();
 
       // Note: We may not want to actually detach as it could affect other tests
@@ -389,9 +398,9 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== DELEGATE THUNK TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi.getDelegateThunk should work for Action delegate", () => {
+    await createMonoDependentTest("MonoApi.getDelegateThunk should work for Action delegate", () => {
       const domain = Mono.domain;
-      const actionClass = domain.class("System.Action");
+      const actionClass = domain.tryClass("System.Action");
 
       if (actionClass) {
         try {
@@ -410,9 +419,9 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.getDelegateThunk should cache results", () => {
+    await createMonoDependentTest("MonoApi.getDelegateThunk should cache results", () => {
       const domain = Mono.domain;
-      const actionClass = domain.class("System.Action");
+      const actionClass = domain.tryClass("System.Action");
 
       if (actionClass) {
         try {
@@ -433,7 +442,7 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== ADD INTERNAL CALL TESTS =====
 
   results.push(
-    createErrorHandlingTest("MonoApi.addInternalCall should reject empty name", () => {
+    await createErrorHandlingTest("MonoApi.addInternalCall should reject empty name", () => {
       assertThrows(() => {
         Mono.api.addInternalCall("", ptr(0x1234));
       }, "Should throw for empty name");
@@ -441,7 +450,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createErrorHandlingTest("MonoApi.addInternalCall should reject null callback", () => {
+    await createErrorHandlingTest("MonoApi.addInternalCall should reject null callback", () => {
       assertThrows(() => {
         Mono.api.addInternalCall("Test.Class::Method", NULL);
       }, "Should throw for null callback");
@@ -449,7 +458,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.addInternalCall should accept valid parameters", () => {
+    await createMonoDependentTest("MonoApi.addInternalCall should accept valid parameters", () => {
       // Create a dummy callback
       const callback = new NativeCallback(
         () => {
@@ -472,14 +481,14 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== DISPOSE TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi should track disposed state", () => {
+    await createMonoDependentTest("MonoApi should track disposed state", () => {
       // Check initial state - should not be disposed
       assert(!Mono.api.isDisposed, "API should not be disposed initially");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.call should invoke native functions", () => {
+    await createMonoDependentTest("MonoApi.call should invoke native functions", () => {
       // Test the call method for invoking native functions
       try {
         const rootDomain = Mono.api.call("mono_get_root_domain");
@@ -494,7 +503,7 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== NATIVE BINDINGS TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi.native should provide lazy-bound functions", () => {
+    await createMonoDependentTest("MonoApi.native should provide lazy-bound functions", () => {
       // Access some native functions
       const native = Mono.api.native;
 
@@ -507,7 +516,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi.native functions should handle null arguments", () => {
+    await createMonoDependentTest("MonoApi.native functions should handle null arguments", () => {
       // mono_class_get_name with NULL should not crash
       try {
         const result = Mono.api.native.mono_class_get_name(NULL);
@@ -521,12 +530,12 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== ERROR TYPE TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoManagedExceptionError should have correct name property", () => {
+    await createMonoDependentTest("MonoManagedExceptionError should have correct name property", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const parseMethod = int32Class.tryGetMethod("Parse", 1);
+        const parseMethod = int32Class.tryMethod("Parse", 1);
         if (parseMethod) {
           try {
             const str = Mono.api.stringNew("invalid");
@@ -543,12 +552,12 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoManagedExceptionError should be instanceof Error", () => {
+    await createMonoDependentTest("MonoManagedExceptionError should be instanceof Error", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const parseMethod = int32Class.tryGetMethod("Parse", 1);
+        const parseMethod = int32Class.tryMethod("Parse", 1);
         if (parseMethod) {
           try {
             const str = Mono.api.stringNew("xyz");
@@ -565,10 +574,10 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== EXCEPTION SLOT TESTS =====
 
   results.push(
-    createMonoDependentTest("Exception slot should be reused across invocations", () => {
+    await createMonoDependentTest("Exception slot should be reused across invocations", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
-      const concatMethod = stringClass!.getMethod("Concat", 2);
+      const stringClass = domain.tryClass("System.String");
+      const concatMethod = stringClass!.tryMethod("Concat", 2);
 
       // Multiple successful invocations
       for (let i = 0; i < 5; i++) {
@@ -586,10 +595,10 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== BOUNDARY AND EDGE CASE TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi should handle rapid successive calls", () => {
+    await createMonoDependentTest("MonoApi should handle rapid successive calls", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
-      const isNullOrEmptyMethod = stringClass!.tryGetMethod("IsNullOrEmpty", 1);
+      const stringClass = domain.tryClass("System.String");
+      const isNullOrEmptyMethod = stringClass!.tryMethod("IsNullOrEmpty", 1);
 
       if (isNullOrEmptyMethod) {
         const iterations = 100;
@@ -612,10 +621,10 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi should handle mixed success/exception calls", () => {
+    await createMonoDependentTest("MonoApi should handle mixed success/exception calls", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
-      const parseMethod = int32Class!.tryGetMethod("Parse", 1);
+      const int32Class = domain.tryClass("System.Int32");
+      const parseMethod = int32Class!.tryMethod("Parse", 1);
 
       if (parseMethod) {
         const testInputs = [
@@ -654,9 +663,9 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== VALUE BOX TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi should support mono_value_box for Int32", () => {
+    await createMonoDependentTest("MonoApi should support mono_value_box for Int32", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
         const valuePtr = Memory.alloc(4);
@@ -676,9 +685,9 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi should support mono_object_unbox", () => {
+    await createMonoDependentTest("MonoApi should support mono_object_unbox", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
         const valuePtr = Memory.alloc(4);
@@ -699,7 +708,7 @@ export function createRuntimeApiTests(): TestResult[] {
   // ===== PERFORMANCE TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoApi native function lookup should be fast after caching", () => {
+    await createMonoDependentTest("MonoApi native function lookup should be fast after caching", () => {
       const iterations = 1000;
 
       // Warm up cache
@@ -717,7 +726,7 @@ export function createRuntimeApiTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoApi string creation performance", () => {
+    await createMonoDependentTest("MonoApi string creation performance", () => {
       const iterations = 100;
       const testString = "Performance test string";
 

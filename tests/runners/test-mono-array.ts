@@ -6,7 +6,7 @@
 
 import { createMonoArrayTests } from "../test-mono-array";
 
-const results = createMonoArrayTests();
+const results = await createMonoArrayTests();
 
 // Print summary
 const passed = results.filter(r => r.passed).length;

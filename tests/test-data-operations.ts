@@ -5,23 +5,23 @@
 
 import Mono from "../src";
 import {
-  TestResult,
-  TestSuite,
-  createMonoDependentTest,
-  createDomainTest,
-  createSmokeTest,
-  createErrorHandlingTest,
-  createNestedPerformTest,
   assert,
-  assertNotNull,
-  assertPerformWorks,
   assertApiAvailable,
   assertDomainAvailable,
   assertDomainCached,
+  assertNotNull,
+  assertPerformWorks,
+  createDomainTestAsync,
+  createErrorHandlingTest,
+  createMonoDependentTest,
+  createNestedPerformTest,
+  createSmokeTest,
   TestCategory,
+  TestResult,
+  TestSuite,
 } from "./test-framework";
 
-export function testDataOperations(): TestResult {
+export async function testDataOperations(): Promise<TestResult> {
   console.log("\nData Operations (Object, String, Array):");
 
   const suite = new TestSuite("Data Operations Tests", TestCategory.MONO_DEPENDENT);
@@ -34,13 +34,13 @@ export function testDataOperations(): TestResult {
   // ============================================================================
 
   // Modern API tests
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Mono.perform should work for object tests", () => {
       assertPerformWorks("Mono.perform() should work for object tests");
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Object APIs should be available", () => {
       assertApiAvailable("Mono.api should be accessible for object operations");
       assert(Mono.api.hasExport("mono_object_new"), "mono_object_new should be available");
@@ -51,7 +51,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Object APIs should be callable", () => {
       assert(typeof Mono.api.native.mono_object_new === "function", "mono_object_new should be a function");
       assert(typeof Mono.api.native.mono_object_get_class === "function", "mono_object_get_class should be a function");
@@ -60,21 +60,21 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should access object-related classes", () => {
       assertDomainAvailable("Mono.domain should be accessible for object operations");
 
       const domain = Mono.domain;
 
       // Try to find Object class
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       if (objectClass) {
-        assert(typeof objectClass.getName === "function", "Object class should have getName method");
-        console.log(`    Found Object class: ${objectClass.getName()}`);
+        assert(typeof objectClass.name === "string", "Object class should have name property");
+        console.log(`    Found Object class: ${objectClass.name}`);
 
-        const methods = objectClass.getMethods();
-        const properties = objectClass.getProperties();
-        const fields = objectClass.getFields();
+        const methods = objectClass.methods;
+        const properties = objectClass.properties;
+        const fields = objectClass.fields;
 
         assert(Array.isArray(methods), "Object class should have methods array");
         assert(Array.isArray(properties), "Object class should have properties array");
@@ -88,10 +88,10 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test string object operations", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
+      const stringClass = domain.tryClass("System.String");
 
       if (stringClass) {
         // Test string as object
@@ -115,10 +115,10 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test value type boxing and unboxing", () => {
       const domain = Mono.domain;
-      const intClass = domain.class("System.Int32");
+      const intClass = domain.tryClass("System.Int32");
 
       if (intClass) {
         console.log("    Found Int32 class for boxing tests");
@@ -134,7 +134,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test different object types", () => {
       const domain = Mono.domain;
 
@@ -150,11 +150,11 @@ export function testDataOperations(): TestResult {
 
       let foundCount = 0;
       for (const objectType of objectTypes) {
-        const testClass = domain.class(objectType);
+        const testClass = domain.tryClass(objectType);
         if (testClass) {
           foundCount++;
-          console.log(`    Found object type: ${objectType} -> ${testClass.getName()}`);
-          assert(typeof testClass.getName === "function", "Object class should have getName method");
+          console.log(`    Found object type: ${objectType} -> ${testClass.name}`);
+          assert(typeof testClass.name === "string", "Object class should have name property");
         }
       }
 
@@ -162,13 +162,13 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test object method access", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
 
       if (objectClass) {
-        const methods = objectClass.getMethods();
+        const methods = objectClass.methods;
         assert(Array.isArray(methods), "Object should have methods array");
 
         // Test for common object methods
@@ -176,7 +176,7 @@ export function testDataOperations(): TestResult {
         let foundMethodCount = 0;
 
         for (const methodName of commonMethods) {
-          const method = objectClass.method(methodName);
+          const method = objectClass.tryMethod(methodName);
           if (method) {
             foundMethodCount++;
             console.log(`    Found object method: ${methodName}`);
@@ -188,29 +188,29 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test object property access", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
 
       if (objectClass) {
-        const properties = objectClass.getProperties();
+        const properties = objectClass.properties;
         assert(Array.isArray(properties), "Object should have properties array");
 
         // System.Object typically has no instance properties, but let's verify
         console.log(`    System.Object has ${properties.length} properties (as expected)`);
 
         // Test with a class that might have properties
-        const stringClass = domain.class("System.String");
+        const stringClass = domain.tryClass("System.String");
         if (stringClass) {
-          const stringProperties = stringClass.getProperties();
+          const stringProperties = stringClass.properties;
           console.log(`    System.String has ${stringProperties.length} properties for comparison`);
         }
       }
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test object runtime initialization", () => {
       // Test runtime object initialization API
       assert(Mono.api.hasExport("mono_runtime_object_init"), "mono_runtime_object_init should be available");
@@ -227,7 +227,7 @@ export function testDataOperations(): TestResult {
   // STRING TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("String APIs should be available", () => {
       assertApiAvailable("Mono.api should be accessible for string operations");
       assert(Mono.api.hasExport("mono_string_new"), "mono_string_new should be available");
@@ -235,7 +235,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("String creation should work", () => {
       const testStr = "Hello, Mono!";
       const monoStr = Mono.api.stringNew(testStr);
@@ -245,7 +245,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Empty string creation should work", () => {
       const emptyStr = Mono.api.stringNew("");
       assertNotNull(emptyStr, "Empty string pointer should not be null");
@@ -254,7 +254,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Unicode string creation should work", () => {
       const unicodeStr = Mono.api.stringNew("Hello 世界");
       assertNotNull(unicodeStr, "Unicode string pointer should not be null");
@@ -263,7 +263,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Long string creation should work", () => {
       const longStr = "A".repeat(10000);
       const monoStr = Mono.api.stringNew(longStr);
@@ -273,7 +273,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Special characters in strings should work", () => {
       const specialStr = Mono.api.stringNew("Line1\nLine2\tTabbed\r\nWindows");
       assertNotNull(specialStr, "Special character string should not be null");
@@ -282,7 +282,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Multiple strings can be created", () => {
       const str1 = Mono.api.stringNew("First");
       const str2 = Mono.api.stringNew("Second");
@@ -300,18 +300,18 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("String class should be accessible through domain", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
+      const stringClass = domain.tryClass("System.String");
 
       if (stringClass) {
-        assert(typeof stringClass.getName === "function", "String class should have getName method");
-        console.log(`    Found String class: ${stringClass.getName()}`);
+        assert(typeof stringClass.name === "string", "String class should have name property");
+        console.log(`    Found String class: ${stringClass.name}`);
 
         // Test that we can access String class methods and fields
-        const methods = stringClass.getMethods();
-        const fields = stringClass.getFields();
+        const methods = stringClass.methods;
+        const fields = stringClass.fields;
 
         assert(Array.isArray(methods), "String class should have methods array");
         assert(Array.isArray(fields), "String class should have fields array");
@@ -322,10 +322,10 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test string field access", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
+      const stringClass = domain.tryClass("System.String");
 
       if (stringClass) {
         // Try to access String.Empty field
@@ -344,7 +344,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test string edge cases", () => {
       // Test various edge cases
       const edgeCases = [
@@ -367,7 +367,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test string encoding scenarios", () => {
       // Test different encoding scenarios
       const encodingTests = [
@@ -393,7 +393,7 @@ export function testDataOperations(): TestResult {
   // ARRAY TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Array APIs should be available", () => {
       assertApiAvailable("Mono.api should be accessible for array operations");
       assert(Mono.api.hasExport("mono_array_new"), "mono_array_new should be available");
@@ -402,7 +402,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Array APIs should be callable", () => {
       assert(typeof Mono.api.native.mono_array_new === "function", "mono_array_new should be a function");
       assert(typeof Mono.api.native.mono_array_length === "function", "mono_array_length should be a function");
@@ -413,19 +413,19 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should access array-related classes", () => {
       assertDomainAvailable("Mono.domain should be accessible for array operations");
 
       const domain = Mono.domain;
 
       // Try to find array-related classes
-      const arrayClass = domain.class("System.Array");
+      const arrayClass = domain.tryClass("System.Array");
       if (arrayClass) {
-        assert(typeof arrayClass.getName === "function", "Array class should have getName method");
-        console.log(`    Found Array class: ${arrayClass.getName()}`);
+        assert(typeof arrayClass.name === "string", "Array class should have name property");
+        console.log(`    Found Array class: ${arrayClass.name}`);
 
-        const methods = arrayClass.getMethods();
+        const methods = arrayClass.methods;
         assert(Array.isArray(methods), "Array class should have methods array");
         console.log(`    System.Array has ${methods.length} methods`);
       } else {
@@ -433,25 +433,25 @@ export function testDataOperations(): TestResult {
       }
 
       // Try to find generic array classes
-      const stringArrayClass = domain.class("System.String[]");
+      const stringArrayClass = domain.tryClass("System.String[]");
       if (stringArrayClass) {
-        console.log(`    Found String array class: ${stringArrayClass.getName()}`);
+        console.log(`    Found String array class: ${stringArrayClass.name}`);
       }
 
-      const intArrayClass = domain.class("System.Int32[]");
+      const intArrayClass = domain.tryClass("System.Int32[]");
       if (intArrayClass) {
-        console.log(`    Found Int32 array class: ${intArrayClass.getName()}`);
+        console.log(`    Found Int32 array class: ${intArrayClass.name}`);
       }
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test array creation through APIs", () => {
       // Test basic array creation APIs
       try {
         const domain = Mono.domain;
         // We need an element type for array creation
-        const stringClass = domain.class("System.String");
+        const stringClass = domain.tryClass("System.String");
         if (stringClass) {
           // Note: Actual array creation would require more complex setup with element types
           // For now, we test that the APIs are available and callable
@@ -463,7 +463,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test different array types", () => {
       const domain = Mono.domain;
 
@@ -478,11 +478,11 @@ export function testDataOperations(): TestResult {
 
       let foundCount = 0;
       for (const arrayType of arrayTypes) {
-        const testClass = domain.class(arrayType);
+        const testClass = domain.tryClass(arrayType);
         if (testClass) {
           foundCount++;
-          console.log(`    Found array type: ${arrayType} -> ${testClass.getName()}`);
-          assert(typeof testClass.getName === "function", "Array class should have getName method");
+          console.log(`    Found array type: ${arrayType} -> ${testClass.name}`);
+          assert(typeof testClass.name === "string", "Array class should have name property");
         }
       }
 
@@ -490,13 +490,13 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test array method access", () => {
       const domain = Mono.domain;
-      const arrayClass = domain.class("System.Array");
+      const arrayClass = domain.tryClass("System.Array");
 
       if (arrayClass) {
-        const methods = arrayClass.getMethods();
+        const methods = arrayClass.methods;
         assert(Array.isArray(methods), "Array should have methods array");
 
         // Test for common array methods
@@ -504,7 +504,7 @@ export function testDataOperations(): TestResult {
         let foundMethodCount = 0;
 
         for (const methodName of commonMethods) {
-          const method = arrayClass.method(methodName);
+          const method = arrayClass.tryMethod(methodName);
           if (method) {
             foundMethodCount++;
             console.log(`    Found array method: ${methodName}`);
@@ -516,13 +516,13 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Should test array property access", () => {
       const domain = Mono.domain;
-      const arrayClass = domain.class("System.Array");
+      const arrayClass = domain.tryClass("System.Array");
 
       if (arrayClass) {
-        const properties = arrayClass.getProperties();
+        const properties = arrayClass.properties;
         assert(Array.isArray(properties), "Array should have properties array");
 
         // Test for common array properties
@@ -546,14 +546,14 @@ export function testDataOperations(): TestResult {
   // INTEGRATION TESTS
   // ============================================================================
 
-  suite.addResult(
-    createDomainTest("Should support object operations in nested perform calls", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Should support object operations in nested perform calls", domain => {
       // Test nested perform calls
       Mono.perform(() => {
-        const objectClass = domain.class("System.Object");
+        const objectClass = domain.tryClass("System.Object");
 
         if (objectClass) {
-          assert(typeof objectClass.getName === "function", "Object access should work in nested perform calls");
+          assert(typeof objectClass.name === "string", "Object access should work in nested perform calls");
         }
 
         // Test that APIs are still accessible in nested context
@@ -562,8 +562,8 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Should support string operations in nested perform calls", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Should support string operations in nested perform calls", domain => {
       // Test nested perform calls
       Mono.perform(() => {
         const testStr = "Nested string test";
@@ -574,26 +574,26 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createNestedPerformTest({
       context: "array operations",
       testName: "Should support array operations in nested perform calls",
       validate: domain => {
-        const arrayClass = domain.class("System.Array");
+        const arrayClass = domain.tryClass("System.Array");
         assert(arrayClass !== null, "System.Array class should be accessible in nested perform calls");
       },
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Object operations should be consistent", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Object operations should be consistent", domain => {
       // Test multiple calls return consistent results
-      const objectClass1 = domain.class("System.Object");
-      const objectClass2 = domain.class("System.Object");
+      const objectClass1 = domain.tryClass("System.Object");
+      const objectClass2 = domain.tryClass("System.Object");
 
       if (objectClass1 && objectClass2) {
-        const name1 = objectClass1.getName();
-        const name2 = objectClass2.getName();
+        const name1 = objectClass1.name;
+        const name2 = objectClass2.name;
         assert(name1 === name2, "Object class lookups should be consistent");
       }
 
@@ -609,8 +609,8 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("String operations should be consistent", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("String operations should be consistent", domain => {
       // Test multiple calls return consistent results
       const testStr = "Consistency test";
       const str1 = Mono.api.stringNew(testStr);
@@ -628,15 +628,15 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Array operations should be consistent", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Array operations should be consistent", domain => {
       // Test multiple calls return consistent results
-      const arrayClass1 = domain.class("System.Array");
-      const arrayClass2 = domain.class("System.Array");
+      const arrayClass1 = domain.tryClass("System.Array");
+      const arrayClass2 = domain.tryClass("System.Array");
 
       if (arrayClass1 && arrayClass2) {
-        const name1 = arrayClass1.getName();
-        const name2 = arrayClass2.getName();
+        const name1 = arrayClass1.name;
+        const name2 = arrayClass2.name;
         assert(name1 === name2, "Array class lookups should be consistent");
       }
 
@@ -644,12 +644,12 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Should test cross-type operations", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Should test cross-type operations", domain => {
       // Test creating objects of different types and working with them
-      const stringClass = domain.class("System.String");
-      const arrayClass = domain.class("System.Array");
-      const objectClass = domain.class("System.Object");
+      const stringClass = domain.tryClass("System.String");
+      const arrayClass = domain.tryClass("System.Array");
+      const objectClass = domain.tryClass("System.Object");
 
       if (stringClass && arrayClass && objectClass) {
         // Create a string
@@ -675,12 +675,12 @@ export function testDataOperations(): TestResult {
   // ERROR HANDLING TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createErrorHandlingTest("Should handle object-related errors gracefully", () => {
       const domain = Mono.domain;
 
       // Test with non-existent object types
-      const nonExistentObject = domain.class("NonExistent.ObjectType");
+      const nonExistentObject = domain.tryClass("NonExistent.ObjectType");
       assert(nonExistentObject === null, "Non-existent object type should return null");
 
       // Test object creation error handling
@@ -690,7 +690,7 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createErrorHandlingTest("Should handle string creation errors gracefully", () => {
       try {
         // Test with null or undefined (these might throw)
@@ -711,29 +711,29 @@ export function testDataOperations(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createErrorHandlingTest("Should handle array-related errors gracefully", () => {
       const domain = Mono.domain;
 
       // Test with non-existent array types
-      const nonExistentArray = domain.class("NonExistent.Type[]");
+      const nonExistentArray = domain.tryClass("NonExistent.Type[]");
       assert(nonExistentArray === null, "Non-existent array type should return null");
 
       // Test with malformed array names
-      const malformedArray = domain.class("System.String[");
+      const malformedArray = domain.tryClass("System.String[");
       assert(malformedArray === null, "Malformed array name should return null");
 
       console.log("    Error handling for array types works correctly");
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createErrorHandlingTest("Should handle invalid data inputs gracefully", () => {
       const domain = Mono.domain;
 
       try {
         // Test invalid object type names
-        const invalidObject = domain.class("Invalid.Object.Type");
+        const invalidObject = domain.tryClass("Invalid.Object.Type");
         assert(invalidObject === null, "Invalid object type should return null");
 
         // Test invalid string operations

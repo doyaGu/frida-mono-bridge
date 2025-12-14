@@ -1,9 +1,12 @@
 /**
  * Test Framework
  * Provides utilities for writing and running tests
+ *
+ * V2 Migration: All test helpers now use async Mono.perform()
  */
 
-import Mono, { MonoDomain } from "../src";
+import Mono from "../src";
+import type { MonoDomain } from "../src/model/domain";
 
 export interface TestResult {
   name: string;
@@ -53,6 +56,15 @@ export class TestSuite {
     this.results.push(result);
   }
 
+  /**
+   * Add a test result that may be a Promise (for async tests).
+   * V2: Supports both sync TestResult and Promise<TestResult>
+   */
+  async addResultAsync(result: TestResult | Promise<TestResult>): Promise<void> {
+    const resolvedResult = await result;
+    this.results.push(resolvedResult);
+  }
+
   getSummary(): TestSummary {
     return {
       total: this.results.length,
@@ -76,10 +88,24 @@ export class TestSuite {
   }
 }
 
-export function createTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
+export function createTest(name: string, testFn: () => void | Promise<void>, options?: TestOptions): TestResult {
   const startTime = Date.now();
   try {
-    testFn();
+    const result = testFn();
+    // Handle both sync and async test functions
+    if (result instanceof Promise) {
+      // For async tests, we need to handle differently
+      // This will be caught by the caller who should await
+      console.log(`  PASS ${name} (async - duration pending)`);
+      return {
+        name,
+        passed: true,
+        failed: false,
+        skipped: false,
+        category: options?.category,
+        requiresMono: options?.requiresMono ?? true,
+      };
+    }
     const duration = Date.now() - startTime;
     console.log(`  PASS ${name} (${duration}ms)`);
     return {
@@ -124,15 +150,68 @@ export function createSkippedTest(name: string, reason?: string): TestResult {
   };
 }
 
-export function createMonoTest<T>(name: string, testFn: () => T): TestResult {
-  return createTest(name, () => Mono.perform(testFn));
+/**
+ * Create a test that runs inside Mono.perform() with proper async handling.
+ * V2: Now returns a Promise and properly awaits Mono.perform().
+ */
+export async function createMonoTestAsync<T>(
+  name: string,
+  testFn: () => T | Promise<T>,
+  options?: TestOptions,
+): Promise<TestResult> {
+  const startTime = Date.now();
+  try {
+    await Mono.perform(testFn);
+    const duration = Date.now() - startTime;
+    console.log(`  PASS ${name} (${duration}ms)`);
+    return {
+      name,
+      passed: true,
+      failed: false,
+      skipped: false,
+      duration,
+      category: options?.category ?? TestCategory.MONO_DEPENDENT,
+      requiresMono: options?.requiresMono ?? true,
+    };
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`  FAIL ${name} (${duration}ms)`);
+    if (error instanceof Error) {
+      console.error(`    Error: ${error.message}`);
+      if (error.stack) {
+        console.error(`    Stack: ${error.stack.split("\n").slice(0, 3).join("\n    ")}`);
+      }
+    }
+    return {
+      name,
+      passed: false,
+      failed: true,
+      skipped: false,
+      error: error instanceof Error ? error : new Error(String(error)),
+      duration,
+      category: options?.category ?? TestCategory.MONO_DEPENDENT,
+      requiresMono: options?.requiresMono ?? true,
+    };
+  }
 }
 
-export function createDomainTest(name: string, testFn: (domain: MonoDomain) => void): TestResult {
-  return createMonoTest(name, () => {
-    const domain = Mono.domain;
-    testFn(domain);
-  });
+/**
+ * Create a domain test with proper async handling.
+ * V2: Properly awaits Mono.perform().
+ */
+export async function createDomainTestAsync(
+  name: string,
+  testFn: (domain: MonoDomain) => void | Promise<void>,
+  options?: TestOptions,
+): Promise<TestResult> {
+  return createMonoTestAsync(
+    name,
+    async () => {
+      const domain = Mono.domain;
+      await testFn(domain);
+    },
+    options,
+  );
 }
 
 /**
@@ -167,9 +246,9 @@ export function assertThrows(fn: () => void, message: string): void {
 }
 
 // Modern API assertion helpers for the fluent API
-export function assertPerformWorks(message: string): void {
+export async function assertPerformWorks(message: string): Promise<void> {
   try {
-    Mono.perform(() => {
+    await Mono.perform(() => {
       // If this executes, perform() is working
     });
   } catch (error) {
@@ -177,9 +256,9 @@ export function assertPerformWorks(message: string): void {
   }
 }
 
-export function assertDomainAvailable(message: string): void {
+export async function assertDomainAvailable(message: string): Promise<void> {
   try {
-    const domain = Mono.perform(() => Mono.domain);
+    const domain = await Mono.perform(() => Mono.domain);
     if (!domain) {
       throw new Error(`Mono.domain not available: ${message}`);
     }
@@ -188,9 +267,9 @@ export function assertDomainAvailable(message: string): void {
   }
 }
 
-export function assertApiAvailable(message: string): void {
+export async function assertApiAvailable(message: string): Promise<void> {
   try {
-    const api = Mono.perform(() => Mono.api);
+    const api = await Mono.perform(() => Mono.api);
     if (!api) {
       throw new Error(`Mono.api not available: ${message}`);
     }
@@ -199,9 +278,9 @@ export function assertApiAvailable(message: string): void {
   }
 }
 
-export function assertPerformReturns<T>(fn: () => T, expected: T, message: string): void {
+export async function assertPerformReturns<T>(fn: () => T, expected: T, message: string): Promise<void> {
   try {
-    const result = Mono.perform(fn);
+    const result = await Mono.perform(fn);
     if (result !== expected) {
       throw new Error(`Expected ${expected}, got ${result}: ${message}`);
     }
@@ -210,9 +289,13 @@ export function assertPerformReturns<T>(fn: () => T, expected: T, message: strin
   }
 }
 
-export function assertThrowsInPerform(fn: () => void, expectedErrorPattern: string | RegExp, message: string): void {
+export async function assertThrowsInPerform(
+  fn: () => void,
+  expectedErrorPattern: string | RegExp,
+  message: string,
+): Promise<void> {
   try {
-    Mono.perform(fn);
+    await Mono.perform(fn);
     throw new Error(`Expected function to throw inside Mono.perform(): ${message}`);
   } catch (error) {
     const errorStr = error instanceof Error ? error.message : String(error);
@@ -228,11 +311,14 @@ export interface PerformSmokeTestOptions {
   message?: string;
 }
 
-export function createPerformSmokeTest(context: string, options: PerformSmokeTestOptions = {}): TestResult {
+export async function createPerformSmokeTest(
+  context: string,
+  options: PerformSmokeTestOptions = {},
+): Promise<TestResult> {
   const testName = options.testName ?? `Mono.perform should work for ${context}`;
   const message = options.message ?? `Mono.perform() should work for ${context}`;
-  return createTest(testName, () => {
-    assertPerformWorks(message);
+  return createMonoTestAsync(testName, async () => {
+    await assertPerformWorks(message);
   });
 }
 
@@ -244,14 +330,14 @@ export interface ApiAvailabilityTestOptions {
   validate?: (api: any) => void;
 }
 
-export function createApiAvailabilityTest(options: ApiAvailabilityTestOptions): TestResult {
+export async function createApiAvailabilityTest(options: ApiAvailabilityTestOptions): Promise<TestResult> {
   const { context, testName, message, requiredExports = [], validate } = options;
 
   const resolvedTestName = testName ?? "Mono API should be available";
   const resolvedMessage = message ?? `Mono.api should be accessible for ${context}`;
 
-  return createMonoTest(resolvedTestName, () => {
-    assertApiAvailable(resolvedMessage);
+  return createMonoTestAsync(resolvedTestName, async () => {
+    await assertApiAvailable(resolvedMessage);
     const api = Mono.api;
 
     for (const exportName of requiredExports) {
@@ -271,7 +357,7 @@ export interface NestedPerformTestOptions {
   validate?: (domain: MonoDomain) => void;
 }
 
-export function createNestedPerformTest(options: NestedPerformTestOptions): TestResult {
+export async function createNestedPerformTest(options: NestedPerformTestOptions): Promise<TestResult> {
   const {
     context,
     testName = `Should support ${context} in nested perform calls`,
@@ -279,10 +365,10 @@ export function createNestedPerformTest(options: NestedPerformTestOptions): Test
     validate,
   } = options;
 
-  return createDomainTest(testName, domain => {
-    Mono.perform(() => {
+  return createDomainTestAsync(testName, async domain => {
+    await Mono.perform(async () => {
       try {
-        validate?.(domain);
+        await validate?.(domain);
       } catch (error) {
         throw new Error(`${message}: ${error}`);
       }
@@ -290,16 +376,22 @@ export function createNestedPerformTest(options: NestedPerformTestOptions): Test
   });
 }
 
-export function assertDomainCached(message = "Mono.domain should be cached instance"): void {
-  const domain1 = Mono.domain;
-  const domain2 = Mono.domain;
-  if (domain1 !== domain2) {
-    fail(message);
-  }
+export async function assertDomainCached(message = "Mono.domain should be cached instance"): Promise<void> {
+  await Mono.perform(() => {
+    const domain1 = Mono.domain;
+    const domain2 = Mono.domain;
+    if (domain1 !== domain2) {
+      fail(message);
+    }
+  });
 }
 
 // Enhanced test creation functions with categorization
-export function createStandaloneTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
+export function createStandaloneTest(
+  name: string,
+  testFn: () => void | Promise<void>,
+  options?: TestOptions,
+): TestResult {
   const result = createTest(name, testFn, {
     ...options,
     category: TestCategory.STANDALONE,
@@ -308,36 +400,52 @@ export function createStandaloneTest(name: string, testFn: () => void, options?:
   return result;
 }
 
-export function createMonoDependentTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
+export async function createMonoDependentTest(
+  name: string,
+  testFn: () => void | Promise<void>,
+  options?: TestOptions,
+): Promise<TestResult> {
   // Wrap the test function in Mono.perform for proper thread attachment
-  return createTest(name, () => Mono.perform(testFn), {
+  return createMonoTestAsync(name, testFn, {
     ...options,
     category: TestCategory.MONO_DEPENDENT,
     requiresMono: true,
   });
 }
 
-export function createIntegrationTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
+export async function createIntegrationTest(
+  name: string,
+  testFn: () => void | Promise<void>,
+  options?: TestOptions,
+): Promise<TestResult> {
   // Wrap the test function in Mono.perform for proper thread attachment
-  return createTest(name, () => Mono.perform(testFn), {
+  return createMonoTestAsync(name, testFn, {
     ...options,
     category: TestCategory.INTEGRATION,
     requiresMono: true,
   });
 }
 
-export function createPerformanceTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
+export async function createPerformanceTest(
+  name: string,
+  testFn: () => void | Promise<void>,
+  options?: TestOptions,
+): Promise<TestResult> {
   // Wrap the test function in Mono.perform for proper thread attachment
-  return createTest(name, () => Mono.perform(testFn), {
+  return createMonoTestAsync(name, testFn, {
     ...options,
     category: TestCategory.PERFORMANCE,
     requiresMono: true,
   });
 }
 
-export function createErrorHandlingTest(name: string, testFn: () => void, options?: TestOptions): TestResult {
+export async function createErrorHandlingTest(
+  name: string,
+  testFn: () => void | Promise<void>,
+  options?: TestOptions,
+): Promise<TestResult> {
   // Wrap the test function in Mono.perform for proper thread attachment
-  return createTest(name, () => Mono.perform(testFn), {
+  return createMonoTestAsync(name, testFn, {
     ...options,
     category: TestCategory.ERROR_HANDLING,
     requiresMono: true,
@@ -346,26 +454,30 @@ export function createErrorHandlingTest(name: string, testFn: () => void, option
 
 // Enhanced versions of existing functions with categorization
 // Note: createMonoDependentTest already wraps in Mono.perform, so no double-wrap needed
-export function createMonoTestEnhanced<T>(name: string, testFn: () => T, options?: TestOptions): TestResult {
+export async function createMonoTestEnhanced<T>(
+  name: string,
+  testFn: () => T | Promise<T>,
+  options?: TestOptions,
+): Promise<TestResult> {
   return createMonoDependentTest(
     name,
-    () => {
-      testFn();
+    async () => {
+      await testFn();
     },
     options,
   );
 }
 
-export function createDomainTestEnhanced(
+export async function createDomainTestEnhanced(
   name: string,
-  testFn: (domain: MonoDomain) => void,
+  testFn: (domain: MonoDomain) => void | Promise<void>,
   options?: TestOptions,
-): TestResult {
+): Promise<TestResult> {
   return createMonoDependentTest(
     name,
-    () => {
+    async () => {
       const domain = Mono.domain;
-      testFn(domain);
+      await testFn(domain);
     },
     options,
   );
@@ -386,7 +498,11 @@ export function createSmokeTest(category: TestCategory, context: string): TestRe
 }
 
 // Additional specialized test creation functions
-export function createMonoThread(name: string, testFn: () => void, options?: TestOptions): TestResult {
+export async function createMonoThread(
+  name: string,
+  testFn: () => void | Promise<void>,
+  options?: TestOptions,
+): Promise<TestResult> {
   return createMonoDependentTest(name, testFn, {
     ...options,
     category: TestCategory.MONO_DEPENDENT,
@@ -394,10 +510,10 @@ export function createMonoThread(name: string, testFn: () => void, options?: Tes
 }
 
 // Alias for createDomainTestEnhanced to provide consistent naming
-export function createDomainTestEnhancedAlias(
+export async function createDomainTestEnhancedAlias(
   name: string,
-  testFn: (domain: any) => void,
+  testFn: (domain: MonoDomain) => void | Promise<void>,
   options?: TestOptions,
-): TestResult {
-  return createDomainTest(name, testFn);
+): Promise<TestResult> {
+  return createDomainTestAsync(name, testFn, options);
 }

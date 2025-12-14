@@ -27,7 +27,7 @@ import { testSupporting } from "./test-supporting";
 // ============================================================================
 // CATEGORY 2: Utility Tests (STANDALONE - No Mono dependency)
 // ============================================================================
-import { testMonoErrorHandling } from "./test-mono-error-handling";
+import runMonoErrorHandlingTests from "./test-mono-error-handling";
 import { testMonoUtils } from "./test-mono-utils";
 
 // ============================================================================
@@ -101,7 +101,7 @@ export {
   testMonoApi,
   testMonoData,
   testMonoDomain,
-  testMonoErrorHandling,
+  runMonoErrorHandlingTests as testMonoErrorHandling,
   testMonoModule,
   testMonoThreading,
   testMonoTypes,

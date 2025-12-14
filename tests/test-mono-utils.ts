@@ -34,7 +34,7 @@ class MockMonoObject {
   }
 }
 
-export function testMonoUtils(): TestResult {
+export async function testMonoUtils(): Promise<TestResult> {
   console.log("\nComprehensive Utility and Helper Function Tests:");
 
   const suite = new TestSuite("Mono Utils Complete Tests", TestCategory.STANDALONE);
@@ -43,7 +43,7 @@ export function testMonoUtils(): TestResult {
   // FIND UTILITY TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Find utility - wildcard pattern matching", () => {
       // Test wildcard to regex conversion using custom implementation
       // (wildcardToRegex is an internal function, not exported)
@@ -73,7 +73,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Find utility - pattern parsing", () => {
       // Test ClassName.MethodName pattern parsing
       const testPattern = "Namespace.ClassName.MethodName";
@@ -85,7 +85,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Find utility - exact class lookup", () => {
       // Test exact class name parsing
       const fullName = "System.String";
@@ -102,7 +102,7 @@ export function testMonoUtils(): TestResult {
   // TRACE UTILITY TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Trace utility - method hooking interface", () => {
       // Test method callbacks interface
       const callbacks: TraceUtils.MethodCallbacks = {
@@ -119,7 +119,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Trace utility - callback validation", () => {
       // Test callback function validation
       const validCallbacks: TraceUtils.MethodCallbacks = {
@@ -143,7 +143,7 @@ export function testMonoUtils(): TestResult {
   // MEMORY UTILITY TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Memory utility - pointer resolution", () => {
       // Test NativePointer resolution
       const testPtr = ptr(0x12345678);
@@ -167,7 +167,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Memory utility - pointer null checking", () => {
       // Test pointer null detection
       assert(MemoryUtils.pointerIsNull(null), "Should detect null as null");
@@ -179,7 +179,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Memory utility - pointer validation", () => {
       // Test pointer validation
       const validPtr = ptr(0x12345678);
@@ -192,7 +192,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Memory utility - instance unwrapping", () => {
       // Test instance unwrapping
       const testPtr = ptr(0x12345678);
@@ -205,7 +205,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createErrorHandlingTest("Memory utility - safe allocation", () => {
       // Test safe allocation
       const validPtr = MemoryUtils.safeAlloc(100);
@@ -216,7 +216,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Memory utility - isNativePointer check", () => {
       // Test isNativePointer
       const testPtr = ptr(0x12345678);
@@ -228,7 +228,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Memory utility - allocPointerArray", () => {
       // Test allocating empty array
       const emptyResult = MemoryUtils.allocPointerArray([]);
@@ -253,7 +253,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Memory utility - tryMakePointer", () => {
       // Test with valid number
       const fromNumber = MemoryUtils.tryMakePointer(0x12345678);
@@ -282,7 +282,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createErrorHandlingTest("Memory utility - ensurePointer", () => {
       // Test with valid pointer
       const validPtr = ptr(0x12345678);
@@ -305,7 +305,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Memory utility - enumerateMonoHandles pattern", () => {
       // Test the enumeration pattern with a mock fetch function
       let callCount = 0;
@@ -337,7 +337,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Memory utility - enumerateMonoHandles empty", () => {
       // Test enumeration with empty results
       const mockFetch = (_iter: NativePointer): NativePointer => {
@@ -351,7 +351,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Memory utility - pointerIsNull with bigint and string", () => {
       // Test with bigint zero
       assert(MemoryUtils.pointerIsNull(BigInt(0)), "Should detect bigint zero as null");
@@ -375,7 +375,7 @@ export function testMonoUtils(): TestResult {
   // CACHE UTILITY TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Cache utility - LRU cache basic operations", () => {
       // Test LRU cache creation and basic operations
       const cache = new CacheUtils.LruCache<string, number>(3);
@@ -395,7 +395,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Cache utility - LRU eviction", () => {
       // Test LRU eviction behavior
       const cache = new CacheUtils.LruCache<string, number>(2);
@@ -404,14 +404,14 @@ export function testMonoUtils(): TestResult {
       cache.set("key2", 2);
       cache.set("key3", 3); // Should evict key1
 
-      assert(cache.size === 2, "Should maintain capacity");
+      assert(cache.size === 2, `Should maintain capacity, got size=${cache.size}`);
       assert(cache.get("key1") === undefined, "Should evict oldest item");
       assert(cache.get("key2") === 2, "Should keep newer items");
       assert(cache.get("key3") === 3, "Should keep newest item");
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Cache utility - LRU access order", () => {
       // Test LRU access order updates
       const cache = new CacheUtils.LruCache<string, number>(3);
@@ -433,7 +433,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Cache utility - cache utilities", () => {
       // Test cache utility methods
       const cache = new CacheUtils.LruCache<string, number>(3);
@@ -464,7 +464,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Cache utility - getOrCreate factory", () => {
       // Test getOrCreate with factory function
       const cache = new CacheUtils.LruCache<string, number>(3);
@@ -487,7 +487,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Cache utility - single value operations", () => {
       // Test single value operations
       const cache = new CacheUtils.LruCache<string, number>(3);
@@ -506,7 +506,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createErrorHandlingTest("Cache utility - invalid capacity", () => {
       // Test invalid capacity handling
       assertThrows(() => new CacheUtils.LruCache<string, number>(0), "Should throw for zero capacity");
@@ -514,7 +514,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Cache utility - onEvict callback", () => {
       // Test eviction callback
       const evicted: Array<{ key: string; value: number }> = [];
@@ -547,7 +547,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Cache utility - iterator methods", () => {
       const cache = new CacheUtils.LruCache<string, number>(5);
 
@@ -575,7 +575,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Cache utility - forEach method", () => {
       const cache = new CacheUtils.LruCache<string, number>(5);
 
@@ -605,7 +605,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Cache utility - clear method", () => {
       const cache = new CacheUtils.LruCache<string, number>(5);
 
@@ -624,7 +624,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Cache utility - LruCache with options object", () => {
       // Test constructor with options object
       const evicted: string[] = [];
@@ -651,7 +651,7 @@ export function testMonoUtils(): TestResult {
   // STRING OPERATIONS TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("StringOperations - UTF-8 string reading", () => {
       // Test UTF-8 string reading
       // Test with null pointer
@@ -664,7 +664,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("StringOperations - Mono string reading", () => {
       // Test Mono string reading
       const mockMonoString = new MockMonoObject(ptr(0x12345678));
@@ -677,7 +677,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("StringOperations - UTF-16 string reading", () => {
       // Test UTF-16 string reading
       assert(StringOperations.readUtf16String(null) === "", "Should return empty string for null");
@@ -686,7 +686,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("StringOperations - safe stringification", () => {
       // Test safe JSON stringification
       const testObj = { name: "test", value: 42 };
@@ -706,7 +706,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("StringOperations - error creation", () => {
       // Test error creation with context
       const error = StringOperations.createError("Test error", { context: "test" });
@@ -716,7 +716,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("StringOperations - performance timer", () => {
       // Test performance timer
       const timer = StringOperations.createTimer();
@@ -741,7 +741,7 @@ export function testMonoUtils(): TestResult {
   // LOGGER TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Logger - basic functionality", () => {
       // Test logger creation
       const logger = new LogUtils.Logger({ tag: "Test", level: "debug" });
@@ -755,7 +755,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Logger - static methods", () => {
       // Test static methods exist
       assert(typeof LogUtils.Logger.debug === "function", "Should have static debug method");
@@ -768,7 +768,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Logger - instance methods", () => {
       // Test instance methods exist and are callable
       const logger = new LogUtils.Logger({ tag: "Test", level: "debug" });
@@ -781,7 +781,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Logger - factory methods", () => {
       // Test withTag factory
       const taggedLogger = LogUtils.Logger.withTag("CustomTag");
@@ -800,7 +800,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createStandaloneTest("Logger - default values", () => {
       // Test default tag and level
       const defaultLogger = new LogUtils.Logger();
@@ -818,7 +818,7 @@ export function testMonoUtils(): TestResult {
   // PERFORMANCE TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createPerformanceTest("Cache utility - LRU cache performance", () => {
       // Test LRU cache performance
       const cache = new CacheUtils.LruCache<string, number>(1000);
@@ -836,7 +836,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createPerformanceTest("String operations - performance timer overhead", () => {
       // Test performance timer overhead
       for (let i = 0; i < 10000; i++) {
@@ -849,7 +849,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createPerformanceTest("Memory operations - pointer resolution performance", () => {
       // Test pointer resolution performance
       const testPtr = ptr(0x12345678);
@@ -873,7 +873,7 @@ export function testMonoUtils(): TestResult {
   // INTEGRATION TESTS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createIntegrationTest("Utilities integration - cache with memory", () => {
       // Test integration between cache and memory utilities
       const cache = new CacheUtils.LruCache<string, NativePointer>(10);
@@ -889,7 +889,7 @@ export function testMonoUtils(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createIntegrationTest("Utilities integration - comprehensive workflow", () => {
       // Test comprehensive workflow using multiple utilities
       const cache = new CacheUtils.LruCache<string, any>(5);

@@ -6,7 +6,7 @@
 
 import { createMonoStringTests } from "../test-mono-string";
 
-const results = createMonoStringTests();
+const results = await createMonoStringTests();
 
 // Print summary
 const passed = results.filter(r => r.passed).length;

@@ -2,6 +2,8 @@
  * Core Infrastructure Tests
  * Consolidated tests for module detection, version detection, and basic API functionality
  * Note: Detailed API tests are in test-mono-api.ts, this file focuses on core infrastructure
+ *
+ * V2 Migration: All tests now async, using property-based API
  */
 
 import Mono from "../src";
@@ -9,7 +11,6 @@ import {
   assert,
   assertNotNull,
   createMonoDependentTest,
-  createMonoTest,
   createSmokeTest,
   createTest,
   TestCategory,
@@ -17,7 +18,7 @@ import {
   TestSuite,
 } from "./test-framework";
 
-export function testCoreInfrastructure(): TestResult {
+export async function testCoreInfrastructure(): Promise<TestResult> {
   console.log("\nCore Infrastructure:");
 
   // Core infrastructure tests are mixed - some standalone, some Mono-dependent
@@ -113,8 +114,8 @@ export function testCoreInfrastructure(): TestResult {
   );
 
   // Version Detection Tests (basic version info - detailed tests in test-mono-api.ts)
-  suite.addResult(
-    createMonoTest("Version object should exist and be accessible", () => {
+  await suite.addResultAsync(
+    createMonoDependentTest("Version object should exist and be accessible", () => {
       const version = Mono.version;
       assertNotNull(version, "Version should not be null");
       assertNotNull(version.features, "Features should not be null");
@@ -122,8 +123,8 @@ export function testCoreInfrastructure(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createMonoTest("All feature flags should be defined and boolean", () => {
+  await suite.addResultAsync(
+    createMonoDependentTest("All feature flags should be defined and boolean", () => {
       const features = Mono.version.features;
       const featureNames = Object.keys(features);
       assert(featureNames.length > 0, "Should have at least one feature flag");
@@ -137,7 +138,8 @@ export function testCoreInfrastructure(): TestResult {
   );
 
   // Basic API Functionality Tests (excluding detailed tests covered in test-mono-api.ts)
-  suite.addResult(
+  // V2: Use addResultAsync for async tests
+  await suite.addResultAsync(
     createMonoDependentTest("Modern API features should be available", () => {
       assertNotNull(Mono.perform, "Mono.perform should be available");
       assertNotNull(Mono.api, "Mono.api should be available");
@@ -151,7 +153,7 @@ export function testCoreInfrastructure(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Basic API connectivity should work", () => {
       // Test basic connectivity without detailed functionality tests
       const domain = Mono.domain;
@@ -164,12 +166,13 @@ export function testCoreInfrastructure(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("API should handle basic operations", () => {
       // Test that basic operations work without detailed testing
+      // V2: Use property-based API (assemblies instead of getAssemblies)
       try {
         const domain = Mono.domain;
-        const assemblies = domain.getAssemblies();
+        const assemblies = domain.assemblies;
         assert(Array.isArray(assemblies), "Should get assemblies array");
         console.log("    Basic API operations working");
       } catch (error) {

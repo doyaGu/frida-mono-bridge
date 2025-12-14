@@ -7,8 +7,8 @@ import { createRuntimeApiTests } from "../test-runtime-api";
 import { runTestCategory, TestResult } from "../test-runner-base";
 
 // Wrapper function to convert array of results to single result
-function runRuntimeApiTests(): TestResult {
-  const results = createRuntimeApiTests();
+async function runRuntimeApiTests(): Promise<TestResult> {
+  const results = await createRuntimeApiTests();
   const passed = results.filter(r => r.passed).length;
   const failed = results.filter(r => r.failed).length;
   const skipped = results.filter(r => r.skipped).length;

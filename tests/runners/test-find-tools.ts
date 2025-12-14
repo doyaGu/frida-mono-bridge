@@ -7,8 +7,8 @@
 import { createFindToolTests } from "../test-find-tools";
 import { runTestCategory, TestResult } from "../test-runner-base";
 
-function runFindToolTests(): TestResult {
-  const results = createFindToolTests();
+async function runFindToolTests(): Promise<TestResult> {
+  const results = await createFindToolTests();
   const passed = results.filter(r => r.passed).length;
   const failed = results.filter(r => r.failed).length;
   const skipped = results.filter(r => r.skipped).length;

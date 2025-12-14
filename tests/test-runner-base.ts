@@ -13,11 +13,11 @@ export interface TestRunnerConfig {
   stopOnFirstFailure?: boolean;
 }
 
-export function runTestCategory(
+export async function runTestCategory(
   categoryName: string,
-  testFunction: () => TestResult,
+  testFunction: () => TestResult | Promise<TestResult>,
   config: TestRunnerConfig = {},
-): void {
+): Promise<void> {
   console.log("=".repeat(Math.max(categoryName.length + 8, 48)));
   console.log(`== ${categoryName} ==`);
   console.log("=".repeat(Math.max(categoryName.length + 8, 48)));
@@ -25,7 +25,7 @@ export function runTestCategory(
   const startTime = Date.now();
 
   try {
-    const result = testFunction();
+    const result = await testFunction();
     const duration = Date.now() - startTime;
 
     // Print individual test results if verbose
@@ -76,10 +76,10 @@ export function runTestCategory(
   }
 }
 
-export function runMultipleTestCategories(
-  categories: Array<{ name: string; testFunction: () => TestResult }>,
+export async function runMultipleTestCategories(
+  categories: Array<{ name: string; testFunction: () => TestResult | Promise<TestResult> }>,
   config: TestRunnerConfig = {},
-): void {
+): Promise<void> {
   console.log("=".repeat(60));
   console.log("== FRIDA MONO BRIDGE - INDIVIDUAL TEST RUNNER ==");
   console.log("=".repeat(60));
@@ -91,7 +91,7 @@ export function runMultipleTestCategories(
 
   for (const category of categories) {
     try {
-      const result = category.testFunction();
+      const result = await category.testFunction();
       results.push({ name: category.name, result });
 
       if (result.passed) {

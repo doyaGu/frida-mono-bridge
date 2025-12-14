@@ -5,17 +5,17 @@
  */
 
 import Mono from "../src";
-import { TestResult, createMonoDependentTest, createErrorHandlingTest, assert, assertNotNull } from "./test-framework";
+import { TestResult, assert, assertNotNull, createErrorHandlingTest, createMonoDependentTest } from "./test-framework";
 
-export function createMonoObjectTests(): TestResult[] {
+export async function createMonoObjectTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // ===== OBJECT CREATION TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoObject should be creatable from class", () => {
+    await createMonoDependentTest("MonoObject should be creatable from class", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should exist");
 
       const obj = objectClass!.newObject();
@@ -25,24 +25,24 @@ export function createMonoObjectTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoObject should have class reference", () => {
+    await createMonoDependentTest("MonoObject should have class reference", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should exist");
 
       const obj = objectClass!.newObject();
-      const klass = obj.getClass();
+      const klass = obj.class;
       assertNotNull(klass, "Object should have class reference");
-      assert(klass.getName() === "Object", "Class name should be Object");
+      assert(klass.name === "Object", "Class name should be Object");
     }),
   );
 
   // ===== OBJECT CLONING TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoObject.clone should create new object", () => {
+    await createMonoDependentTest("MonoObject.clone should create new object", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should exist");
 
       const obj = objectClass!.newObject();
@@ -55,23 +55,23 @@ export function createMonoObjectTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoObject.clone should preserve class", () => {
+    await createMonoDependentTest("MonoObject.clone should preserve class", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should exist");
 
       const obj = objectClass!.newObject();
       const cloned = obj.clone();
 
       // Same class
-      assert(obj.getClass().getFullName() === cloned.getClass().getFullName(), "Clone should have same class");
+      assert(obj.class.fullName === cloned.class.fullName, "Clone should have same class");
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoObject.deepClone should create new object", () => {
+    await createMonoDependentTest("MonoObject.deepClone should create new object", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should exist");
 
       const obj = objectClass!.newObject();
@@ -84,9 +84,9 @@ export function createMonoObjectTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoObject.deepClone should accept maxDepth parameter", () => {
+    await createMonoDependentTest("MonoObject.deepClone should accept maxDepth parameter", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should exist");
 
       const obj = objectClass!.newObject();
@@ -98,41 +98,41 @@ export function createMonoObjectTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoObject.deepClone should preserve class", () => {
+    await createMonoDependentTest("MonoObject.deepClone should preserve class", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should exist");
 
       const obj = objectClass!.newObject();
       const cloned = obj.deepClone();
 
-      assert(obj.getClass().getFullName() === cloned.getClass().getFullName(), "Deep clone should have same class");
+      assert(obj.class.fullName === cloned.class.fullName, "Deep clone should have same class");
     }),
   );
 
   // ===== OBJECT TYPE TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoObject should return correct class type", () => {
+    await createMonoDependentTest("MonoObject should return correct class type", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should exist");
 
       const obj = objectClass!.newObject();
-      const klass = obj.getClass();
+      const klass = obj.class;
 
       assertNotNull(klass, "Object should have class");
-      assert(klass.getName() === "Object", "Class name should be Object");
-      assert(klass.getNamespace() === "System", "Namespace should be System");
+      assert(klass.name === "Object", "Class name should be Object");
+      assert(klass.namespace === "System", "Namespace should be System");
     }),
   );
 
   // ===== OBJECT TOSTRING TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoObject toString should work", () => {
+    await createMonoDependentTest("MonoObject toString should work", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should exist");
 
       const obj = objectClass!.newObject();
@@ -145,9 +145,9 @@ export function createMonoObjectTests(): TestResult[] {
   // ===== OBJECT COMPARISON TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoObject equals should work for same object", () => {
+    await createMonoDependentTest("MonoObject equals should work for same object", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should exist");
 
       const obj = objectClass!.newObject();
@@ -156,9 +156,9 @@ export function createMonoObjectTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoObject clone should not be equal by pointer", () => {
+    await createMonoDependentTest("MonoObject clone should not be equal by pointer", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should exist");
 
       const obj = objectClass!.newObject();
@@ -171,17 +171,17 @@ export function createMonoObjectTests(): TestResult[] {
   // ===== ERROR HANDLING TESTS =====
 
   results.push(
-    createErrorHandlingTest("MonoObject operations should handle null gracefully", () => {
+    await createErrorHandlingTest("MonoObject operations should handle null gracefully", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should exist");
 
       const obj = objectClass!.newObject();
       assertNotNull(obj, "Object should be created");
 
       // These operations should not crash
-      const klass = obj.getClass();
-      assertNotNull(klass, "getClass should work");
+      const klass = obj.class;
+      assertNotNull(klass, "class should work");
 
       const clone = obj.clone();
       assertNotNull(clone, "clone should work");

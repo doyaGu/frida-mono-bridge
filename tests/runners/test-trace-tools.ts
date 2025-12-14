@@ -6,7 +6,7 @@
 
 import { createTraceToolsTests } from "../test-trace-tools";
 
-const results = createTraceToolsTests();
+const results = await createTraceToolsTests();
 
 // Print summary
 const passed = results.filter(r => r.passed).length;

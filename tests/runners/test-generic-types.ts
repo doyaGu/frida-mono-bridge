@@ -6,7 +6,7 @@
 
 import { createGenericTypeTests } from "../test-generic-types";
 
-const results = createGenericTypeTests();
+const results = await createGenericTypeTests();
 
 // Print summary
 const passed = results.filter(r => r.passed).length;

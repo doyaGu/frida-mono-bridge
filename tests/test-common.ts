@@ -2,19 +2,21 @@
  * Test Common Helpers
  * Consolidated common test utilities and setup functions used across all test files
  * This file consolidates functionality from multiple helper files for consistency
+ *
+ * V2 Migration: All helpers now use async Mono.perform()
  */
 
+import Mono from "../src";
+import type { MonoDomain } from "../src/model/domain";
 import {
-  TestResult,
   TestCategory,
-  createTest,
-  createMonoTest,
-  createDomainTest,
-  assertNotNull,
+  TestResult,
   assert,
+  assertNotNull,
+  createMonoTestAsync,
+  createTest,
   fail,
 } from "./test-framework";
-import Mono, { MonoDomain } from "../src";
 
 // ===== COMMON INTERFACES AND TYPES =====
 
@@ -223,13 +225,16 @@ export const PERFORMANCE_PRESETS = {
 
 /**
  * Sets up common test environment with domain and API access
+ * V2: Now async and uses Mono.perform()
  */
-export function setupCommonTestEnvironment(): CommonTestSetup {
+export async function setupCommonTestEnvironment(): Promise<CommonTestSetup> {
   const setup: CommonTestSetup = {};
 
   try {
-    setup.domain = Mono.perform(() => Mono.domain);
-    setup.api = Mono.perform(() => Mono.api);
+    await Mono.perform(() => {
+      setup.domain = Mono.domain;
+      setup.api = Mono.api;
+    });
   } catch (error) {
     // Some tests might not have Mono available
     console.warn(`Warning: Could not setup Mono environment: ${error}`);
@@ -240,20 +245,22 @@ export function setupCommonTestEnvironment(): CommonTestSetup {
 
 /**
  * Sets up Unity-specific test environment
+ * V2: Now async and uses Mono.perform()
  */
-export function setupUnityTestEnvironment(): CommonTestSetup {
+export async function setupUnityTestEnvironment(): Promise<CommonTestSetup> {
   const setup: CommonTestSetup = {};
 
   try {
     // Get basic Mono environment
-    const basicSetup = setupCommonTestEnvironment();
+    const basicSetup = await setupCommonTestEnvironment();
     setup.domain = basicSetup.domain;
     setup.api = basicSetup.api;
 
     // Get Unity-specific assemblies
     if (setup.domain) {
-      setup.testAssembly = setup.domain.getAssembly(UNITY_TEST_DATA.ASSEMBLIES.UNITY_ENGINE);
-      // Note: Additional Unity setup can be added here as needed
+      await Mono.perform(() => {
+        setup.testAssembly = setup.domain!.tryAssembly(UNITY_TEST_DATA.ASSEMBLIES.UNITY_ENGINE);
+      });
     }
   } catch (error) {
     console.warn(`Warning: Could not setup Unity test environment: ${error}`);
@@ -266,26 +273,31 @@ export function setupUnityTestEnvironment(): CommonTestSetup {
 
 /**
  * Creates a standardized test for basic Mono functionality
+ * V2: Now async
  */
-export function createBasicMonoTest(testName: string, testFn: (setup: CommonTestSetup) => void): TestResult {
-  return createMonoTest(testName, () => {
-    const setup = setupCommonTestEnvironment();
+export async function createBasicMonoTest(
+  testName: string,
+  testFn: (setup: CommonTestSetup) => void | Promise<void>,
+): Promise<TestResult> {
+  return createMonoTestAsync(testName, async () => {
+    const setup = await setupCommonTestEnvironment();
     assertNotNull(setup.domain, "Mono domain should be available");
     assertNotNull(setup.api, "Mono API should be available");
-    testFn(setup);
+    await testFn(setup);
   });
 }
 
 /**
  * Creates a test that verifies a specific Mono API function exists and is callable
+ * V2: Now async
  */
-export function createApiFunctionTest(
+export async function createApiFunctionTest(
   functionName: string,
   expectedSignature?: string,
-  testFn?: (api: any, func: any) => void,
-): TestResult {
-  return createMonoTest(`API function ${functionName} should be available`, () => {
-    const setup = setupCommonTestEnvironment();
+  testFn?: (api: any, func: any) => void | Promise<void>,
+): Promise<TestResult> {
+  return createMonoTestAsync(`API function ${functionName} should be available`, async () => {
+    const setup = await setupCommonTestEnvironment();
     assertNotNull(setup.api, "Mono API should be available");
 
     const func = setup.api[functionName];
@@ -301,27 +313,28 @@ export function createApiFunctionTest(
     }
 
     if (testFn) {
-      testFn(setup.api, func);
+      await testFn(setup.api, func);
     }
   });
 }
 
 /**
  * Creates a test that verifies a specific Mono type can be accessed
+ * V2: Now async, uses property-based API
  */
-export function createMonoTypeTest(
+export async function createMonoTypeTest(
   typeName: string,
   expectedProperties?: string[],
-  testFn?: (type: any) => void,
-): TestResult {
-  return createMonoTest(`Mono type ${typeName} should be accessible`, () => {
-    const setup = setupCommonTestEnvironment();
+  testFn?: (type: any) => void | Promise<void>,
+): Promise<TestResult> {
+  return createMonoTestAsync(`Mono type ${typeName} should be accessible`, async () => {
+    const setup = await setupCommonTestEnvironment();
     assertNotNull(setup.domain, "Mono domain should be available");
 
     // Try to get the type - this is a simplified version
     // Real implementation would depend on the actual Mono API
     try {
-      const type = setup.domain.class(typeName);
+      const type = setup.domain!.tryClass(typeName);
       assertNotNull(type, `Type ${typeName} should be accessible`);
 
       if (expectedProperties) {
@@ -331,7 +344,7 @@ export function createMonoTypeTest(
       }
 
       if (testFn) {
-        testFn(type);
+        await testFn(type);
       }
     } catch (error) {
       fail(`Could not access type ${typeName}: ${error}`);
@@ -579,22 +592,23 @@ export function createThreadingTest(
 
 /**
  * Utility to create a test that verifies assembly loading
+ * V2: Now async, uses property-based API
  */
-export function createAssemblyTest(
+export async function createAssemblyTest(
   testName: string,
   assemblyName: string,
-  testFn?: (assembly: any) => void,
-): TestResult {
-  return createMonoTest(testName, () => {
-    const setup = setupCommonTestEnvironment();
+  testFn?: (assembly: any) => void | Promise<void>,
+): Promise<TestResult> {
+  return createMonoTestAsync(testName, async () => {
+    const setup = await setupCommonTestEnvironment();
     assertNotNull(setup.domain, "Mono domain should be available");
 
     try {
-      const assembly = setup.domain.getAssembly(assemblyName);
+      const assembly = setup.domain!.tryAssembly(assemblyName);
       assertNotNull(assembly, `Assembly ${assemblyName} should be loadable`);
 
       if (testFn) {
-        testFn(assembly);
+        await testFn(assembly);
       }
     } catch (error) {
       fail(`Could not load assembly ${assemblyName}: ${error}`);
@@ -604,24 +618,25 @@ export function createAssemblyTest(
 
 /**
  * Creates a test for type checking operations
+ * V2: Now async, uses property-based API
  */
-export function createTypeCheckingTest(
+export async function createTypeCheckingTest(
   testName: string,
   typeName: string,
   expectedBaseType?: string,
   expectedInterfaces?: string[],
-): TestResult {
-  return createMonoTest(testName, () => {
-    const setup = setupCommonTestEnvironment();
+): Promise<TestResult> {
+  return createMonoTestAsync(testName, async () => {
+    const setup = await setupCommonTestEnvironment();
     assertNotNull(setup.domain, "Mono domain should be available");
 
     try {
-      const type = setup.domain.class(typeName);
+      const type = setup.domain!.tryClass(typeName);
       assertNotNull(type, `Type ${typeName} should be accessible`);
 
       if (expectedBaseType) {
-        // Check base type - implementation depends on actual Mono API
-        const baseType = type.getParent();
+        // Check base type - V2 uses property instead of method
+        const baseType = type.parent;
         assertNotNull(baseType, `Type ${typeName} should have a base type`);
         // Additional checks would go here based on actual API
       }

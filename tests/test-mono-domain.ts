@@ -10,22 +10,22 @@
 
 import Mono from "../src";
 import {
-  TestResult,
-  TestSuite,
-  createMonoDependentTest,
-  createPerformanceTest,
-  createDomainTest,
-  createDomainTestEnhanced,
-  createApiAvailabilityTest,
   assert,
-  assertNotNull,
-  assertPerformWorks,
   assertDomainAvailable,
   assertDomainCached,
+  assertNotNull,
+  assertPerformWorks,
+  createApiAvailabilityTest,
+  createDomainTestAsync,
+  createDomainTestEnhanced,
+  createMonoDependentTest,
+  createPerformanceTest,
   TestCategory,
+  TestResult,
+  TestSuite,
 } from "./test-framework";
 
-export function testMonoDomain(): TestResult {
+export async function testMonoDomain(): Promise<TestResult> {
   console.log("\nComprehensive Mono Domain Tests:");
 
   const suite = new TestSuite("Mono Domain Complete Tests", TestCategory.MONO_DEPENDENT);
@@ -34,7 +34,7 @@ export function testMonoDomain(): TestResult {
   // DOMAIN CREATION AND BASIC OPERATIONS
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Domain should be accessible and functional", () => {
       assertPerformWorks("Domain operations should work");
       assertDomainAvailable("Mono.domain should be accessible");
@@ -51,7 +51,7 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createMonoDependentTest("Domain should provide consistent access", () => {
       const domain1 = Mono.domain;
       const domain2 = Mono.domain;
@@ -70,7 +70,7 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createApiAvailabilityTest({
       context: "domain operations",
       testName: "Domain API exports should be available",
@@ -104,8 +104,8 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Root domain should be accessible", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Root domain should be accessible", domain => {
       assertNotNull(domain, "Root domain should not be null");
       assert(!domain.pointer.isNull(), "Root domain pointer should not be NULL");
 
@@ -123,10 +123,10 @@ export function testMonoDomain(): TestResult {
   // ASSEMBLY LOADING WITHIN DOMAINS
   // ============================================================================
 
-  suite.addResult(
-    createDomainTest("Domain should load assemblies correctly", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should load assemblies correctly", domain => {
       // Test assembly enumeration
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
       assert(Array.isArray(assemblies), "getAssemblies should return array");
       assert(assemblies.length > 0, "Should have at least one assembly");
 
@@ -141,9 +141,8 @@ export function testMonoDomain(): TestResult {
       // Test assembly lookup
       const firstAssembly = assemblies[0];
       assertNotNull(firstAssembly, "First assembly should not be null");
-      assert(typeof firstAssembly.getName === "function", "Assembly should have getName method");
 
-      const assemblyName = firstAssembly.getName();
+      const assemblyName = firstAssembly.name;
       assert(typeof assemblyName === "string", "Assembly name should be string");
       assert(assemblyName.length > 0, "Assembly name should not be empty");
 
@@ -151,13 +150,13 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain should find core assemblies", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should find core assemblies", domain => {
       const coreAssemblyNames = ["mscorlib", "System.Private.CoreLib", "netstandard"];
       let foundCoreAssembly = null;
 
       for (const name of coreAssemblyNames) {
-        const assembly = domain.assembly(name);
+        const assembly = domain.tryAssembly(name);
         if (assembly) {
           foundCoreAssembly = assembly;
           console.log(`    Found core assembly: ${name}`);
@@ -169,7 +168,7 @@ export function testMonoDomain(): TestResult {
         assertNotNull(foundCoreAssembly.image, "Core assembly should have image");
         assert(!foundCoreAssembly.image.pointer.isNull(), "Core assembly image should not be NULL");
 
-        const classes = foundCoreAssembly.image.getClasses();
+        const classes = foundCoreAssembly.image.classes;
         assert(Array.isArray(classes), "Core assembly should have classes array");
         assert(classes.length > 0, "Core assembly should have classes");
 
@@ -180,8 +179,8 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain should find Unity assemblies", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should find Unity assemblies", domain => {
       const unityAssemblyNames = [
         "UnityEngine.CoreModule",
         "UnityEngine",
@@ -194,14 +193,14 @@ export function testMonoDomain(): TestResult {
       let foundUnityAssemblies = 0;
 
       for (const name of unityAssemblyNames) {
-        const assembly = domain.assembly(name);
+        const assembly = domain.tryAssembly(name);
         if (assembly) {
           foundUnityAssemblies++;
           console.log(`    Found Unity assembly: ${name}`);
 
           // Test assembly properties
           assertNotNull(assembly.image, "Unity assembly should have image");
-          const classes = assembly.image.getClasses();
+          const classes = assembly.image.classes;
           console.log(`      ${classes.length} classes in ${name}`);
         }
       }
@@ -214,11 +213,11 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain should handle assembly loading variations", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should handle assembly loading variations", domain => {
       // Test case sensitivity
-      const mscorlibLower = domain.assembly("mscorlib");
-      const mscorlibUpper = domain.assembly("MSCORLIB");
+      const mscorlibLower = domain.tryAssembly("mscorlib");
+      const mscorlibUpper = domain.tryAssembly("MSCORLIB");
 
       if (mscorlibLower) {
         console.log("    Found mscorlib with lowercase name");
@@ -231,16 +230,16 @@ export function testMonoDomain(): TestResult {
       }
 
       // Test with/without extension
-      const withExtension = domain.assembly("mscorlib.dll");
+      const withExtension = domain.tryAssembly("mscorlib.dll");
       if (withExtension) {
         console.log("    Found mscorlib with .dll extension");
       }
 
       // Test non-existent assemblies
-      const nonExistent = domain.assembly("NonExistent.Assembly");
+      const nonExistent = domain.tryAssembly("NonExistent.Assembly");
       assert(nonExistent === null, "Non-existent assembly should return null");
 
-      const emptyName = domain.assembly("");
+      const emptyName = domain.tryAssembly("");
       assert(emptyName === null, "Empty assembly name should return null");
 
       console.log("    Assembly loading variations handled correctly");
@@ -251,8 +250,8 @@ export function testMonoDomain(): TestResult {
   // TYPE RESOLUTION ACROSS DOMAINS
   // ============================================================================
 
-  suite.addResult(
-    createDomainTest("Domain should resolve system types", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should resolve system types", domain => {
       const systemTypes = [
         "System.String",
         "System.Object",
@@ -265,17 +264,14 @@ export function testMonoDomain(): TestResult {
       let foundTypes = 0;
 
       for (const typeName of systemTypes) {
-        const klass = domain.class(typeName);
+        const klass = domain.tryClass(typeName);
         if (klass) {
           foundTypes++;
           console.log(`    Found system type: ${typeName}`);
 
           // Test class properties
-          assert(typeof klass.getName === "function", "Class should have getName method");
-          assert(typeof klass.getNamespace === "function", "Class should have getNamespace method");
-
-          const className = klass.getName();
-          const namespace = klass.getNamespace();
+          const className = klass.name;
+          const namespace = klass.namespace;
 
           assert(typeof className === "string", "Class name should be string");
           assert(typeof namespace === "string", "Namespace should be string");
@@ -288,8 +284,8 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain should resolve Unity types", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should resolve Unity types", domain => {
       const unityTypes = [
         "UnityEngine.GameObject",
         "UnityEngine.Transform",
@@ -301,18 +297,18 @@ export function testMonoDomain(): TestResult {
       let foundUnityTypes = 0;
 
       for (const typeName of unityTypes) {
-        const klass = domain.class(typeName);
+        const klass = domain.tryClass(typeName);
         if (klass) {
           foundUnityTypes++;
           console.log(`    Found Unity type: ${typeName}`);
 
           // Test class methods
-          const methods = klass.getMethods();
+          const methods = klass.methods;
           assert(Array.isArray(methods), "Class should have methods array");
           console.log(`      ${methods.length} methods`);
 
           // Test class fields
-          const fields = klass.getFields();
+          const fields = klass.fields;
           assert(Array.isArray(fields), "Class should have fields array");
           console.log(`      ${fields.length} fields`);
         }
@@ -326,26 +322,26 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain should handle type resolution edge cases", domain => {
-      // Test empty and null type names
-      const emptyType = domain.class("");
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should handle type resolution edge cases", domain => {
+      // Test empty and null type names - use tryClass to safely handle edge cases
+      const emptyType = domain.tryClass("");
       assert(emptyType === null, "Empty type name should return null");
 
-      const nullType = domain.class(null as any);
+      const nullType = domain.tryClass(null as any);
       assert(nullType === null, "Null type name should return null");
 
-      const undefinedType = domain.class(undefined as any);
+      const undefinedType = domain.tryClass(undefined as any);
       assert(undefinedType === null, "Undefined type name should return null");
 
       // Test malformed type names
-      const malformedType = domain.class("Invalid.Type.Name.With.Too.Many.Dots");
+      const malformedType = domain.tryClass("Invalid.Type.Name.With.Too.Many.Dots");
       // This should return null, not throw
       console.log("    Malformed type name handled gracefully");
 
       // Test case sensitivity
-      const stringLower = domain.class("system.string");
-      const stringProper = domain.class("System.String");
+      const stringLower = domain.tryClass("system.string");
+      const stringProper = domain.tryClass("System.String");
 
       if (stringProper && !stringLower) {
         console.log("    Type resolution is case-sensitive");
@@ -357,18 +353,18 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain should provide namespace information", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should provide namespace information", domain => {
       // getRootNamespaces can be slow, so we use a timeout wrapper
       let rootNamespaces: string[] = [];
       try {
         // Only get a quick sample, don't iterate everything
-        const mscorlib = domain.assembly("mscorlib");
+        const mscorlib = domain.tryAssembly("mscorlib");
         if (mscorlib && mscorlib.image) {
-          const classes = mscorlib.image.getClasses().slice(0, 100); // Only check first 100 classes
+          const classes = mscorlib.image.classes.slice(0, 100); // Only check first 100 classes
           const namespaces = new Set<string>();
           for (const klass of classes) {
-            const ns = klass.getNamespace();
+            const ns = klass.namespace;
             if (ns) {
               const root = ns.split(".")[0];
               namespaces.add(root);
@@ -402,9 +398,9 @@ export function testMonoDomain(): TestResult {
   // CROSS-DOMAIN ACCESS AND SECURITY
   // ============================================================================
 
-  suite.addResult(
-    createDomainTest("Domain should maintain assembly isolation", domain => {
-      const assemblies = domain.getAssemblies();
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should maintain assembly isolation", domain => {
+      const assemblies = domain.assemblies;
       assert(Array.isArray(assemblies), "Should get assemblies array");
 
       // Test that each assembly has its own image
@@ -414,7 +410,7 @@ export function testMonoDomain(): TestResult {
           assertNotNull(assembly.image, "Assembly should have image");
           assert(!assembly.image.pointer.isNull(), "Assembly image should not be NULL");
 
-          const classes = assembly.image.getClasses();
+          const classes = assembly.image.classes;
           assert(Array.isArray(classes), "Assembly image should have classes array");
 
           // Test that classes are properly associated with their assembly
@@ -423,14 +419,14 @@ export function testMonoDomain(): TestResult {
             assertNotNull(firstClass, "First class should not be null");
 
             // The class should be accessible through the domain
-            const className = firstClass.getName();
-            const namespace = firstClass.getNamespace();
+            const className = firstClass.name;
+            const namespace = firstClass.namespace;
             const fullName = namespace ? `${namespace}.${className}` : className;
 
-            const domainClass = domain.class(fullName);
+            const domainClass = domain.tryClass(fullName);
             if (domainClass) {
               // Should be the same class or equivalent
-              const domainClassName = domainClass.getName();
+              const domainClassName = domainClass.name;
               assert(domainClassName === className, "Class names should match");
             }
           }
@@ -443,13 +439,13 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain should handle cross-assembly type references", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should handle cross-assembly type references", domain => {
       // Find a type that references another assembly
-      const stringClass = domain.class("System.String");
+      const stringClass = domain.tryClass("System.String");
       if (stringClass) {
         // String class should reference mscorlib
-        const methods = stringClass.getMethods();
+        const methods = stringClass.methods;
         assert(Array.isArray(methods), "String class should have methods");
 
         // Look for methods that might reference other assemblies
@@ -457,9 +453,9 @@ export function testMonoDomain(): TestResult {
         for (const method of methods.slice(0, 10)) {
           // Check first 10 methods
           try {
-            const returnType = method.getReturnType();
+            const returnType = method.returnType;
             if (returnType) {
-              const returnTypeName = returnType.getName();
+              const returnTypeName = returnType.name;
               if (returnTypeName && returnTypeName.includes(".")) {
                 crossAssemblyRefs++;
               }
@@ -476,14 +472,14 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain should enforce type access boundaries", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should enforce type access boundaries", domain => {
       // Test that private/internal types are handled appropriately
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
 
       if (assemblies.length > 0) {
         const firstAssembly = assemblies[0];
-        const classes = firstAssembly.image.getClasses();
+        const classes = firstAssembly.image.classes;
 
         // Try to access various types
         let accessibleTypes = 0;
@@ -492,12 +488,12 @@ export function testMonoDomain(): TestResult {
         for (const klass of classes.slice(0, 20)) {
           // Test first 20 classes
           try {
-            const className = klass.getName();
-            const namespace = klass.getNamespace();
+            const className = klass.name;
+            const namespace = klass.namespace;
             const fullName = namespace ? `${namespace}.${className}` : className;
 
             // Try to access through domain
-            const domainClass = domain.class(fullName);
+            const domainClass = domain.tryClass(fullName);
             if (domainClass) {
               accessibleTypes++;
             } else {
@@ -519,8 +515,8 @@ export function testMonoDomain(): TestResult {
   // DOMAIN LIFECYCLE MANAGEMENT
   // ============================================================================
 
-  suite.addResult(
-    createDomainTest("Domain should handle lifecycle operations", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should handle lifecycle operations", domain => {
       // Test domain properties
       assert(typeof domain.id === "number", "Domain should have numeric ID");
       assert(typeof domain.name === "string" || domain.name === null, "Domain name should be string or null");
@@ -538,8 +534,8 @@ export function testMonoDomain(): TestResult {
       assert(!domain.pointer.isNull(), "Domain pointer should not be NULL");
 
       // Test that domain operations remain consistent
-      const assemblies1 = domain.getAssemblies();
-      const assemblies2 = domain.getAssemblies();
+      const assemblies1 = domain.assemblies;
+      const assemblies2 = domain.assemblies;
 
       assert(assemblies1.length === assemblies2.length, "Assembly count should be consistent");
 
@@ -547,28 +543,27 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain should handle enumeration operations", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should handle enumeration operations", domain => {
       let enumeratedAssemblies = 0;
 
       // Test assembly enumeration callback
       domain.enumerateAssemblies(assembly => {
         enumeratedAssemblies++;
         assertNotNull(assembly, "Enumerated assembly should not be null");
-        assert(typeof assembly.getName === "function", "Enumerated assembly should have getName method");
       });
 
       assert(enumeratedAssemblies > 0, "Should enumerate at least one assembly");
 
       // Compare with getAssemblies
-      const directAssemblies = domain.getAssemblies();
+      const directAssemblies = domain.assemblies;
       assert(enumeratedAssemblies === directAssemblies.length, "Enumeration should match direct access");
 
       console.log(`    Enumerated ${enumeratedAssemblies} assemblies`);
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createPerformanceTest("Performance: Domain operations", () => {
       const domain = Mono.domain;
       const iterations = 100; // Reduced iterations for faster testing
@@ -585,7 +580,7 @@ export function testMonoDomain(): TestResult {
       const enumStartTime = Date.now();
       for (let i = 0; i < 10; i++) {
         // Reduced from 100
-        const assemblies = domain.getAssemblies();
+        const assemblies = domain.assemblies;
         assert(Array.isArray(assemblies), "Should get assemblies array");
       }
       const enumTime = Date.now() - enumStartTime;
@@ -594,7 +589,7 @@ export function testMonoDomain(): TestResult {
       const lookupStartTime = Date.now();
       for (let i = 0; i < 20; i++) {
         // Reduced from 200
-        const stringClass = domain.class("System.String");
+        const stringClass = domain.tryClass("System.String");
         // Don't assert here as it might not exist, just test performance
       }
       const lookupTime = Date.now() - lookupStartTime;
@@ -613,7 +608,7 @@ export function testMonoDomain(): TestResult {
   // ERROR HANDLING AND EDGE CASES
   // ============================================================================
 
-  suite.addResult(
+  await suite.addResultAsync(
     createDomainTestEnhanced("Domain should handle invalid operations gracefully", domain => {
       // Test invalid assembly names
       const invalidAssemblies = [
@@ -627,7 +622,7 @@ export function testMonoDomain(): TestResult {
 
       for (const invalidName of invalidAssemblies) {
         try {
-          const result = domain.assembly(invalidName as any);
+          const result = domain.tryAssembly(invalidName as any);
           assert(result === null, `Invalid assembly name should return null: ${invalidName}`);
         } catch (error) {
           // Controlled errors are acceptable
@@ -647,7 +642,7 @@ export function testMonoDomain(): TestResult {
 
       for (const invalidName of invalidTypes) {
         try {
-          const result = domain.class(invalidName as any);
+          const result = domain.tryClass(invalidName as any);
           assert(result === null, `Invalid type name should return null: ${invalidName}`);
         } catch (error) {
           console.log(`    Type lookup error handled: ${invalidName}`);
@@ -658,7 +653,7 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
+  await suite.addResultAsync(
     createDomainTestEnhanced("Domain should handle assembly loading errors", domain => {
       // Test loading non-existent files
       try {
@@ -698,8 +693,8 @@ export function testMonoDomain(): TestResult {
   // INTEGRATION TESTS
   // ============================================================================
 
-  suite.addResult(
-    createDomainTest("Domain should integrate with API operations", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should integrate with API operations", domain => {
       const api = Mono.api;
 
       // Test that domain and API work together
@@ -710,28 +705,28 @@ export function testMonoDomain(): TestResult {
       assert(domain.pointer.equals(apiDomain), "Domain and API domain pointers should match");
 
       // Test that domain operations use API correctly
-      const assemblies = domain.getAssemblies();
+      const assemblies = domain.assemblies;
       assert(Array.isArray(assemblies), "Domain should provide assemblies through API");
 
       console.log("    Domain-API integration working correctly");
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain should integrate with type system", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should integrate with type system", domain => {
       // Test that domain types work with the type system
-      const stringClass = domain.class("System.String");
+      const stringClass = domain.tryClass("System.String");
       if (stringClass) {
         // Test class methods
-        const methods = stringClass.getMethods();
+        const methods = stringClass.methods;
         assert(Array.isArray(methods), "Class should have methods array");
 
         // Test class fields
-        const fields = stringClass.getFields();
+        const fields = stringClass.fields;
         assert(Array.isArray(fields), "Class should have fields array");
 
         // Test class properties
-        const properties = stringClass.getProperties();
+        const properties = stringClass.properties;
         assert(Array.isArray(properties), "Class should have properties array");
 
         console.log(
@@ -743,32 +738,30 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain should integrate with Unity systems", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain should integrate with Unity systems", domain => {
       // Test Unity-specific integration
-      const gameObjectClass = domain.class("UnityEngine.GameObject");
+      const gameObjectClass = domain.tryClass("UnityEngine.GameObject");
       if (gameObjectClass) {
         console.log("    Unity GameObject class found");
 
         // Test that we can access Unity-specific methods
-        const methods = gameObjectClass.getMethods();
+        const methods = gameObjectClass.methods;
         const unityMethods = methods.filter(
           (m: any) =>
-            m.getName().includes("GetComponent") ||
-            m.getName().includes("AddComponent") ||
-            m.getName().includes("Instantiate"),
+            m.name.includes("GetComponent") || m.name.includes("AddComponent") || m.name.includes("Instantiate"),
         );
 
         console.log(`    Found ${unityMethods.length} Unity-specific methods`);
       }
 
       // Test Unity assembly integration
-      const unityCore = domain.assembly("UnityEngine.CoreModule");
+      const unityCore = domain.tryAssembly("UnityEngine.CoreModule");
       if (unityCore) {
         const image = unityCore.image;
-        const classes = image.getClasses();
+        const classes = image.classes;
 
-        const unityClasses = classes.filter((c: any) => c.getNamespace().startsWith("UnityEngine"));
+        const unityClasses = classes.filter((c: any) => c.namespace.startsWith("UnityEngine"));
 
         console.log(`    Found ${unityClasses.length} Unity classes in CoreModule`);
       }
@@ -781,9 +774,9 @@ export function testMonoDomain(): TestResult {
   // ASSEMBLY UNLOADING TESTS
   // ============================================================================
 
-  suite.addResult(
-    createDomainTest("Domain.unloadAssembly should return result object", domain => {
-      const mscorlib = domain.getAssembly("mscorlib");
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.unloadAssembly should return result object", domain => {
+      const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
       const result = domain.unloadAssembly(mscorlib!);
@@ -794,9 +787,9 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.unloadAssembly should reject system assemblies", domain => {
-      const mscorlib = domain.getAssembly("mscorlib");
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.unloadAssembly should reject system assemblies", domain => {
+      const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
       const result = domain.unloadAssembly(mscorlib!);
@@ -806,8 +799,8 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.unloadAssembly should work by name", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.unloadAssembly should work by name", domain => {
       const result = domain.unloadAssembly("mscorlib");
       // Should return a result (even if failed)
       assert(typeof result === "object", "Should return result object");
@@ -815,16 +808,16 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.unloadAssembly should handle nonexistent assembly", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.unloadAssembly should handle nonexistent assembly", domain => {
       const result = domain.unloadAssembly("NonExistentAssembly12345");
       assert(result.success === false, "Should fail for nonexistent assembly");
       assert(result.reason.toLowerCase().includes("not found"), "Reason should mention not found");
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.isAssemblyUnloadingSupported should return boolean", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.isAssemblyUnloadingSupported should return boolean", domain => {
       const supported = domain.isAssemblyUnloadingSupported();
       assert(typeof supported === "boolean", "Should return boolean");
       console.log(`    Assembly unloading supported: ${supported}`);
@@ -835,8 +828,8 @@ export function testMonoDomain(): TestResult {
   // SUMMARY AND DESCRIPTION TESTS
   // ============================================================================
 
-  suite.addResult(
-    createDomainTest("Domain.getSummary should return complete summary object", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.getSummary should return complete summary object", domain => {
       const summary = domain.getSummary();
       assertNotNull(summary, "getSummary should return an object");
 
@@ -852,13 +845,13 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.getSummary should have consistent data", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.getSummary should have consistent data", domain => {
       const summary = domain.getSummary();
 
       // Verify consistency with direct methods
       assert(summary.id === domain.id, "Summary id should match domain.id");
-      assert(summary.isRoot === domain.isRootDomain(), "Summary isRoot should match isRootDomain()");
+      assert(summary.isRoot === domain.isRoot, "Summary isRoot should match isRoot");
       assert(summary.assemblyCount === domain.assemblyCount, "Summary assemblyCount should match domain.assemblyCount");
       assert(
         summary.assemblyNames.length === domain.assemblyCount,
@@ -867,8 +860,8 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.describe should return formatted string", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.describe should return formatted string", domain => {
       const description = domain.describe();
       assertNotNull(description, "describe should return a string");
 
@@ -882,8 +875,8 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.toString should return correct format", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.toString should return correct format", domain => {
       const str = domain.toString();
       assertNotNull(str, "toString should return a string");
 
@@ -891,7 +884,7 @@ export function testMonoDomain(): TestResult {
       assert(str.includes("assemblies"), "toString should include assembly count");
 
       // Should include root label if it is root
-      if (domain.isRootDomain()) {
+      if (domain.isRoot) {
         assert(str.includes("root"), "toString should include 'root' for root domain");
       }
 
@@ -903,10 +896,10 @@ export function testMonoDomain(): TestResult {
   // ACCESSOR PROPERTIES TESTS
   // ============================================================================
 
-  suite.addResult(
-    createDomainTest("Domain.assemblyCount accessor should return correct count", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.assemblyCount accessor should return correct count", domain => {
       const countFromAccessor = domain.assemblyCount;
-      const countFromMethod = domain.getAssemblies().length;
+      const countFromMethod = domain.assemblies.length;
 
       assert(countFromAccessor === countFromMethod, "assemblyCount accessor should match getAssemblies().length");
       assert(typeof countFromAccessor === "number", "assemblyCount should be a number");
@@ -916,12 +909,12 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.isRoot accessor should match isRootDomain()", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.isRoot accessor should match isRoot", domain => {
       const fromAccessor = domain.isRoot;
-      const fromMethod = domain.isRootDomain();
+      const fromMethod = domain.isRoot;
 
-      assert(fromAccessor === fromMethod, "isRoot accessor should match isRootDomain()");
+      assert(fromAccessor === fromMethod, "isRoot accessor should match isRoot");
       assert(typeof fromAccessor === "boolean", "isRoot should be a boolean");
 
       console.log(`    Is root domain: ${fromAccessor}`);
@@ -932,8 +925,8 @@ export function testMonoDomain(): TestResult {
   // UTILITY METHODS TESTS
   // ============================================================================
 
-  suite.addResult(
-    createDomainTest("Domain.hasAssembly should return true for existing assembly", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.hasAssembly should return true for existing assembly", domain => {
       assert(domain.hasAssembly("mscorlib") === true, "Should find mscorlib");
 
       // Also test with other common assemblies
@@ -943,29 +936,29 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.hasAssembly should return false for non-existing assembly", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.hasAssembly should return false for non-existing assembly", domain => {
       assert(domain.hasAssembly("NonExistent.Assembly") === false, "Should not find NonExistent.Assembly");
       assert(domain.hasAssembly("") === false, "Should return false for empty string");
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.hasClass should return true for existing class", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.hasClass should return true for existing class", domain => {
       assert(domain.hasClass("System.String") === true, "Should find System.String");
       assert(domain.hasClass("System.Object") === true, "Should find System.Object");
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.hasClass should return false for non-existing class", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.hasClass should return false for non-existing class", domain => {
       assert(domain.hasClass("NonExistent.Class") === false, "Should not find NonExistent.Class");
       assert(domain.hasClass("") === false, "Should return false for empty string");
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.searchAssemblies should find by pattern", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.searchAssemblies should find by pattern", domain => {
       // Search for "System" assemblies
       const systemAssemblies = domain.searchAssemblies("system");
       assert(Array.isArray(systemAssemblies), "Should return an array");
@@ -981,8 +974,8 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.searchClasses should find by pattern", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.searchClasses should find by pattern", domain => {
       // Search for "String" classes
       const stringClasses = domain.searchClasses("string", 20);
       assert(Array.isArray(stringClasses), "Should return an array");
@@ -990,23 +983,23 @@ export function testMonoDomain(): TestResult {
       assert(stringClasses.length <= 20, "Should respect maxResults");
 
       // Verify all contain the pattern (case-insensitive)
-      const allMatch = stringClasses.every(c => c.getName().toLowerCase().includes("string"));
+      const allMatch = stringClasses.every(c => c.name.toLowerCase().includes("string"));
       assert(allMatch, "All found classes should contain the pattern");
 
       console.log(`    Found ${stringClasses.length} classes containing 'string'`);
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.getTotalClassCount should return positive number", domain => {
-      const totalCount = domain.getTotalClassCount();
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.getTotalClassCount should return positive number", domain => {
+      const totalCount = domain.totalClassCount;
       assert(typeof totalCount === "number", "Should return a number");
       assert(totalCount > 0, "Should have positive total class count");
 
       // Verify it matches sum of individual assembly class counts
       let manualCount = 0;
-      for (const asm of domain.getAssemblies()) {
-        manualCount += asm.image.getClassCount();
+      for (const asm of domain.assemblies) {
+        manualCount += asm.image.classCount;
       }
       assert(totalCount === manualCount, "getTotalClassCount should match sum of individual counts");
 
@@ -1018,8 +1011,8 @@ export function testMonoDomain(): TestResult {
   // DOMAIN CREATION AND SWITCHING TESTS
   // ============================================================================
 
-  suite.addResult(
-    createDomainTest("Domain.createDomain should return domain or null", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.createDomain should return domain or null", domain => {
       const newDomain = domain.createDomain("TestDomain");
       // Can be null if not supported, that's OK
       assert(newDomain === null || newDomain.pointer !== undefined, "Should return null or valid domain");
@@ -1031,8 +1024,8 @@ export function testMonoDomain(): TestResult {
     }),
   );
 
-  suite.addResult(
-    createDomainTest("Domain.setAsCurrent should return domain or null", domain => {
+  await suite.addResultAsync(
+    createDomainTestAsync("Domain.setAsCurrent should return domain or null", domain => {
       const previous = domain.setAsCurrent();
       // Can be null if API not available
       assert(previous === null || previous.pointer !== undefined, "Should return null or valid domain");

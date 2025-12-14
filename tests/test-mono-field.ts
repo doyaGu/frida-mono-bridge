@@ -7,32 +7,32 @@
 import Mono from "../src";
 import {
   TestResult,
-  createMonoDependentTest,
-  createErrorHandlingTest,
   assert,
   assertNotNull,
   assertThrows,
+  createErrorHandlingTest,
+  createMonoDependentTest,
 } from "./test-framework";
 import { createBasicLookupPerformanceTest, createFieldLookupPerformanceTest } from "./test-utilities";
 
-export function createMonoFieldTests(): TestResult[] {
+export async function createMonoFieldTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // ===== FIELD DISCOVERY AND ENUMERATION TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should discover fields by name", () => {
+    await createMonoDependentTest("MonoField should discover fields by name", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
+      const stringClass = domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should be available");
 
       // Try to find a common field - String might not have public fields, so let's try another class
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
       if (int32Class) {
-        const field = int32Class.tryGetField("MaxValue");
+        const field = int32Class.tryField("MaxValue");
         if (field) {
-          assert(field.getName() === "MaxValue", "Field name should be MaxValue");
-          assert(field.getParent().getName() === "Int32", "Field parent should be Int32");
+          assert(field.name === "MaxValue", "Field name should be MaxValue");
+          assert(field.parent.name === "Int32", "Field parent should be Int32");
         } else {
           console.log("  - MaxValue field not found on Int32");
         }
@@ -41,45 +41,45 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should enumerate all fields in class", () => {
+    await createMonoDependentTest("MonoField should enumerate all fields in class", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const fields = int32Class.getFields();
+        const fields = int32Class.fields;
         assert(fields.length >= 0, "Should find fields (or none)");
 
         // Look for common static fields
-        const maxValueField = fields.find(f => f.getName() === "MaxValue");
-        const minValueField = fields.find(f => f.getName() === "MinValue");
+        const maxValueField = fields.find(f => f.name === "MaxValue");
+        const minValueField = fields.find(f => f.name === "MinValue");
 
         if (maxValueField) {
-          assert(maxValueField.getName() === "MaxValue", "Should find MaxValue field");
+          assert(maxValueField.name === "MaxValue", "Should find MaxValue field");
         }
         if (minValueField) {
-          assert(minValueField.getName() === "MinValue", "Should find MinValue field");
+          assert(minValueField.name === "MinValue", "Should find MinValue field");
         }
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoField should handle missing fields gracefully", () => {
+    await createMonoDependentTest("MonoField should handle missing fields gracefully", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
+      const stringClass = domain.tryClass("System.String");
 
-      const missingField = stringClass!.tryGetField("DefinitelyDoesNotExist");
+      const missingField = stringClass!.tryField("DefinitelyDoesNotExist");
       assert(missingField === null, "Missing field should return null");
     }),
   );
 
   results.push(
-    createErrorHandlingTest("MonoField should throw for missing required fields", () => {
+    await createErrorHandlingTest("MonoField should throw for missing required fields", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
+      const stringClass = domain.tryClass("System.String");
 
       assertThrows(() => {
-        stringClass!.getField("DefinitelyDoesNotExist");
+        stringClass!.field("DefinitelyDoesNotExist");
       }, "Should throw when required field is not found");
     }),
   );
@@ -87,13 +87,13 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD VALUE GETTING AND SETTING TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should get static field values", () => {
+    await createMonoDependentTest("MonoField should get static field values", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
-        if (maxValueField && maxValueField.isStatic()) {
+        const maxValueField = int32Class.tryField("MaxValue");
+        if (maxValueField && maxValueField.isStatic) {
           try {
             const value = maxValueField.getStaticValue();
             assertNotNull(value, "Static field value should be available");
@@ -106,14 +106,14 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should set static field values", () => {
+    await createMonoDependentTest("MonoField should set static field values", () => {
       const domain = Mono.domain;
 
       // Try to find a class with a writable static field
-      const testClass = domain.class("System.Threading.Thread");
+      const testClass = domain.tryClass("System.Threading.Thread");
       if (testClass) {
-        const field = testClass.tryGetField("CurrentThread");
-        if (field && field.isStatic()) {
+        const field = testClass.tryField("CurrentThread");
+        if (field && field.isStatic) {
           try {
             // This might not work due to security, but test API
             const originalValue = field.getStaticValue();
@@ -128,17 +128,17 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should get instance field values", () => {
+    await createMonoDependentTest("MonoField should get instance field values", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
 
       if (objectClass) {
         // Create an object instance
         const obj = objectClass.alloc();
 
         // Try to find instance fields (Object might not have public fields)
-        const fields = objectClass.getFields();
-        const instanceFields = fields.filter(f => !f.isStatic());
+        const fields = objectClass.fields;
+        const instanceFields = fields.filter(f => !f.isStatic);
 
         if (instanceFields.length > 0) {
           const field = instanceFields[0];
@@ -156,25 +156,25 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should set instance field values", () => {
+    await createMonoDependentTest("MonoField should set instance field values", () => {
       const domain = Mono.domain;
 
       // Use StringBuilder which is safe to allocate and has internal fields
-      const stringBuilderClass = domain.class("System.Text.StringBuilder");
+      const stringBuilderClass = domain.tryClass("System.Text.StringBuilder");
       if (stringBuilderClass) {
         const obj = stringBuilderClass.alloc();
         assertNotNull(obj, "StringBuilder instance should be allocated");
 
-        const fields = stringBuilderClass.getFields();
-        const instanceFields = fields.filter(f => !f.isStatic() && !f.isInitOnly() && !f.isLiteral());
+        const fields = stringBuilderClass.fields;
+        const instanceFields = fields.filter(f => !f.isStatic && !f.isInitOnly && !f.isLiteral);
 
         if (instanceFields.length > 0) {
           console.log(`  - Found ${instanceFields.length} writable instance fields on StringBuilder`);
 
           // Find a field we can safely modify (e.g., capacity-related or internal)
           for (const field of instanceFields) {
-            const fieldType = field.getType();
-            const typeName = fieldType?.getName() || "";
+            const fieldType = field.type;
+            const typeName = fieldType?.name || "";
 
             // Try to find an Int32 field we can set
             if (typeName === "Int32" || typeName === "System.Int32") {
@@ -216,11 +216,11 @@ export function createMonoFieldTests(): TestResult[] {
         }
       } else {
         // Fallback: try Exception class which has instance fields
-        const exceptionClass = domain.class("System.Exception");
+        const exceptionClass = domain.tryClass("System.Exception");
         if (exceptionClass) {
           const obj = exceptionClass.alloc();
-          const fields = exceptionClass.getFields();
-          const instanceFields = fields.filter(f => !f.isStatic());
+          const fields = exceptionClass.fields;
+          const instanceFields = fields.filter(f => !f.isStatic);
 
           console.log(`  - Using Exception class with ${instanceFields.length} instance fields`);
 
@@ -243,17 +243,17 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== TYPE CHECKING AND VALIDATION TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should provide field type information", () => {
+    await createMonoDependentTest("MonoField should provide field type information", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
           try {
-            const fieldType = maxValueField.getType();
+            const fieldType = maxValueField.type;
             assertNotNull(fieldType, "Field type should be available");
-            const typeName = fieldType.getName();
+            const typeName = fieldType.name;
             assert(
               typeName.includes("Int32") || typeName.includes("int"),
               `MaxValue field type should include 'Int32' or 'int', got: ${typeName}`,
@@ -267,12 +267,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should provide field metadata", () => {
+    await createMonoDependentTest("MonoField should provide field metadata", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
           try {
             const summary = maxValueField.getSummary();
@@ -290,12 +290,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should provide field description", () => {
+    await createMonoDependentTest("MonoField should provide field description", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
           const description = maxValueField.describe();
           assertNotNull(description, "Field description should be available");
@@ -309,50 +309,50 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== STATIC VS INSTANCE FIELD OPERATIONS TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should identify static fields correctly", () => {
+    await createMonoDependentTest("MonoField should identify static fields correctly", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
-          assert(maxValueField.isStatic(), "MaxValue should be static");
+          assert(maxValueField.isStatic, "MaxValue should be static");
         }
 
-        const minValueField = int32Class.tryGetField("MinValue");
+        const minValueField = int32Class.tryField("MinValue");
         if (minValueField) {
-          assert(minValueField.isStatic(), "MinValue should be static");
+          assert(minValueField.isStatic, "MinValue should be static");
         }
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoField should identify instance fields correctly", () => {
+    await createMonoDependentTest("MonoField should identify instance fields correctly", () => {
       const domain = Mono.domain;
 
       // Try to find a class with instance fields
-      const pointClass = domain.class("System.Drawing.Point");
+      const pointClass = domain.tryClass("System.Drawing.Point");
       if (pointClass) {
-        const fields = pointClass.getFields();
-        const instanceFields = fields.filter((f: any) => !f.isStatic());
+        const fields = pointClass.fields;
+        const instanceFields = fields.filter((f: any) => !f.isStatic);
 
         if (instanceFields.length > 0) {
           const field = instanceFields[0];
-          assert(!field.isStatic(), "Field should be instance field");
+          assert(!field.isStatic, "Field should be instance field");
         }
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoField should handle static field operations", () => {
+    await createMonoDependentTest("MonoField should handle static field operations", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
-        if (maxValueField && maxValueField.isStatic()) {
+        const maxValueField = int32Class.tryField("MaxValue");
+        if (maxValueField && maxValueField.isStatic) {
           try {
             const value = maxValueField.getStaticValue();
             assertNotNull(value, "Should get static field value");
@@ -369,14 +369,14 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should handle instance field operations", () => {
+    await createMonoDependentTest("MonoField should handle instance field operations", () => {
       const domain = Mono.domain;
-      const objectClass = domain.class("System.Object");
+      const objectClass = domain.tryClass("System.Object");
 
       if (objectClass) {
         const obj = objectClass.alloc();
-        const fields = objectClass.getFields();
-        const instanceFields = fields.filter(f => !f.isStatic());
+        const fields = objectClass.fields;
+        const instanceFields = fields.filter(f => !f.isStatic);
 
         if (instanceFields.length > 0) {
           const field = instanceFields[0];
@@ -398,14 +398,14 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD ATTRIBUTES AND METADATA TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should provide accessibility information", () => {
+    await createMonoDependentTest("MonoField should provide accessibility information", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
-          const accessibility = maxValueField.getAccessibility();
+          const accessibility = maxValueField.accessibility;
           assertNotNull(accessibility, "Accessibility should be available");
           assert(typeof accessibility === "string", "Accessibility should be a string");
         }
@@ -414,14 +414,14 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should identify readonly fields", () => {
+    await createMonoDependentTest("MonoField should identify readonly fields", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
-          const isReadonly = maxValueField.isInitOnly();
+          const isReadonly = maxValueField.isInitOnly;
           assert(typeof isReadonly === "boolean", "isInitOnly should return boolean");
         }
       }
@@ -429,14 +429,14 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should identify constant fields", () => {
+    await createMonoDependentTest("MonoField should identify constant fields", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
-          const isConstant = maxValueField.isLiteral();
+          const isConstant = maxValueField.isLiteral;
           assert(typeof isConstant === "boolean", "isLiteral should return boolean");
         }
       }
@@ -444,17 +444,17 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should provide field flags", () => {
+    await createMonoDependentTest("MonoField should provide field flags", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
-          const flags = maxValueField.getFlags();
+          const flags = maxValueField.flags;
           assert(typeof flags === "number", "Flags should be a number");
 
-          const flagNames = maxValueField.getFlagNames();
+          const flagNames = maxValueField.flagNames;
           assert(Array.isArray(flagNames), "Flag names should be an array");
         }
       }
@@ -464,14 +464,14 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD ACCESS MODIFIERS AND SECURITY TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should handle public fields", () => {
+    await createMonoDependentTest("MonoField should handle public fields", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
-          const accessibility = maxValueField.getAccessibility();
+          const accessibility = maxValueField.accessibility;
           // MaxValue should be public
           assert(accessibility === "public" || accessibility === "private-scope", "MaxValue should be accessible");
         }
@@ -480,15 +480,15 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should handle private fields gracefully", () => {
+    await createMonoDependentTest("MonoField should handle private fields gracefully", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
+      const stringClass = domain.tryClass("System.String");
 
       // Try to access private fields (might not be visible through reflection)
-      const fields = stringClass!.getFields();
+      const fields = stringClass!.fields;
       const privateFields = fields.filter(f => {
         try {
-          const accessibility = f.getAccessibility();
+          const accessibility = f.accessibility;
           return accessibility.includes("private");
         } catch {
           return false;
@@ -503,14 +503,14 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD OFFSET AND MEMORY LAYOUT TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should provide field offset information", () => {
+    await createMonoDependentTest("MonoField should provide field offset information", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
-          const offset = maxValueField.getOffset();
+          const offset = maxValueField.offset;
           assert(typeof offset === "number", "Offset should be a number");
 
           // Static fields might have offset 0 or special values
@@ -521,15 +521,15 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should provide field token", () => {
+    await createMonoDependentTest("MonoField should provide field token", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
           try {
-            const token = maxValueField.getToken();
+            const token = maxValueField.token;
             assert(typeof token === "number", "Token should be a number");
             assert(token > 0, "Token should be positive");
           } catch (error) {
@@ -543,13 +543,13 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD VALUE CONVERSION TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should convert field values to objects", () => {
+    await createMonoDependentTest("MonoField should convert field values to objects", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
-        if (maxValueField && maxValueField.isStatic()) {
+        const maxValueField = int32Class.tryField("MaxValue");
+        if (maxValueField && maxValueField.isStatic) {
           try {
             const valueObject = maxValueField.getValueObject(null);
             if (valueObject) {
@@ -564,13 +564,13 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should coerce primitive values", () => {
+    await createMonoDependentTest("MonoField should coerce primitive values", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
-        if (maxValueField && maxValueField.isStatic()) {
+        const maxValueField = int32Class.tryField("MaxValue");
+        if (maxValueField && maxValueField.isStatic) {
           try {
             const value = maxValueField.readValue(null, { coerce: true });
             assertNotNull(value, "Coerced value should be available");
@@ -589,10 +589,10 @@ export function createMonoFieldTests(): TestResult[] {
   results.push(
     createBasicLookupPerformanceTest("Field value access performance for System.Int32.MaxValue", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
       if (int32Class) {
-        const field = int32Class.tryGetField("MaxValue");
-        if (field && field.isStatic()) {
+        const field = int32Class.tryField("MaxValue");
+        if (field && field.isStatic) {
           try {
             field.getStaticValue();
           } catch (error) {
@@ -606,22 +606,22 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== ERROR HANDLING TESTS =====
 
   results.push(
-    createErrorHandlingTest("MonoField should handle invalid field operations gracefully", () => {
+    await createErrorHandlingTest("MonoField should handle invalid field operations gracefully", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
+      const stringClass = domain.tryClass("System.String");
 
-      const missingField = stringClass!.tryGetField("NonExistentField");
+      const missingField = stringClass!.tryField("NonExistentField");
       assert(missingField === null, "Missing field should return null");
     }),
   );
 
   results.push(
-    createErrorHandlingTest("MonoField should handle null instance access", () => {
+    await createErrorHandlingTest("MonoField should handle null instance access", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
+      const stringClass = domain.tryClass("System.String");
 
-      const fields = stringClass!.getFields();
-      const instanceFields = fields.filter(f => !f.isStatic());
+      const fields = stringClass!.fields;
+      const instanceFields = fields.filter(f => !f.isStatic);
 
       if (instanceFields.length > 0) {
         const field = instanceFields[0];
@@ -634,12 +634,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should handle type mismatch errors", () => {
+    await createMonoDependentTest("MonoField should handle type mismatch errors", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
           // Try to set with wrong type - may throw or silently fail
           try {
@@ -657,12 +657,12 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD TOSTRING AND SERIALIZATION TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField toString should work correctly", () => {
+    await createMonoDependentTest("MonoField toString should work correctly", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
           const stringRep = maxValueField.toString();
           assertNotNull(stringRep, "toString should return a value");
@@ -675,21 +675,21 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== PRIMITIVE TYPE FIELD TESTS (BOUNDARY) =====
 
   results.push(
-    createMonoDependentTest("MonoField should read/access Boolean static fields", () => {
+    await createMonoDependentTest("MonoField should read/access Boolean static fields", () => {
       const domain = Mono.domain;
-      const boolClass = domain.class("System.Boolean");
+      const boolClass = domain.tryClass("System.Boolean");
 
       if (boolClass) {
-        const trueString = boolClass.tryGetField("TrueString");
-        const falseString = boolClass.tryGetField("FalseString");
+        const trueString = boolClass.tryField("TrueString");
+        const falseString = boolClass.tryField("FalseString");
 
         if (trueString) {
-          const type = trueString.getType();
+          const type = trueString.type;
           assertNotNull(type, "Boolean field should have type");
-          console.log(`  - TrueString type: ${type.getName()}`);
+          console.log(`  - TrueString type: ${type.name}`);
         }
         if (falseString) {
-          const type = falseString.getType();
+          const type = falseString.type;
           assertNotNull(type, "Boolean field should have type");
         }
       }
@@ -697,20 +697,20 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should access Double constants (Min/MaxValue)", () => {
+    await createMonoDependentTest("MonoField should access Double constants (Min/MaxValue)", () => {
       const domain = Mono.domain;
-      const doubleClass = domain.class("System.Double");
+      const doubleClass = domain.tryClass("System.Double");
 
       if (doubleClass) {
-        const maxValueField = doubleClass.tryGetField("MaxValue");
-        const minValueField = doubleClass.tryGetField("MinValue");
-        const epsilon = doubleClass.tryGetField("Epsilon");
-        const nan = doubleClass.tryGetField("NaN");
+        const maxValueField = doubleClass.tryField("MaxValue");
+        const minValueField = doubleClass.tryField("MinValue");
+        const epsilon = doubleClass.tryField("Epsilon");
+        const nan = doubleClass.tryField("NaN");
 
         [maxValueField, minValueField, epsilon, nan].forEach((field, index) => {
           if (field) {
-            assert(field.isStatic(), "Double constants should be static");
-            const type = field.getType();
+            assert(field.isStatic, "Double constants should be static");
+            const type = field.type;
             assertNotNull(type, `Double field ${index} should have type`);
           }
         });
@@ -720,16 +720,16 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should access Byte constants", () => {
+    await createMonoDependentTest("MonoField should access Byte constants", () => {
       const domain = Mono.domain;
-      const byteClass = domain.class("System.Byte");
+      const byteClass = domain.tryClass("System.Byte");
 
       if (byteClass) {
-        const maxValueField = byteClass.tryGetField("MaxValue");
-        const minValueField = byteClass.tryGetField("MinValue");
+        const maxValueField = byteClass.tryField("MaxValue");
+        const minValueField = byteClass.tryField("MinValue");
 
         if (maxValueField) {
-          assert(maxValueField.isStatic(), "Byte.MaxValue should be static");
+          assert(maxValueField.isStatic, "Byte.MaxValue should be static");
           try {
             const value = maxValueField.getStaticValue();
             console.log(`  - Byte.MaxValue static field accessed`);
@@ -738,25 +738,25 @@ export function createMonoFieldTests(): TestResult[] {
           }
         }
         if (minValueField) {
-          assert(minValueField.isStatic(), "Byte.MinValue should be static");
+          assert(minValueField.isStatic, "Byte.MinValue should be static");
         }
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoField should access Int64 (Long) fields", () => {
+    await createMonoDependentTest("MonoField should access Int64 (Long) fields", () => {
       const domain = Mono.domain;
-      const int64Class = domain.class("System.Int64");
+      const int64Class = domain.tryClass("System.Int64");
 
       if (int64Class) {
-        const maxValueField = int64Class.tryGetField("MaxValue");
+        const maxValueField = int64Class.tryField("MaxValue");
 
         if (maxValueField) {
-          assert(maxValueField.isStatic(), "Int64.MaxValue should be static");
-          const type = maxValueField.getType();
+          assert(maxValueField.isStatic, "Int64.MaxValue should be static");
+          const type = maxValueField.type;
           assertNotNull(type, "Int64 field should have type");
-          const typeName = type.getName();
+          const typeName = type.name;
           assert(typeName === "Int64" || typeName === "System.Int64", "Type should be Int64");
         }
       }
@@ -764,13 +764,13 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should access Single (Float) constants", () => {
+    await createMonoDependentTest("MonoField should access Single (Float) constants", () => {
       const domain = Mono.domain;
-      const singleClass = domain.class("System.Single");
+      const singleClass = domain.tryClass("System.Single");
 
       if (singleClass) {
-        const fields = singleClass.getFields();
-        const staticFields = fields.filter(f => f.isStatic());
+        const fields = singleClass.fields;
+        const staticFields = fields.filter(f => f.isStatic);
 
         assert(staticFields.length > 0, "Single should have static constant fields");
 
@@ -789,18 +789,18 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should access Char constants", () => {
+    await createMonoDependentTest("MonoField should access Char constants", () => {
       const domain = Mono.domain;
-      const charClass = domain.class("System.Char");
+      const charClass = domain.tryClass("System.Char");
 
       if (charClass) {
-        const maxValueField = charClass.tryGetField("MaxValue");
-        const minValueField = charClass.tryGetField("MinValue");
+        const maxValueField = charClass.tryField("MaxValue");
+        const minValueField = charClass.tryField("MinValue");
 
         if (maxValueField) {
-          assert(maxValueField.isStatic(), "Char.MaxValue should be static");
-          const type = maxValueField.getType();
-          const typeName = type.getName();
+          assert(maxValueField.isStatic, "Char.MaxValue should be static");
+          const type = maxValueField.type;
+          const typeName = type.name;
           assert(typeName === "Char" || typeName === "System.Char", "Type should be Char");
         }
       }
@@ -810,16 +810,16 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== ARRAY TYPE FIELD TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should handle array-typed fields", () => {
+    await createMonoDependentTest("MonoField should handle array-typed fields", () => {
       const domain = Mono.domain;
       // System.Environment has some array fields
-      const envClass = domain.class("System.Environment");
+      const envClass = domain.tryClass("System.Environment");
 
       if (envClass) {
-        const fields = envClass.getFields();
+        const fields = envClass.fields;
         const arrayFields = fields.filter(f => {
-          const type = f.getType();
-          const typeName = type?.getName() || "";
+          const type = f.type;
+          const typeName = type?.name || "";
           return type && (typeName.includes("[]") || typeName.includes("Array"));
         });
 
@@ -827,8 +827,8 @@ export function createMonoFieldTests(): TestResult[] {
 
         if (arrayFields.length > 0) {
           const firstArray = arrayFields[0];
-          const type = firstArray.getType();
-          console.log(`  - Array field type: ${type.getName()}`);
+          const type = firstArray.type;
+          console.log(`  - Array field type: ${type.name}`);
         }
       }
     }),
@@ -837,18 +837,18 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== GENERIC TYPE FIELD TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should handle fields in generic types", () => {
+    await createMonoDependentTest("MonoField should handle fields in generic types", () => {
       const domain = Mono.domain;
 
       // Nullable<T> has instance fields
-      const nullableClass = domain.class("System.Nullable`1");
+      const nullableClass = domain.tryClass("System.Nullable`1");
 
       if (nullableClass) {
-        const fields = nullableClass.getFields();
+        const fields = nullableClass.fields;
         console.log(`  - Nullable<T> has ${fields.length} fields`);
 
         fields.forEach(field => {
-          console.log(`    - Field: ${field.name}, Static: ${field.isStatic()}`);
+          console.log(`    - Field: ${field.name}, Static: ${field.isStatic}`);
         });
       }
     }),
@@ -857,54 +857,54 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== STRUCT FIELD LAYOUT TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should handle struct field layout (DateTime)", () => {
+    await createMonoDependentTest("MonoField should handle struct field layout (DateTime)", () => {
       const domain = Mono.domain;
-      const dateTimeClass = domain.class("System.DateTime");
+      const dateTimeClass = domain.tryClass("System.DateTime");
 
       if (dateTimeClass) {
-        const fields = dateTimeClass.getFields();
-        const instanceFields = fields.filter(f => !f.isStatic());
-        const staticFields = fields.filter(f => f.isStatic());
+        const fields = dateTimeClass.fields;
+        const instanceFields = fields.filter(f => !f.isStatic);
+        const staticFields = fields.filter(f => f.isStatic);
 
         console.log(`  - DateTime has ${instanceFields.length} instance fields, ${staticFields.length} static fields`);
 
         // DateTime typically has a single ticks field
         instanceFields.forEach(field => {
-          const offset = field.getOffset();
+          const offset = field.offset;
           console.log(`    - ${field.name}: offset=${offset}`);
         });
 
         // Check for static Min/MaxValue
-        const minValue = dateTimeClass.tryGetField("MinValue");
-        const maxValue = dateTimeClass.tryGetField("MaxValue");
+        const minValue = dateTimeClass.tryField("MinValue");
+        const maxValue = dateTimeClass.tryField("MaxValue");
 
-        if (minValue) assert(minValue.isStatic(), "DateTime.MinValue should be static");
-        if (maxValue) assert(maxValue.isStatic(), "DateTime.MaxValue should be static");
+        if (minValue) assert(minValue.isStatic, "DateTime.MinValue should be static");
+        if (maxValue) assert(maxValue.isStatic, "DateTime.MaxValue should be static");
       }
     }),
   );
 
   results.push(
-    createMonoDependentTest("MonoField should handle Guid struct fields", () => {
+    await createMonoDependentTest("MonoField should handle Guid struct fields", () => {
       const domain = Mono.domain;
-      const guidClass = domain.class("System.Guid");
+      const guidClass = domain.tryClass("System.Guid");
 
       if (guidClass) {
-        const fields = guidClass.getFields();
-        const instanceFields = fields.filter(f => !f.isStatic());
+        const fields = guidClass.fields;
+        const instanceFields = fields.filter(f => !f.isStatic);
 
         console.log(`  - Guid has ${instanceFields.length} instance fields`);
 
         // GUID typically has internal fields like _a, _b, _c, etc.
         instanceFields.slice(0, 5).forEach(field => {
-          const type = field.getType();
-          console.log(`    - ${field.name}: ${type.getName()}`);
+          const type = field.type;
+          console.log(`    - ${field.name}: ${type.name}`);
         });
 
         // Check Guid.Empty
-        const emptyField = guidClass.tryGetField("Empty");
+        const emptyField = guidClass.tryField("Empty");
         if (emptyField) {
-          assert(emptyField.isStatic(), "Guid.Empty should be static");
+          assert(emptyField.isStatic, "Guid.Empty should be static");
         }
       }
     }),
@@ -913,22 +913,22 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== LITERAL/CONST FIELD TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should identify literal (const) fields", () => {
+    await createMonoDependentTest("MonoField should identify literal (const) fields", () => {
       const domain = Mono.domain;
-      const mathClass = domain.class("System.Math");
+      const mathClass = domain.tryClass("System.Math");
 
       if (mathClass) {
-        const piField = mathClass.tryGetField("PI");
-        const eField = mathClass.tryGetField("E");
+        const piField = mathClass.tryField("PI");
+        const eField = mathClass.tryField("E");
 
         if (piField) {
-          const isLiteral = piField.isLiteral();
-          const isStatic = piField.isStatic();
+          const isLiteral = piField.isLiteral;
+          const isStatic = piField.isStatic;
           console.log(`  - Math.PI: literal=${isLiteral}, static=${isStatic}`);
         }
 
         if (eField) {
-          const isLiteral = eField.isLiteral();
+          const isLiteral = eField.isLiteral;
           console.log(`  - Math.E: literal=${isLiteral}`);
         }
       }
@@ -938,13 +938,13 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== ENUM FIELD TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should enumerate all enum values as fields", () => {
+    await createMonoDependentTest("MonoField should enumerate all enum values as fields", () => {
       const domain = Mono.domain;
-      const dayOfWeekClass = domain.class("System.DayOfWeek");
+      const dayOfWeekClass = domain.tryClass("System.DayOfWeek");
 
       if (dayOfWeekClass) {
-        const fields = dayOfWeekClass.getFields();
-        const staticFields = fields.filter(f => f.isStatic());
+        const fields = dayOfWeekClass.fields;
+        const staticFields = fields.filter(f => f.isStatic);
 
         // DayOfWeek has Sunday=0 through Saturday=6
         console.log(`  - DayOfWeek has ${staticFields.length} enum value fields`);
@@ -955,7 +955,7 @@ export function createMonoFieldTests(): TestResult[] {
         staticFields.forEach(field => {
           if (expectedDays.includes(field.name)) {
             foundCount++;
-            const isLiteral = field.isLiteral();
+            const isLiteral = field.isLiteral;
             assert(isLiteral, `${field.name} should be a literal (const) field`);
           }
         });
@@ -966,13 +966,13 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should handle flag enum fields (FileAccess)", () => {
+    await createMonoDependentTest("MonoField should handle flag enum fields (FileAccess)", () => {
       const domain = Mono.domain;
-      const fileAccessClass = domain.class("System.IO.FileAccess");
+      const fileAccessClass = domain.tryClass("System.IO.FileAccess");
 
       if (fileAccessClass) {
-        const fields = fileAccessClass.getFields();
-        const staticFields = fields.filter(f => f.isStatic());
+        const fields = fileAccessClass.fields;
+        const staticFields = fields.filter(f => f.isStatic);
 
         console.log(`  - FileAccess has ${staticFields.length} flag values`);
 
@@ -989,19 +989,19 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== INHERITED FIELD TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should access inherited fields through parent class", () => {
+    await createMonoDependentTest("MonoField should access inherited fields through parent class", () => {
       const domain = Mono.domain;
 
       // Exception has Message field from base
-      const exceptionClass = domain.class("System.ArgumentException");
+      const exceptionClass = domain.tryClass("System.ArgumentException");
 
       if (exceptionClass) {
-        const parent = exceptionClass.getParent();
+        const parent = exceptionClass.parent;
         assertNotNull(parent, "ArgumentException should have parent");
         console.log(`  - ArgumentException parent: ${parent?.name}`);
 
         // Get fields from the class itself
-        const ownFields = exceptionClass.getFields();
+        const ownFields = exceptionClass.fields;
         console.log(`  - ArgumentException own fields: ${ownFields.length}`);
 
         // Try to find _message field which is typically in base Exception
@@ -1009,7 +1009,7 @@ export function createMonoFieldTests(): TestResult[] {
         let messageFound = false;
 
         while (currentClass && !messageFound) {
-          const fields = currentClass.getFields();
+          const fields = currentClass.fields;
           for (const field of fields) {
             if (field.name.toLowerCase().includes("message")) {
               messageFound = true;
@@ -1017,7 +1017,7 @@ export function createMonoFieldTests(): TestResult[] {
               break;
             }
           }
-          currentClass = currentClass.getParent()!;
+          currentClass = currentClass.parent!;
         }
       }
     }),
@@ -1026,19 +1026,19 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD ATTRIBUTE TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should report field attributes/flags", () => {
+    await createMonoDependentTest("MonoField should report field attributes/flags", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
 
         if (maxValueField) {
           // Check various field attributes
-          const accessibility = maxValueField.getAccessibility();
-          const isStatic = maxValueField.isStatic();
-          const isInitOnly = maxValueField.isInitOnly();
-          const isLiteral = maxValueField.isLiteral();
+          const accessibility = maxValueField.accessibility;
+          const isStatic = maxValueField.isStatic;
+          const isInitOnly = maxValueField.isInitOnly;
+          const isLiteral = maxValueField.isLiteral;
 
           console.log(`  - Int32.MaxValue attributes:`);
           console.log(`    - Accessibility: ${accessibility}`);
@@ -1055,12 +1055,12 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD DESCRIBE COMPLETENESS TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField describe() should include complete information", () => {
+    await createMonoDependentTest("MonoField describe() should include complete information", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
 
         if (maxValueField) {
           const description = maxValueField.describe();
@@ -1082,20 +1082,20 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== THREAD STATIC FIELD TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should identify thread-static fields if available", () => {
+    await createMonoDependentTest("MonoField should identify thread-static fields if available", () => {
       const domain = Mono.domain;
 
       // Look for classes that might have ThreadStatic fields
-      const threadClass = domain.class("System.Threading.Thread");
+      const threadClass = domain.tryClass("System.Threading.Thread");
 
       if (threadClass) {
-        const fields = threadClass.getFields();
+        const fields = threadClass.fields;
         console.log(`  - Thread class has ${fields.length} fields`);
 
         // Check if we can identify thread-static by examining attributes
         fields.slice(0, 5).forEach(field => {
           const name = field.name;
-          const isStatic = field.isStatic();
+          const isStatic = field.isStatic;
           console.log(`    - ${name}: static=${isStatic}`);
         });
       }
@@ -1105,15 +1105,15 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD WRITE TO STATIC TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should handle static field write operations", () => {
+    await createMonoDependentTest("MonoField should handle static field write operations", () => {
       const domain = Mono.domain;
 
       // Find a class with writable static fields
-      const consoleClass = domain.class("System.Console");
+      const consoleClass = domain.tryClass("System.Console");
 
       if (consoleClass) {
-        const fields = consoleClass.getFields();
-        const writableStatic = fields.filter(f => f.isStatic() && !f.isLiteral() && !f.isInitOnly());
+        const fields = consoleClass.fields;
+        const writableStatic = fields.filter(f => f.isStatic && !f.isLiteral && !f.isInitOnly);
 
         console.log(`  - Console has ${writableStatic.length} writable static fields`);
 
@@ -1129,20 +1129,20 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD POINTER TYPE TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should handle IntPtr fields", () => {
+    await createMonoDependentTest("MonoField should handle IntPtr fields", () => {
       const domain = Mono.domain;
-      const intPtrClass = domain.class("System.IntPtr");
+      const intPtrClass = domain.tryClass("System.IntPtr");
 
       if (intPtrClass) {
-        const fields = intPtrClass.getFields();
+        const fields = intPtrClass.fields;
 
         console.log(`  - IntPtr has ${fields.length} fields`);
 
-        const zeroField = intPtrClass.tryGetField("Zero");
+        const zeroField = intPtrClass.tryField("Zero");
         if (zeroField) {
-          assert(zeroField.isStatic(), "IntPtr.Zero should be static");
-          const type = zeroField.getType();
-          const typeName = type.getName();
+          assert(zeroField.isStatic, "IntPtr.Zero should be static");
+          const type = zeroField.type;
+          const typeName = type.name;
           assert(typeName === "IntPtr" || typeName === "System.IntPtr", "Type should be IntPtr");
         }
       }
@@ -1152,7 +1152,7 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD COUNT/SIZE TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should report field size information", () => {
+    await createMonoDependentTest("MonoField should report field size information", () => {
       const domain = Mono.domain;
 
       // Test fields of different sizes
@@ -1164,12 +1164,12 @@ export function createMonoFieldTests(): TestResult[] {
       ];
 
       testCases.forEach(tc => {
-        const cls = domain.class(tc.class);
+        const cls = domain.tryClass(tc.class);
         if (cls) {
-          const maxField = cls.tryGetField("MaxValue");
+          const maxField = cls.tryField("MaxValue");
           if (maxField) {
-            const type = maxField.getType();
-            console.log(`  - ${tc.class}: type=${type.getName()}`);
+            const type = maxField.type;
+            console.log(`  - ${tc.class}: type=${type.name}`);
           }
         }
       });
@@ -1177,12 +1177,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should provide JSON representation", () => {
+    await createMonoDependentTest("MonoField should provide JSON representation", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
           try {
             const json = maxValueField.toJSON();
@@ -1201,17 +1201,17 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD PARENT CLASS TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should provide parent class information", () => {
+    await createMonoDependentTest("MonoField should provide parent class information", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
-          const parentClass = maxValueField.getParent();
+          const parentClass = maxValueField.parent;
           assertNotNull(parentClass, "Parent class should be available");
-          assert(parentClass.getName() === "Int32", "Parent class should be Int32");
-          assert(parentClass.getFullName() === "System.Int32", "Parent class full name should be System.Int32");
+          assert(parentClass.name === "Int32", "Parent class should be Int32");
+          assert(parentClass.fullName === "System.Int32", "Parent class full name should be System.Int32");
         }
       }
     }),
@@ -1220,14 +1220,14 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== FIELD FULL NAME TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField should provide full name information", () => {
+    await createMonoDependentTest("MonoField should provide full name information", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxValueField = int32Class.tryGetField("MaxValue");
+        const maxValueField = int32Class.tryField("MaxValue");
         if (maxValueField) {
-          const fullName = maxValueField.getFullName();
+          const fullName = maxValueField.fullName;
           assertNotNull(fullName, "Full name should be available");
           assert(fullName.includes("MaxValue"), "Full name should include field name");
           assert(fullName.includes("Int32"), "Full name should include class name");
@@ -1239,18 +1239,18 @@ export function createMonoFieldTests(): TestResult[] {
   // ===== TYPE-SPECIFIC READ/WRITE TESTS =====
 
   results.push(
-    createMonoDependentTest("MonoField readValue should correctly read Boolean type", () => {
+    await createMonoDependentTest("MonoField readValue should correctly read Boolean type", () => {
       const domain = Mono.domain;
-      const boolClass = domain.class("System.Boolean");
+      const boolClass = domain.tryClass("System.Boolean");
 
       if (boolClass) {
         // Boolean doesn't have true/false as static fields, but let's find a class with boolean field
         // Try to use reflection or a class known to have boolean fields
-        const fields = boolClass.getFields();
+        const fields = boolClass.fields;
         console.log(`  - Boolean has ${fields.length} fields`);
 
         // Create a simple test using a wrapper type
-        const nullableBoolClass = domain.class("System.Nullable`1[System.Boolean]");
+        const nullableBoolClass = domain.tryClass("System.Nullable`1[System.Boolean]");
         if (nullableBoolClass) {
           console.log("  - Found Nullable<Boolean> for testing");
         }
@@ -1259,12 +1259,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue should correctly read Int32 static field", () => {
+    await createMonoDependentTest("MonoField readValue should correctly read Int32 static field", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxField = int32Class.tryGetField("MaxValue");
+        const maxField = int32Class.tryField("MaxValue");
         if (maxField) {
           const value = maxField.readValue(null, { coerce: true });
           assertNotNull(value, "MaxValue should be readable");
@@ -1277,7 +1277,7 @@ export function createMonoFieldTests(): TestResult[] {
           console.log(`  - Int32.MaxValue = ${value}`);
         }
 
-        const minField = int32Class.tryGetField("MinValue");
+        const minField = int32Class.tryField("MinValue");
         if (minField) {
           const value = minField.readValue(null, { coerce: true });
           assertNotNull(value, "MinValue should be readable");
@@ -1294,12 +1294,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue should correctly read Byte type", () => {
+    await createMonoDependentTest("MonoField readValue should correctly read Byte type", () => {
       const domain = Mono.domain;
-      const byteClass = domain.class("System.Byte");
+      const byteClass = domain.tryClass("System.Byte");
 
       if (byteClass) {
-        const maxField = byteClass.tryGetField("MaxValue");
+        const maxField = byteClass.tryField("MaxValue");
         if (maxField) {
           const value = maxField.readValue(null, { coerce: true });
           assertNotNull(value, "Byte.MaxValue should be readable");
@@ -1309,7 +1309,7 @@ export function createMonoFieldTests(): TestResult[] {
           console.log(`  - Byte.MaxValue = ${value}`);
         }
 
-        const minField = byteClass.tryGetField("MinValue");
+        const minField = byteClass.tryField("MinValue");
         if (minField) {
           const value = minField.readValue(null, { coerce: true });
           // Byte.MinValue = 0
@@ -1321,12 +1321,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue should correctly read Int16 (Short) type", () => {
+    await createMonoDependentTest("MonoField readValue should correctly read Int16 (Short) type", () => {
       const domain = Mono.domain;
-      const int16Class = domain.class("System.Int16");
+      const int16Class = domain.tryClass("System.Int16");
 
       if (int16Class) {
-        const maxField = int16Class.tryGetField("MaxValue");
+        const maxField = int16Class.tryField("MaxValue");
         if (maxField) {
           const value = maxField.readValue(null, { coerce: true });
           assertNotNull(value, "Int16.MaxValue should be readable");
@@ -1336,7 +1336,7 @@ export function createMonoFieldTests(): TestResult[] {
           console.log(`  - Int16.MaxValue = ${value}`);
         }
 
-        const minField = int16Class.tryGetField("MinValue");
+        const minField = int16Class.tryField("MinValue");
         if (minField) {
           const value = minField.readValue(null, { coerce: true });
           // Int16.MinValue = -32768
@@ -1348,12 +1348,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue should correctly read UInt16 (UShort) type", () => {
+    await createMonoDependentTest("MonoField readValue should correctly read UInt16 (UShort) type", () => {
       const domain = Mono.domain;
-      const uint16Class = domain.class("System.UInt16");
+      const uint16Class = domain.tryClass("System.UInt16");
 
       if (uint16Class) {
-        const maxField = uint16Class.tryGetField("MaxValue");
+        const maxField = uint16Class.tryField("MaxValue");
         if (maxField) {
           const value = maxField.readValue(null, { coerce: true });
           assertNotNull(value, "UInt16.MaxValue should be readable");
@@ -1367,12 +1367,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue should correctly read Int64 (Long) type", () => {
+    await createMonoDependentTest("MonoField readValue should correctly read Int64 (Long) type", () => {
       const domain = Mono.domain;
-      const int64Class = domain.class("System.Int64");
+      const int64Class = domain.tryClass("System.Int64");
 
       if (int64Class) {
-        const maxField = int64Class.tryGetField("MaxValue");
+        const maxField = int64Class.tryField("MaxValue");
         if (maxField) {
           const value = maxField.readValue(null, { coerce: true });
           assertNotNull(value, "Int64.MaxValue should be readable");
@@ -1389,12 +1389,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue should correctly read UInt32 type", () => {
+    await createMonoDependentTest("MonoField readValue should correctly read UInt32 type", () => {
       const domain = Mono.domain;
-      const uint32Class = domain.class("System.UInt32");
+      const uint32Class = domain.tryClass("System.UInt32");
 
       if (uint32Class) {
-        const maxField = uint32Class.tryGetField("MaxValue");
+        const maxField = uint32Class.tryField("MaxValue");
         if (maxField) {
           const value = maxField.readValue(null, { coerce: true });
           assertNotNull(value, "UInt32.MaxValue should be readable");
@@ -1408,12 +1408,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue should correctly read SByte (Int8) type", () => {
+    await createMonoDependentTest("MonoField readValue should correctly read SByte (Int8) type", () => {
       const domain = Mono.domain;
-      const sbyteClass = domain.class("System.SByte");
+      const sbyteClass = domain.tryClass("System.SByte");
 
       if (sbyteClass) {
-        const maxField = sbyteClass.tryGetField("MaxValue");
+        const maxField = sbyteClass.tryField("MaxValue");
         if (maxField) {
           const value = maxField.readValue(null, { coerce: true });
           assertNotNull(value, "SByte.MaxValue should be readable");
@@ -1423,7 +1423,7 @@ export function createMonoFieldTests(): TestResult[] {
           console.log(`  - SByte.MaxValue = ${value}`);
         }
 
-        const minField = sbyteClass.tryGetField("MinValue");
+        const minField = sbyteClass.tryField("MinValue");
         if (minField) {
           const value = minField.readValue(null, { coerce: true });
           // SByte.MinValue = -128
@@ -1435,12 +1435,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue should correctly read Single (Float) type", () => {
+    await createMonoDependentTest("MonoField readValue should correctly read Single (Float) type", () => {
       const domain = Mono.domain;
-      const singleClass = domain.class("System.Single");
+      const singleClass = domain.tryClass("System.Single");
 
       if (singleClass) {
-        const maxField = singleClass.tryGetField("MaxValue");
+        const maxField = singleClass.tryField("MaxValue");
         if (maxField) {
           const value = maxField.readValue(null, { coerce: true });
           assertNotNull(value, "Single.MaxValue should be readable");
@@ -1448,7 +1448,7 @@ export function createMonoFieldTests(): TestResult[] {
           console.log(`  - Single.MaxValue = ${value}`);
         }
 
-        const epsilonField = singleClass.tryGetField("Epsilon");
+        const epsilonField = singleClass.tryField("Epsilon");
         if (epsilonField) {
           const value = epsilonField.readValue(null, { coerce: true });
           assertNotNull(value, "Single.Epsilon should be readable");
@@ -1459,7 +1459,7 @@ export function createMonoFieldTests(): TestResult[] {
           console.log(`  - Single.Epsilon = ${value}`);
         }
 
-        const nanField = singleClass.tryGetField("NaN");
+        const nanField = singleClass.tryField("NaN");
         if (nanField) {
           const value = nanField.readValue(null, { coerce: true });
           assertNotNull(value, "Single.NaN should be readable");
@@ -1472,12 +1472,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue should correctly read Double type", () => {
+    await createMonoDependentTest("MonoField readValue should correctly read Double type", () => {
       const domain = Mono.domain;
-      const doubleClass = domain.class("System.Double");
+      const doubleClass = domain.tryClass("System.Double");
 
       if (doubleClass) {
-        const maxField = doubleClass.tryGetField("MaxValue");
+        const maxField = doubleClass.tryField("MaxValue");
         if (maxField) {
           const value = maxField.readValue(null, { coerce: true });
           assertNotNull(value, "Double.MaxValue should be readable");
@@ -1485,7 +1485,7 @@ export function createMonoFieldTests(): TestResult[] {
           console.log(`  - Double.MaxValue = ${value}`);
         }
 
-        const epsilonField = doubleClass.tryGetField("Epsilon");
+        const epsilonField = doubleClass.tryField("Epsilon");
         if (epsilonField) {
           const value = epsilonField.readValue(null, { coerce: true });
           assertNotNull(value, "Double.Epsilon should be readable");
@@ -1493,7 +1493,7 @@ export function createMonoFieldTests(): TestResult[] {
           console.log(`  - Double.Epsilon = ${value}`);
         }
 
-        const piField = doubleClass.tryGetField("PI");
+        const piField = doubleClass.tryField("PI");
         if (piField) {
           const value = piField.readValue(null, { coerce: true });
           console.log(`  - Double.PI (if available) = ${value}`);
@@ -1503,12 +1503,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue should correctly read Char type", () => {
+    await createMonoDependentTest("MonoField readValue should correctly read Char type", () => {
       const domain = Mono.domain;
-      const charClass = domain.class("System.Char");
+      const charClass = domain.tryClass("System.Char");
 
       if (charClass) {
-        const maxField = charClass.tryGetField("MaxValue");
+        const maxField = charClass.tryField("MaxValue");
         if (maxField) {
           const value = maxField.readValue(null, { coerce: true });
           assertNotNull(value, "Char.MaxValue should be readable");
@@ -1521,7 +1521,7 @@ export function createMonoFieldTests(): TestResult[] {
           console.log(`  - Char.MaxValue = ${JSON.stringify(value)}`);
         }
 
-        const minField = charClass.tryGetField("MinValue");
+        const minField = charClass.tryField("MinValue");
         if (minField) {
           const value = minField.readValue(null, { coerce: true });
           // Char.MinValue = '\u0000'
@@ -1533,13 +1533,13 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue should correctly read String type field", () => {
+    await createMonoDependentTest("MonoField readValue should correctly read String type field", () => {
       const domain = Mono.domain;
-      const boolClass = domain.class("System.Boolean");
+      const boolClass = domain.tryClass("System.Boolean");
 
       if (boolClass) {
         // Boolean.TrueString and FalseString are static readonly strings
-        const trueStringField = boolClass.tryGetField("TrueString");
+        const trueStringField = boolClass.tryField("TrueString");
         if (trueStringField) {
           try {
             const value = trueStringField.readValue(null, { coerce: true });
@@ -1564,7 +1564,7 @@ export function createMonoFieldTests(): TestResult[] {
           }
         }
 
-        const falseStringField = boolClass.tryGetField("FalseString");
+        const falseStringField = boolClass.tryField("FalseString");
         if (falseStringField) {
           try {
             const value = falseStringField.readValue(null, { coerce: true });
@@ -1586,12 +1586,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should read String.Empty correctly", () => {
+    await createMonoDependentTest("MonoField should read String.Empty correctly", () => {
       const domain = Mono.domain;
-      const stringClass = domain.class("System.String");
+      const stringClass = domain.tryClass("System.String");
 
       if (stringClass) {
-        const emptyField = stringClass.tryGetField("Empty");
+        const emptyField = stringClass.tryField("Empty");
         if (emptyField) {
           const value = emptyField.readValue(null, { coerce: true });
           assert(value === "" || value === null, `String.Empty should be empty string, got: ${JSON.stringify(value)}`);
@@ -1602,15 +1602,15 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue should handle enum underlying values", () => {
+    await createMonoDependentTest("MonoField readValue should handle enum underlying values", () => {
       const domain = Mono.domain;
-      const dayOfWeekClass = domain.class("System.DayOfWeek");
+      const dayOfWeekClass = domain.tryClass("System.DayOfWeek");
 
       if (dayOfWeekClass) {
-        const sundayField = dayOfWeekClass.tryGetField("Sunday");
+        const sundayField = dayOfWeekClass.tryField("Sunday");
         if (sundayField) {
-          const type = sundayField.getType();
-          console.log(`  - DayOfWeek.Sunday type kind: ${type.getKind()}`);
+          const type = sundayField.type;
+          console.log(`  - DayOfWeek.Sunday type kind: ${type.kind}`);
 
           // For enum fields, readValue returns the underlying value
           try {
@@ -1623,7 +1623,7 @@ export function createMonoFieldTests(): TestResult[] {
           }
         }
 
-        const saturdayField = dayOfWeekClass.tryGetField("Saturday");
+        const saturdayField = dayOfWeekClass.tryField("Saturday");
         if (saturdayField) {
           try {
             const value = saturdayField.readValue(null, { coerce: true });
@@ -1639,30 +1639,30 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should read Math.PI and Math.E constants", () => {
+    await createMonoDependentTest("MonoField should read Math.PI and Math.E constants", () => {
       const domain = Mono.domain;
-      const mathClass = domain.class("System.Math");
+      const mathClass = domain.tryClass("System.Math");
 
       if (mathClass) {
-        const piField = mathClass.tryGetField("PI");
+        const piField = mathClass.tryField("PI");
         if (piField) {
           const value = piField.readValue(null, { coerce: true });
           assertNotNull(value, "Math.PI should be readable");
           assert(typeof value === "number", "PI should be a number");
 
-          // Math.PI ≈ 3.14159...
+          // Math.PI �?3.14159...
           if (typeof value === "number") {
             assert(Math.abs(value - Math.PI) < 0.0001, `Math.PI should be approximately ${Math.PI}, got: ${value}`);
           }
           console.log(`  - Math.PI = ${value}`);
         }
 
-        const eField = mathClass.tryGetField("E");
+        const eField = mathClass.tryField("E");
         if (eField) {
           const value = eField.readValue(null, { coerce: true });
           assertNotNull(value, "Math.E should be readable");
 
-          // Math.E ≈ 2.71828...
+          // Math.E �?2.71828...
           if (typeof value === "number") {
             assert(Math.abs(value - Math.E) < 0.0001, `Math.E should be approximately ${Math.E}, got: ${value}`);
           }
@@ -1673,19 +1673,19 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should read IntPtr.Zero and IntPtr.Size", () => {
+    await createMonoDependentTest("MonoField should read IntPtr.Zero and IntPtr.Size", () => {
       const domain = Mono.domain;
-      const intPtrClass = domain.class("System.IntPtr");
+      const intPtrClass = domain.tryClass("System.IntPtr");
 
       if (intPtrClass) {
-        const zeroField = intPtrClass.tryGetField("Zero");
+        const zeroField = intPtrClass.tryField("Zero");
         if (zeroField) {
           const value = zeroField.readValue(null, { coerce: true });
           assertNotNull(value, "IntPtr.Zero should be readable");
           console.log(`  - IntPtr.Zero = ${value}`);
         }
 
-        const sizeField = intPtrClass.tryGetField("Size");
+        const sizeField = intPtrClass.tryField("Size");
         if (sizeField) {
           const value = sizeField.readValue(null, { coerce: true });
           assertNotNull(value, "IntPtr.Size should be readable");
@@ -1701,12 +1701,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField should read without coercion when coerce=false", () => {
+    await createMonoDependentTest("MonoField should read without coercion when coerce=false", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxField = int32Class.tryGetField("MaxValue");
+        const maxField = int32Class.tryField("MaxValue");
         if (maxField) {
           // Read with coerce=false should return raw pointer
           const rawValue = maxField.readValue(null, { coerce: false });
@@ -1728,26 +1728,26 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField getValueObject should return boxed value", () => {
+    await createMonoDependentTest("MonoField getValueObject should return boxed value", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxField = int32Class.tryGetField("MaxValue");
+        const maxField = int32Class.tryField("MaxValue");
         if (maxField) {
           const valueObj = maxField.getValueObject(null);
           if (valueObj) {
             assertNotNull(valueObj.pointer, "Boxed value should have pointer");
 
-            const objClass = valueObj.getClass();
+            const objClass = valueObj.class;
             assertNotNull(objClass, "Boxed value should have class");
 
             // For Int32, the boxed class should be Int32
             assert(
-              objClass.getName() === "Int32" || objClass.getFullName() === "System.Int32",
-              `Boxed class should be Int32, got: ${objClass.getName()}`,
+              objClass.name === "Int32" || objClass.fullName === "System.Int32",
+              `Boxed class should be Int32, got: ${objClass.name}`,
             );
-            console.log(`  - Boxed Int32.MaxValue class: ${objClass.getFullName()}`);
+            console.log(`  - Boxed Int32.MaxValue class: ${objClass.fullName}`);
           }
         }
       }
@@ -1755,12 +1755,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField getTypedStaticValue should return typed value", () => {
+    await createMonoDependentTest("MonoField getTypedStaticValue should return typed value", () => {
       const domain = Mono.domain;
-      const int32Class = domain.class("System.Int32");
+      const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
-        const maxField = int32Class.tryGetField("MaxValue") as any;
+        const maxField = int32Class.tryField("MaxValue") as any;
         if (maxField) {
           const typedValue = maxField.getTypedStaticValue();
           assertNotNull(typedValue, "Typed value should be available");
@@ -1771,15 +1771,15 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue for DateTime.MinValue and MaxValue", () => {
+    await createMonoDependentTest("MonoField readValue for DateTime.MinValue and MaxValue", () => {
       const domain = Mono.domain;
-      const dateTimeClass = domain.class("System.DateTime");
+      const dateTimeClass = domain.tryClass("System.DateTime");
 
       if (dateTimeClass) {
-        const minField = dateTimeClass.tryGetField("MinValue");
+        const minField = dateTimeClass.tryField("MinValue");
         if (minField) {
-          const type = minField.getType();
-          console.log(`  - DateTime.MinValue type: ${type.getName()}, kind: ${type.getKind()}`);
+          const type = minField.type;
+          console.log(`  - DateTime.MinValue type: ${type.name}, kind: ${type.kind}`);
 
           try {
             const value = minField.readValue(null, { coerce: true });
@@ -1789,7 +1789,7 @@ export function createMonoFieldTests(): TestResult[] {
           }
         }
 
-        const maxField = dateTimeClass.tryGetField("MaxValue");
+        const maxField = dateTimeClass.tryField("MaxValue");
         if (maxField) {
           try {
             const value = maxField.readValue(null, { coerce: true });
@@ -1803,15 +1803,15 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue for Guid.Empty", () => {
+    await createMonoDependentTest("MonoField readValue for Guid.Empty", () => {
       const domain = Mono.domain;
-      const guidClass = domain.class("System.Guid");
+      const guidClass = domain.tryClass("System.Guid");
 
       if (guidClass) {
-        const emptyField = guidClass.tryGetField("Empty");
+        const emptyField = guidClass.tryField("Empty");
         if (emptyField) {
-          const type = emptyField.getType();
-          console.log(`  - Guid.Empty type: ${type.getName()}, kind: ${type.getKind()}`);
+          const type = emptyField.type;
+          console.log(`  - Guid.Empty type: ${type.name}, kind: ${type.kind}`);
 
           try {
             const value = emptyField.readValue(null, { coerce: true });
@@ -1825,12 +1825,12 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue for UInt64.MaxValue", () => {
+    await createMonoDependentTest("MonoField readValue for UInt64.MaxValue", () => {
       const domain = Mono.domain;
-      const uint64Class = domain.class("System.UInt64");
+      const uint64Class = domain.tryClass("System.UInt64");
 
       if (uint64Class) {
-        const maxField = uint64Class.tryGetField("MaxValue");
+        const maxField = uint64Class.tryField("MaxValue");
         if (maxField) {
           const value = maxField.readValue(null, { coerce: true });
           assertNotNull(value, "UInt64.MaxValue should be readable");
@@ -1847,14 +1847,14 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue for Decimal type constants", () => {
+    await createMonoDependentTest("MonoField readValue for Decimal type constants", () => {
       const domain = Mono.domain;
-      const decimalClass = domain.class("System.Decimal");
+      const decimalClass = domain.tryClass("System.Decimal");
 
       if (decimalClass) {
-        const oneField = decimalClass.tryGetField("One");
+        const oneField = decimalClass.tryField("One");
         if (oneField) {
-          console.log(`  - Decimal.One type kind: ${oneField.getType().getKind()}`);
+          console.log(`  - Decimal.One type kind: ${oneField.type.kind}`);
           try {
             const value = oneField.readValue(null, { coerce: true });
             console.log(`  - Decimal.One: ${value}`);
@@ -1863,7 +1863,7 @@ export function createMonoFieldTests(): TestResult[] {
           }
         }
 
-        const zeroField = decimalClass.tryGetField("Zero");
+        const zeroField = decimalClass.tryField("Zero");
         if (zeroField) {
           try {
             const value = zeroField.readValue(null, { coerce: true });
@@ -1877,14 +1877,14 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField readValue for TimeSpan constants", () => {
+    await createMonoDependentTest("MonoField readValue for TimeSpan constants", () => {
       const domain = Mono.domain;
-      const timeSpanClass = domain.class("System.TimeSpan");
+      const timeSpanClass = domain.tryClass("System.TimeSpan");
 
       if (timeSpanClass) {
-        const zeroField = timeSpanClass.tryGetField("Zero");
+        const zeroField = timeSpanClass.tryField("Zero");
         if (zeroField) {
-          console.log(`  - TimeSpan.Zero type kind: ${zeroField.getType().getKind()}`);
+          console.log(`  - TimeSpan.Zero type kind: ${zeroField.type.kind}`);
           try {
             const value = zeroField.readValue(null, { coerce: true });
             console.log(`  - TimeSpan.Zero: ${value}`);
@@ -1893,7 +1893,7 @@ export function createMonoFieldTests(): TestResult[] {
           }
         }
 
-        const ticksPerSecondField = timeSpanClass.tryGetField("TicksPerSecond");
+        const ticksPerSecondField = timeSpanClass.tryField("TicksPerSecond");
         if (ticksPerSecondField) {
           try {
             const value = ticksPerSecondField.readValue(null, { coerce: true });
@@ -1908,7 +1908,7 @@ export function createMonoFieldTests(): TestResult[] {
   );
 
   results.push(
-    createMonoDependentTest("MonoField type coercion should handle all primitive types consistently", () => {
+    await createMonoDependentTest("MonoField type coercion should handle all primitive types consistently", () => {
       const domain = Mono.domain;
 
       const testCases = [
@@ -1930,11 +1930,11 @@ export function createMonoFieldTests(): TestResult[] {
       let totalCount = 0;
 
       testCases.forEach(tc => {
-        const cls = domain.class(tc.class);
+        const cls = domain.tryClass(tc.class);
         if (cls) {
           tc.fields.forEach(fieldName => {
             totalCount++;
-            const field = cls.tryGetField(fieldName);
+            const field = cls.tryField(fieldName);
             if (field) {
               try {
                 const value = field.readValue(null, { coerce: true });

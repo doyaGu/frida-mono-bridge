@@ -7,8 +7,8 @@ import { createMonoImageTests } from "../test-mono-image";
 import { runTestCategory, TestResult } from "../test-runner-base";
 
 // Wrapper function to convert array of results to single result
-function runMonoImageTests(): TestResult {
-  const results = createMonoImageTests();
+async function runMonoImageTests(): Promise<TestResult> {
+  const results = await createMonoImageTests();
   const passed = results.filter(r => r.passed).length;
   const failed = results.filter(r => r.failed).length;
   const skipped = results.filter(r => r.skipped).length;
