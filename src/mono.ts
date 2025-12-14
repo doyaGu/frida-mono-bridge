@@ -503,6 +503,9 @@ export class MonoNamespace {
    * const detach = Mono.trace.classAll(myClass, callbacks);
    */
   get trace(): MonoNamespace.Trace {
+    this.ensureInitializedSync();
+    const api = this._api!;
+
     return {
       /**
        * Hook a single method
@@ -536,7 +539,7 @@ export class MonoNamespace {
        * @param pattern Wildcard pattern for method names
        */
       methodsByPattern: (pattern: string, callbacks: Trace.MethodCallbacks) =>
-        Trace.methodsByPattern(this._api!, pattern, callbacks),
+        Trace.methodsByPattern(api, pattern, callbacks),
 
       /**
        * Replace a method's return value
