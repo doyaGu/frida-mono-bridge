@@ -236,13 +236,13 @@ export function unboxValue(
  * Convert a JavaScript value to a Mono-compatible value.
  *
  * Supports automatic conversion of:
- * - number → Byte, SByte, Int16, UInt16, Int32, UInt32, Single, Double
- * - boolean → Boolean, or numeric 0/1
- * - string → String, Char
- * - bigint → Int64, UInt64
- * - MonoObject → passthrough
- * - NativePointer → passthrough
- * - null/undefined → null
+ * - number -> Byte, SByte, Int16, UInt16, Int32, UInt32, Single, Double
+ * - boolean -> Boolean, or numeric 0/1
+ * - string -> String, Char
+ * - bigint -> Int64, UInt64
+ * - MonoObject -> passthrough
+ * - NativePointer -> passthrough
+ * - null/undefined -> null
  *
  * @param api The MonoApi instance
  * @param value The JavaScript value to convert

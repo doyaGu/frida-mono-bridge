@@ -28,7 +28,7 @@ import { MonoMethod } from "./method";
  * - `call(name, args)` / `tryCall(name, args)` - Call method with auto-unboxing
  * - `invoke(name, args)` - Raw invoke returning NativePointer
  *
- * ### Unified Access (tries field → property → method)
+ * ### Unified Access (tries field -> property -> method)
  * - `getMember(name)` / `tryGetMember(name)` - Auto-detect member type
  */
 export class MonoObject extends MonoHandle {

@@ -381,7 +381,7 @@ Mono.perform(() => {
   // Basic method tracing
   const detach = Trace.method(takeDamage, {
     onEnter(args) {
-      console.log("→ TakeDamage called with:", args[0].toInt32());
+      console.log("-> TakeDamage called with:", args[0].toInt32());
     },
     onLeave(retval) {
       console.log("← Returned:", retval);
