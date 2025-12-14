@@ -32,50 +32,54 @@ tests/
 ├── test-utilities.ts                  # Test utility functions
 ├── test-runner-base.ts                # Base test runner
 │
-├── CATEGORY 1: Core Infrastructure Tests (~200 tests)
-│   ├── test-core-infrastructure.ts    # Module/version detection, basic API (22 tests)
-│   ├── test-mono-types.ts             # MonoType system and type kinds (106 tests)
-│   ├── test-data-operations.ts        # Object/String/Array operations (69 tests)
-│   ├── test-integration.ts            # Fluent API and integration (75 tests)
-│   └── test-supporting.ts             # Enums, metadata, logger (69 tests)
+├── CATEGORY 1: Core Infrastructure Tests (213 tests)
+│   ├── test-core-infrastructure.ts    # Module/version detection, basic API (11 tests)
+│   ├── test-mono-types.ts             # MonoType system and type kinds (77 tests)
+│   ├── test-data-operations.ts        # Object/String/Array operations (51 tests)
+│   ├── test-integration.ts            # Fluent API and integration (33 tests)
+│   └── test-supporting.ts             # Enums, metadata, logger (41 tests)
 │
-├── CATEGORY 2: Utility Tests - STANDALONE (No Mono dependency, ~94 tests)
+├── CATEGORY 2: Utility Tests - STANDALONE (No Mono dependency, 95 tests)
 │   ├── test-mono-utils.ts             # Utility functions (45 tests)
-│   └── test-mono-error-handling.ts    # Error handling (49 tests)
+│   ├── test-mono-error-handling.ts    # Error handling (46 tests)
+│   └── test-utilities.ts              # Test utility helpers (4 tests)
 │
-├── CATEGORY 3: Type System Tests - MONO_DEPENDENT (~245 tests)
-│   ├── test-mono-class.ts             # MonoClass API (35 tests)
-│   ├── test-mono-method.ts            # MonoMethod API (49 tests)
-│   ├── test-mono-field.ts             # MonoField API (74 tests)
-│   ├── test-mono-property.ts          # MonoProperty API (58 tests)
-│   └── test-generic-types.ts          # Generic type operations (29 tests)
+├── CATEGORY 3: Type System Tests - MONO_DEPENDENT (270 tests)
+│   ├── test-mono-class.ts             # MonoClass API (56 tests total: 33 + 23)
+│   ├── test-mono-method.ts            # MonoMethod API (45 tests)
+│   ├── test-mono-field.ts             # MonoField API (70 tests)
+│   ├── test-mono-property.ts          # MonoProperty API (61 tests)
+│   ├── test-generic-types.ts          # Generic type operations (29 tests)
+│   └── test-custom-attributes.ts      # Custom attributes (9 tests)
 │
-├── CATEGORY 4: Runtime Object Tests - MONO_DEPENDENT (~272 tests)
+├── CATEGORY 4: Runtime Object Tests - MONO_DEPENDENT (251 tests)
 │   ├── test-mono-string.ts            # MonoString operations (70 tests)
 │   ├── test-mono-array.ts             # MonoArray operations (66 tests)
 │   ├── test-mono-delegate.ts          # MonoDelegate operations (52 tests)
-│   ├── test-mono-object.ts            # MonoObject operations (11 tests)
-│   └── test-mono-data.ts              # Data type operations (73 tests)
+│   ├── test-mono-object.ts            # MonoObject operations (12 tests)
+│   ├── test-mono-data.ts              # Data type operations (41 tests)
+│   └── test-runtime-api.ts            # Runtime API (38 tests, also listed in Category 5)
 │
-├── CATEGORY 5: Domain & Assembly Tests - MONO_DEPENDENT (~291 tests)
-│   ├── test-mono-api.ts               # Core Mono API (32 tests)
-│   ├── test-mono-domain.ts            # MonoDomain operations (45 tests)
-│   ├── test-mono-threading.ts         # Thread operations (50 tests)
-│   ├── test-mono-module.ts            # Module management (39 tests)
-│   ├── test-mono-assembly.ts          # MonoAssembly operations (39 tests)
-│   ├── test-mono-image.ts             # MonoImage operations (47 tests)
-│   └── test-runtime-api.ts            # Runtime API (39 tests)
+├── CATEGORY 5: Domain & Assembly Tests - MONO_DEPENDENT (184 tests)
+│   ├── test-mono-api.ts               # Core Mono API (18 tests)
+│   ├── test-mono-domain.ts            # MonoDomain operations (3 tests)
+│   ├── test-mono-threading.ts         # Thread operations (29 tests)
+│   ├── test-mono-module.ts            # Module management (24 tests)
+│   ├── test-mono-assembly.ts          # MonoAssembly operations (42 tests)
+│   ├── test-mono-image.ts             # MonoImage operations (52 tests)
+│   ├── test-runtime-api.ts            # Runtime API (38 tests, included in count)
+│   └── test-common.ts                 # Common test utilities (8 tests - helper functions)
 │
-├── CATEGORY 6: Advanced Feature Tests - MONO_DEPENDENT (~135 tests)
+├── CATEGORY 6: Advanced Feature Tests - MONO_DEPENDENT (143 tests)
 │   ├── test-find-tools.ts             # Find utilities (56 tests)
-│   ├── test-trace-tools.ts            # Tracing utilities (34 tests)
-│   ├── test-gc-tools.ts               # GC utilities (36 tests)
-│   └── test-custom-attributes.ts      # Custom attributes (9 tests)
+│   ├── test-trace-tools.ts            # Tracing utilities (33 tests)
+│   ├── test-gc-tools.ts               # GC utilities (41 tests)
+│   └── test-framework.ts              # Test framework tests (13 tests)
 │
-├── CATEGORY 7: Unity Integration Tests - MONO_DEPENDENT (~58 tests)
-│   ├── test-unity-gameobject.ts       # GameObject operations (14 tests)
-│   ├── test-unity-components.ts       # Component system (19 tests)
-│   └── test-unity-engine-modules.ts   # Engine modules (25 tests)
+├── CATEGORY 7: Unity Integration Tests - MONO_DEPENDENT (42 tests)
+│   ├── test-unity-gameobject.ts       # GameObject operations (12 tests)
+│   ├── test-unity-components.ts       # Component system (11 tests)
+│   └── test-unity-engine-modules.ts   # Engine modules (19 tests)
 │
 └── Test Runners (runners/)
     └── Individual category runners for selective testing
@@ -139,8 +143,8 @@ Unity GameObject Tests:
 ======================================================================
 FINAL TEST SUMMARY
 ======================================================================
-Total Tests:    1400+
-PASS:          1400+ (100.0%)
+Total Tests:    1181
+PASS:          1181 (100.0%)
 FAIL:           0 (0.0%)
 SKIP:           0 (0.0%)
 ======================================================================
@@ -156,110 +160,114 @@ The test suite follows a **phased execution model** organized by dependency and 
 
 Tests that run without requiring Mono runtime:
 
-**Category 1: Core Infrastructure Tests** (~200 tests)
+**Category 1: Core Infrastructure Tests** (213 tests)
 
-- Module detection and version checking
-- Type system validation (MonoType kinds)
-- Basic data operations
-- Metadata and enums
-- Logger functionality
+- Module detection and version checking (11 tests)
+- Type system validation - MonoType kinds (77 tests)
+- Basic data operations (51 tests)
+- Fluent API and integration (33 tests)
+- Metadata and enums (41 tests)
 
-**Category 2: Utility Tests** (~94 tests)
+**Category 2: Utility Tests** (95 tests)
 
 - Utility functions (45 tests)
-- Error handling and exception management (49 tests)
+- Error handling and exception management (46 tests)
+- Test utility helpers (4 tests)
 
 ### Phase 2: MONO_DEPENDENT Tests (Require Mono Runtime)
 
 Tests requiring active Mono runtime:
 
-**Category 3: Type System Tests** (~245 tests)
+**Category 3: Type System Tests** (270 tests)
 
-- MonoClass API and operations
-- MonoMethod resolution and invocation
-- MonoField access and manipulation
-- MonoProperty getter/setter operations
-- Generic type instantiation
+- MonoClass API and operations (56 tests)
+- MonoMethod resolution and invocation (45 tests)
+- MonoField access and manipulation (70 tests)
+- MonoProperty getter/setter operations (61 tests)
+- Generic type instantiation (29 tests)
+- Custom attribute reflection (9 tests)
 
-**Category 4: Runtime Object Tests** (~272 tests)
+**Category 4: Runtime Object Tests** (251 tests)
 
-- MonoString creation and encoding
-- MonoArray operations and access
-- MonoDelegate creation and invocation
-- MonoObject lifecycle management
-- Data type conversions
+- MonoString creation and encoding (70 tests)
+- MonoArray operations and access (66 tests)
+- MonoDelegate creation and invocation (52 tests)
+- MonoObject lifecycle management (12 tests)
+- Data type conversions (41 tests)
+- Runtime API (38 tests)
 
-**Category 5: Domain & Assembly Tests** (~291 tests)
+**Category 5: Domain & Assembly Tests** (184 tests)
 
-- Core Mono API functions
-- Domain management and assembly loading
-- Thread operations and synchronization
-- Module detection and management
-- Assembly/Image metadata access
-- Runtime API initialization
+- Core Mono API functions (18 tests)
+- Domain management and assembly loading (3 tests)
+- Thread operations and synchronization (29 tests)
+- Module detection and management (24 tests)
+- Assembly/Image metadata access (94 tests: 42 assembly + 52 image)
+- Runtime API initialization (38 tests)
+- Common test utilities (8 tests)
 
-**Category 6: Advanced Feature Tests** (~135 tests)
+**Category 6: Advanced Feature Tests** (143 tests)
 
-- Find tools (methods, classes, fields)
-- Trace tools (hooking and monitoring)
-- GC tools (memory management)
-- Custom attribute reflection
+- Find tools (methods, classes, fields) (56 tests)
+- Trace tools (hooking and monitoring) (33 tests)
+- GC tools (memory management) (41 tests)
+- Test framework (13 tests)
 
-**Category 7: Unity Integration Tests** (~58 tests)
+**Category 7: Unity Integration Tests** (42 tests)
 
-- Unity GameObject operations
-- Unity Component system
-- Unity Engine modules (Vector3, Quaternion, etc.)
+- Unity GameObject operations (12 tests)
+- Unity Component system (11 tests)
+- Unity Engine modules (Vector3, Quaternion, etc.) (19 tests)
 
 ## Test Categories (Detailed Breakdown)
 
-### CATEGORY 1: Core Infrastructure Tests (~200 tests)
+### CATEGORY 1: Core Infrastructure Tests (213 tests)
 
-#### `test-core-infrastructure.ts` - 22 tests
+#### `test-core-infrastructure.ts` - 11 tests
 
 - Mono module detection
 - Version detection and feature flags
 - Basic API availability checks
 
-#### `test-mono-types.ts` - 106 tests
+#### `test-mono-types.ts` - 77 tests
 
-- Domain operations and caching (10 tests)
-- Assembly operations (8 tests)
-- Class discovery and operations (14 tests)
-- MonoType kind identification (15 tests)
+- Domain operations and caching
+- Assembly operations
+- Class discovery and operations
+- MonoType kind identification
   - Primitive types, String, Object, ValueType, Enum, Class
   - Array types (single/multi-dimensional, jagged)
   - Generic types, Pointer/IntPtr, Void
-- MonoType methods (10 tests)
+- MonoType methods
   - getSummary(), size/alignment, isByRef()
   - getElementType(), getClass(), getUnderlyingType()
   - Name formats, toString(), rank operations
 
-#### `test-data-operations.ts` - 69 tests
+#### `test-data-operations.ts` - 51 tests
 
 - Object operations
 - String operations and encoding
 - Array creation and manipulation
 
-#### `test-integration.ts` - 75 tests
+#### `test-integration.ts` - 33 tests
 
 - Fluent API usage
 - Consolidated utilities
 - End-to-end workflows
 
-#### `test-supporting.ts` - 69 tests
+#### `test-supporting.ts` - 41 tests
 
 - MonoEnums (type enums, exception enums, etc.)
 - MonoDefines (numeric constants)
 - Metadata collection and namespace grouping
-- Logger functionality (12 tests)
+- Logger functionality
   - Log methods, levels, formatting
   - Multi-line messages, special characters
   - Multiple logger instances
 
 ---
 
-### CATEGORY 2: Utility Tests - STANDALONE (~94 tests)
+### CATEGORY 2: Utility Tests - STANDALONE (95 tests)
 
 #### `test-mono-utils.ts` - 45 tests
 
@@ -269,26 +277,33 @@ Tests requiring active Mono runtime:
 - Performance optimization utilities
 - Memory management helpers
 
-#### `test-mono-error-handling.ts` - 49 tests
+#### `test-mono-error-handling.ts` - 46 tests
 
 - Comprehensive error scenario coverage
 - Exception handling and recovery
 - Error propagation and reporting
 - Graceful failure modes
 - Error message validation
+- MonoError and MonoErrorCodes
+
+#### `test-utilities.ts` - 4 tests
+
+- Test utility helper functions
+- Common test setup utilities
 
 ---
 
-### CATEGORY 3: Type System Tests - MONO_DEPENDENT (~245 tests)
+### CATEGORY 3: Type System Tests - MONO_DEPENDENT (270 tests)
 
-#### `test-mono-class.ts` - 35 tests
+#### `test-mono-class.ts` - 56 tests
 
 - Class discovery and enumeration
 - Inheritance relationships
 - Interface implementation
 - Class metadata and attributes
+- Namespace operations
 
-#### `test-mono-method.ts` - 49 tests
+#### `test-mono-method.ts` - 45 tests
 
 - Method resolution and overloading
 - Parameter validation and conversion
@@ -296,7 +311,7 @@ Tests requiring active Mono runtime:
 - Static vs instance methods
 - Method signature analysis
 
-#### `test-mono-field.ts` - 74 tests
+#### `test-mono-field.ts` - 70 tests
 
 - Field discovery and enumeration
 - Static vs instance field operations
@@ -304,7 +319,7 @@ Tests requiring active Mono runtime:
 - Field metadata and attributes
 - Accessibility testing
 
-#### `test-mono-property.ts` - 58 tests
+#### `test-mono-property.ts` - 61 tests
 
 - Property discovery
 - Getter/setter resolution
@@ -318,9 +333,14 @@ Tests requiring active Mono runtime:
 - Type parameter handling
 - Generic method operations
 
+#### `test-custom-attributes.ts` - 9 tests
+
+- Custom attribute reflection
+- Attribute metadata access
+
 ---
 
-### CATEGORY 4: Runtime Object Tests - MONO_DEPENDENT (~272 tests)
+### CATEGORY 4: Runtime Object Tests - MONO_DEPENDENT (251 tests)
 
 #### `test-mono-string.ts` - 70 tests
 
@@ -342,70 +362,81 @@ Tests requiring active Mono runtime:
 - Callback handling
 - Event system integration
 
-#### `test-mono-object.ts` - 11 tests
+#### `test-mono-object.ts` - 12 tests
 
 - Object boxing/unboxing
 - Object lifecycle management
 - Type conversions
 
-#### `test-mono-data.ts` - 73 tests
+#### `test-mono-data.ts` - 41 tests
 
 - Data type operations
 - Type conversions
 - Value marshalling
 
----
-
-### CATEGORY 5: Domain & Assembly Tests - MONO_DEPENDENT (~291 tests)
-
-#### `test-mono-api.ts` - 32 tests
-
-- Core Mono API functions
-- API export validation
-- Version compatibility
-
-#### `test-mono-domain.ts` - 45 tests
-
-- Domain creation and management
-- Domain hierarchy
-- Assembly loading within domains
-- Domain caching
-
-#### `test-mono-threading.ts` - 50 tests
-
-- Thread attachment/detachment
-- Thread synchronization
-- Thread-safe operations
-- Concurrent operation handling
-
-#### `test-mono-module.ts` - 39 tests
-
-- Module loading and validation
-- Metadata table access
-- Module enumeration
-
-#### `test-mono-assembly.ts` - 39 tests
-
-- Assembly loading and enumeration
-- Dependency analysis
-- Assembly metadata
-- Version compatibility
-
-#### `test-mono-image.ts` - 47 tests
-
-- Image metadata access
-- Class enumeration from images
-- Image validation
-- Cross-image operations
-
-#### `test-runtime-api.ts` - 39 tests
+#### `test-runtime-api.ts` - 38 tests
 
 - Runtime API initialization
 - Runtime state management
 
 ---
 
-### CATEGORY 6: Advanced Feature Tests - MONO_DEPENDENT (~135 tests)
+### CATEGORY 5: Domain & Assembly Tests - MONO_DEPENDENT (184 tests)
+
+#### `test-mono-api.ts` - 18 tests
+
+- Core Mono API functions
+- API export validation
+- Version compatibility
+
+#### `test-mono-domain.ts` - 3 tests
+
+- Domain creation and management
+- Domain hierarchy
+- Assembly loading within domains
+- Domain caching
+
+#### `test-mono-threading.ts` - 29 tests
+
+- Thread attachment/detachment
+- Thread synchronization
+- Thread-safe operations
+- Concurrent operation handling
+
+#### `test-mono-module.ts` - 24 tests
+
+- Module loading and validation
+- Metadata table access
+- Module enumeration
+
+#### `test-mono-assembly.ts` - 42 tests
+
+- Assembly loading and enumeration
+- Dependency analysis
+- Assembly metadata
+- Version compatibility
+
+#### `test-mono-image.ts` - 52 tests
+
+- Image metadata access
+- Class enumeration from images
+- Image validation
+- Cross-image operations
+
+#### `test-runtime-api.ts` - 38 tests
+
+- Runtime API initialization
+- Runtime state management
+- (Note: Also listed in Category 4)
+
+#### `test-common.ts` - 8 tests
+
+- Common test setup utilities
+- Helper functions for tests
+
+---
+
+### CATEGORY 6: Advanced Feature Tests - MONO_DEPENDENT (143 tests)
 
 #### `test-find-tools.ts` - 56 tests
 
@@ -413,40 +444,41 @@ Tests requiring active Mono runtime:
 - Search patterns and filters
 - Performance optimization
 
-#### `test-trace-tools.ts` - 34 tests
+#### `test-trace-tools.ts` - 33 tests
 
 - Method tracing and hooking
 - Call monitoring
 - Performance profiling
 
-#### `test-gc-tools.ts` - 36 tests
+#### `test-gc-tools.ts` - 41 tests
 
 - Garbage collection management
 - Memory monitoring
 - GC handle operations
 
-#### `test-custom-attributes.ts` - 9 tests
+#### `test-framework.ts` - 13 tests
 
-- Custom attribute reflection
-- Attribute metadata access
+- Test framework functionality
+- Assertion utilities
+- Test result management
 
 ---
 
-### CATEGORY 7: Unity Integration Tests - MONO_DEPENDENT (~58 tests)
+### CATEGORY 7: Unity Integration Tests - MONO_DEPENDENT (42 tests)
 
-#### `test-unity-gameobject.ts` - 14 tests
+#### `test-unity-gameobject.ts` - 12 tests
 
 - GameObject operations
 - Lifecycle management
 - Component attachment
 
-#### `test-unity-components.ts` - 19 tests
+#### `test-unity-components.ts` - 11 tests
 
 - Component system integration
 - Component operations
 - Component communication
 
-#### `test-unity-engine-modules.ts` - 25 tests
+#### `test-unity-engine-modules.ts` - 19 tests
 
 - Vector3, Quaternion operations
 - Engine module access
@@ -460,6 +492,12 @@ The test framework provides:
 
 - `createTest(name, testFn)` - Create and run a test
 - `createSkippedTest(name, reason)` - Skip a test with reason
+- `createMonoDependentTest(name, testFn)` - Create Mono-dependent test
+- `createStandaloneTest(name, testFn)` - Create standalone test
+- `createIntegrationTest(name, testFn)` - Create integration test
+- `createPerformanceTest(name, testFn)` - Create performance test
+- `createErrorHandlingTest(name, testFn)` - Create error handling test
+- `createSmokeTest(category, name)` - Create smoke test
 - `TestSuite` - Group related tests
 
 ### Assertions
@@ -542,20 +580,20 @@ The test suite provides comprehensive validation across all library components:
 
 ### Library Features Covered
 
-- Thread attachment and management (50 tests)
-- Domain access and caching (45 tests)
-- Exception handling (MonoManagedExceptionError) (49 tests)
+- Thread attachment and management (29 tests)
+- Domain access and caching (3 tests)
+- Exception handling (MonoManagedExceptionError) (46 tests)
 - Utility functions (45 tests)
-- Type system (MonoType, MonoClass) (141 tests)
-- Runtime objects (MonoString, MonoArray, MonoDelegate) (188 tests)
-- Find/Trace/GC tools (126 tests)
-- Unity integration (58 tests)
-- Logger functionality (12 tests)
-- Version detection and feature flags (22 tests)
+- Type system (MonoType, MonoClass) (263 tests: 77 + 56 + 45 + 70 + 61 + 29 + 9)
+- Runtime objects (MonoString, MonoArray, MonoDelegate) (251 tests: 70 + 66 + 52 + 12 + 41 + 38)
+- Find/Trace/GC tools (130 tests: 56 + 33 + 41)
+- Unity integration (42 tests: 12 + 11 + 19)
+- Logger and metadata functionality (41 tests in supporting)
+- Version detection and feature flags (11 tests)
 
 ### Integration & Real-World Usage
 
-- End-to-end workflows (75 tests)
+- End-to-end workflows (33 tests)
 - Unity game integration (tested with real Unity games)
 - Performance optimization and caching
 - Error handling and recovery
@@ -737,7 +775,7 @@ if (!Mono.api.hasExport("mono_domain_get")) {
 
 The Frida Mono Bridge test suite provides comprehensive validation with:
 
-- **1,400+ individual test cases** across 31 test files
+- **1,181 individual test cases** across 35 test files
 - **7 major categories** covering all library functionality
 - **Phased execution model** separating standalone and Mono-dependent tests
 - **Manual invocation** for stability and control
@@ -745,6 +783,63 @@ The Frida Mono Bridge test suite provides comprehensive validation with:
 - **100% coverage** of core APIs, type system, runtime objects, and advanced features
 
 The suite is designed for both development validation and CI/CD integration, with flexible configuration options and detailed output for debugging.
+
+### Test Count by File
+
+Complete breakdown of all 1,181 tests across 35 test files:
+
+| File                         | Tests     | Category                            |
+| ---------------------------- | --------- | ----------------------------------- |
+| test-mono-types.ts           | 77        | Core Infrastructure                 |
+| test-mono-string.ts          | 70        | Runtime Objects                     |
+| test-mono-array.ts           | 66        | Runtime Objects                     |
+| test-mono-property.ts        | 61        | Type System                         |
+| test-find-tools.ts           | 56        | Advanced Features                   |
+| test-mono-class.ts           | 56        | Type System                         |
+| test-mono-delegate.ts        | 52        | Runtime Objects                     |
+| test-mono-image.ts           | 52        | Domain & Assembly                   |
+| test-data-operations.ts      | 51        | Core Infrastructure                 |
+| test-mono-error-handling.ts  | 46        | Utilities (Standalone)              |
+| test-mono-method.ts          | 45        | Type System                         |
+| test-mono-utils.ts           | 45        | Utilities (Standalone)              |
+| test-mono-assembly.ts        | 42        | Domain & Assembly                   |
+| test-supporting.ts           | 41        | Core Infrastructure                 |
+| test-gc-tools.ts             | 41        | Advanced Features                   |
+| test-mono-data.ts            | 41        | Runtime Objects                     |
+| test-runtime-api.ts          | 38        | Domain & Assembly / Runtime Objects |
+| test-integration.ts          | 33        | Core Infrastructure                 |
+| test-trace-tools.ts          | 33        | Advanced Features                   |
+| test-mono-threading.ts       | 29        | Domain & Assembly                   |
+| test-generic-types.ts        | 29        | Type System                         |
+| test-mono-module.ts          | 26        | Domain & Assembly                   |
+| test-unity-engine-modules.ts | 19        | Unity Integration                   |
+| test-mono-api.ts             | 18        | Domain & Assembly                   |
+| test-framework.ts            | 13        | Advanced Features                   |
+| test-mono-object.ts          | 12        | Runtime Objects                     |
+| test-unity-gameobject.ts     | 12        | Unity Integration                   |
+| test-core-infrastructure.ts  | 11        | Core Infrastructure                 |
+| test-unity-components.ts     | 11        | Unity Integration                   |
+| test-custom-attributes.ts    | 9         | Type System                         |
+| test-common.ts               | 8         | Domain & Assembly                   |
+| test-utilities.ts            | 4         | Utilities (Standalone)              |
+| test-mono-domain.ts          | 3         | Domain & Assembly                   |
+| test-runner-base.ts          | 0         | Infrastructure                      |
+| index.ts                     | 0         | Infrastructure                      |
+| **TOTAL**                    | **1,181** | -                                   |
+
+### Test Count by Category
+
+| Category                               | Tests     | Files  |
+| -------------------------------------- | --------- | ------ |
+| **Category 1: Core Infrastructure**    | 213       | 5      |
+| **Category 2: Utilities (Standalone)** | 95        | 3      |
+| **Category 3: Type System**            | 270       | 6      |
+| **Category 4: Runtime Objects**        | 251       | 6      |
+| **Category 5: Domain & Assembly**      | 184       | 8      |
+| **Category 6: Advanced Features**      | 143       | 4      |
+| **Category 7: Unity Integration**      | 42        | 3      |
+| **Infrastructure/Framework**           | 0         | 2      |
+| **TOTAL**                              | **1,181** | **35** |
 
 ## Best Practices
 

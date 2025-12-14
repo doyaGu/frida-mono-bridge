@@ -30,7 +30,8 @@ npm install frida-mono-bridge
 import Mono from "frida-mono-bridge";
 
 // Modern fluent API with automatic thread management
-Mono.perform(() => {
+// NOTE: perform() is async in v0.3.0+ and must be awaited
+await Mono.perform(async () => {
   // Get root domain
   const domain = Mono.domain;
 
@@ -85,10 +86,11 @@ The library is organized into three main layers:
 frida-mono-bridge/
 ├── src/
 │   ├── runtime/            # Low-level Mono C API bindings
-│   │   ├── api.ts          # MonoApi - bound Mono functions
-│   │   ├── thread.ts       # ThreadManager - thread attachment
+│   │   ├── api.ts          # MonoApi - bound Mono functions (~150+ API exports)
+│   │   ├── thread.ts       # ThreadManager - thread attachment/lifecycle
 │   │   ├── module.ts       # Module discovery (mono-2.0-bdwgc.dll, etc.)
-│   │   └── version.ts      # Runtime feature detection
+│   │   ├── version.ts      # Runtime version & feature detection
+│   │   └── exports.ts      # Export resolution with aliasing support
 │   ├── model/              # High-level object model
 │   │   ├── domain.ts       # MonoDomain - application domain
 │   │   ├── assembly.ts     # MonoAssembly - loaded assemblies
@@ -100,20 +102,32 @@ frida-mono-bridge/
 │   │   ├── object.ts       # MonoObject - managed objects
 │   │   ├── string.ts       # MonoString - string operations
 │   │   ├── array.ts        # MonoArray - array operations
-│   │   └── delegate.ts     # MonoDelegate - delegate handling
+│   │   ├── delegate.ts     # MonoDelegate - delegate handling
+│   │   └── type.ts         # MonoType - type information and metadata
 │   ├── utils/              # Utility modules
 │   │   ├── find.ts         # Search utilities (classes, methods, fields)
 │   │   ├── trace.ts        # Method hooking/tracing
 │   │   ├── gc.ts           # GC utilities and handle management
-│   │   ├── errors.ts       # Error types and handling
-│   │   ├── memory.ts       # Memory utilities
-│   │   ├── log.ts          # Logging infrastructure
-│   │   └── cache.ts        # LRU caching utilities
+│   │   ├── errors.ts       # Error types and handling (MonoError, codes)
+│   │   ├── memory.ts       # Memory utilities (boxing, pointers, read/write)
+│   │   ├── log.ts          # Logging infrastructure (Logger class)
+│   │   ├── cache.ts        # LRU caching utilities
+│   │   ├── validation.ts   # Input validation and error builders
+│   │   └── metadata.ts     # Metadata collection and namespace grouping
 │   ├── mono.ts             # MonoNamespace - main fluent API facade
 │   └── index.ts            # Package entry point and exports
 ├── tests/                  # Test suite (30+ modules, 1000+ tests)
+│   ├── test-*.ts           # 30 test modules covering all APIs
+│   ├── runners/            # 30 individual test runners for selective execution
+│   ├── test-framework.ts   # Test framework and utilities
+│   ├── test-common.ts      # Common test setup and helpers
+│   └── README.md           # Test documentation
 ├── docs/                   # Documentation
-└── dist/                   # Compiled output
+├── scripts/                # Build and generation scripts
+│   ├── build.mjs                  # Main build script
+│   ├── generate-mono-signatures.ts # API signature generator
+│   └── generate-enums.ts          # Enum definition generator
+└── dist/                   # Compiled output (ES modules + type definitions)
 ```
 
 ## API Overview
@@ -124,7 +138,7 @@ frida-mono-bridge/
 import Mono from "frida-mono-bridge";
 
 // Modern Fluent API (recommended)
-Mono.perform(() => {
+await Mono.perform(async () => {
   // Module & Version
   console.log(Mono.module.name); // e.g., "mono-2.0-bdwgc.dll"
   console.log(Mono.version.features); // { delegateThunk, metadataTables, ... }
@@ -145,25 +159,29 @@ Mono.detachIfExiting(); // Only detaches if thread is exiting
 
 ### MonoNamespace Properties
 
-| Property  | Type                 | Description                  |
-| --------- | -------------------- | ---------------------------- |
-| `domain`  | `MonoDomain`         | Root application domain      |
-| `api`     | `MonoApi`            | Low-level Mono C API wrapper |
-| `module`  | `MonoModuleInfo`     | Discovered Mono module info  |
-| `version` | `MonoRuntimeVersion` | Runtime version and features |
-| `gc`      | `GCUtilities`        | Garbage collection utilities |
-| `find`    | `Find`               | Search utilities module      |
-| `trace`   | `Trace`              | Tracing utilities module     |
+| Property  | Description                                                                               |
+| --------- | ----------------------------------------------------------------------------------------- |
+| `config`  | Configuration (module discovery, export aliasing, timeouts, perform mode, global install) |
+| `domain`  | Root application domain                                                                   |
+| `api`     | Low-level Mono C API wrapper (internal/advanced)                                          |
+| `module`  | Discovered Mono module info                                                               |
+| `version` | Runtime version and feature detection                                                     |
+| `exports` | Resolved native export addresses with alias support                                       |
+| `memory`  | Memory utilities (boxing/unboxing, string/array helpers, typed read/write)                |
+| `gc`      | Garbage collection utilities                                                              |
+| `find`    | Search utilities (facade submodule)                                                       |
+| `trace`   | Tracing utilities (facade submodule)                                                      |
 
 ### MonoNamespace Methods
 
-| Method                   | Description                                    |
-| ------------------------ | ---------------------------------------------- |
-| `perform(callback)`      | Execute code with guaranteed thread attachment |
-| `dispose()`              | Clean up all resources                         |
-| `ensureThreadAttached()` | Manually attach current thread                 |
-| `detachIfExiting()`      | Safe thread detach (only if exiting)           |
-| `detachAllThreads()`     | Force detach all threads (cleanup only)        |
+| Method                     | Description                                                      |
+| -------------------------- | ---------------------------------------------------------------- |
+| `initialize()`             | Wait for module + root domain readiness (does not attach thread) |
+| `perform(callback, mode?)` | Execute code with guaranteed init + thread attachment (async)    |
+| `dispose()`                | Clean up all resources                                           |
+| `ensureThreadAttached()`   | Manually attach current thread                                   |
+| `detachIfExiting()`        | Safe thread detach (only if exiting)                             |
+| `detachAllThreads()`       | Force detach all threads (cleanup only)                          |
 
 ## Development Guide
 
@@ -215,64 +233,44 @@ npm run typecheck
 
 ### Package Exports
 
-The library is an ES module (`"type": "module"`) with the following exports:
+The library is an ES module (`"type": "module"`). In v0.3.0+, the root entry focuses on a single `Mono` facade.
 
 ```typescript
-// Default export - MonoNamespace singleton
+// Default export - Mono facade singleton
 import Mono from "frida-mono-bridge";
 
-// Named export
-import { Mono } from "frida-mono-bridge";
+// Named export (same instance)
+import { Mono as MonoNamed } from "frida-mono-bridge";
 
-// Direct module access
-import {
-  // Runtime layer
-  MonoApi,
-  createMonoApi,
-  findMonoModule,
-  ThreadManager,
+// Error types/enums for typed catch blocks
+import { MonoError, MonoErrorCodes, MonoRuntimeNotReadyError } from "frida-mono-bridge";
 
-  // Model layer
-  MonoDomain,
-  MonoAssembly,
-  MonoImage,
-  MonoClass,
-  MonoMethod,
-  MonoField,
-  MonoProperty,
-  MonoObject,
-  MonoString,
-  MonoArray,
-  MonoDelegate,
-
-  // Utilities
-  classes,
-  methods,
-  fields, // Find utilities
-  method as traceMethod,
-  classAll, // Trace utilities
-  GCUtilities, // GC utilities
-  withErrorHandling,
-  MonoError, // Error handling
-  Logger, // Logging
-} from "frida-mono-bridge";
+// Type-only exports for annotations (not runtime values)
+import type { MonoDomain, MonoClass, MonoMethod, MonoApi } from "frida-mono-bridge";
 ```
+
+Notes:
+
+- v0.3.0+ no longer re-exports `runtime/`, `model/`, `utils/` as runtime values. Use facade submodules instead: `Mono.find`, `Mono.trace`, `Mono.gc`, `Mono.memory`, `Mono.exports`.
+- `globalThis.Mono` is installed by default on first `Mono.initialize()` / `Mono.perform()`. Disable by setting `Mono.config.installGlobal = false` before first use.
 
 ## Testing
 
-The test suite contains **1000+ tests** organized into **7 categories** across **30+ test modules**.
+The test suite contains **1,181 individual test cases** organized into **7 categories** across **35 test files**.
+See [tests/README.md](tests/README.md) for complete documentation and [docs/API_QUALITY_REPORT.md](docs/API_QUALITY_REPORT.md) for quality metrics.
 
 ### Test Categories
 
-| Category            | Tests | Description                                     |
-| ------------------- | ----- | ----------------------------------------------- |
-| Core Infrastructure | ~200  | Module detection, type system, metadata         |
-| Utility Tests       | ~94   | Standalone tests (no Mono dependency)           |
-| Type System         | ~245  | MonoClass, MonoMethod, MonoField, MonoProperty  |
-| Runtime Objects     | ~272  | MonoString, MonoArray, MonoDelegate, MonoObject |
-| Domain & Assembly   | ~291  | MonoDomain, MonoAssembly, MonoImage, threading  |
-| Advanced Features   | ~135  | Find, Trace, GC, Custom Attributes              |
-| Unity Integration   | ~58   | GameObject, Components, Engine Modules          |
+| Category            | Tests     | Files  | Description                                     |
+| ------------------- | --------- | ------ | ----------------------------------------------- |
+| Core Infrastructure | 213       | 5      | Module detection, type system, metadata         |
+| Utility Tests       | 95        | 3      | Standalone tests (no Mono dependency)           |
+| Type System         | 270       | 6      | MonoClass, MonoMethod, MonoField, MonoProperty  |
+| Runtime Objects     | 251       | 6      | MonoString, MonoArray, MonoDelegate, MonoObject |
+| Domain & Assembly   | 184       | 8      | MonoDomain, MonoAssembly, MonoImage, threading  |
+| Advanced Features   | 143       | 4      | Find, Trace, GC, Custom Attributes              |
+| Unity Integration   | 42        | 3      | GameObject, Components, Engine Modules          |
+| **TOTAL**           | **1,181** | **35** | Complete test coverage                          |
 
 ### Running Tests
 
@@ -280,7 +278,7 @@ Tests are compiled with `frida-compile` and executed against a running Mono proc
 
 ```bash
 # Step 1: Compile tests
-npm run test:mono-class           # Single category
+npm run test:mono-class           # Single category (recommended)
 npm test                          # All tests
 
 # Step 2: Run with Frida against target process
@@ -288,108 +286,125 @@ frida -n "YourApp.exe" -l dist/test-mono-class.js
 frida -n "UnityGame.exe" -l dist/tests.js
 ```
 
+**Test Execution Model:**
+
+- **Phase 1**: Standalone tests (95 tests) - No Mono runtime required
+- **Phase 2**: Mono-dependent tests (1,086 tests) - Requires active Mono runtime
+- **Selective Execution**: Run individual test categories for faster iteration
+- **Manual Invocation**: Tests don't auto-run; explicit execution required
+
 ### Available Test Scripts
 
 ```bash
-# Core tests
-npm run test:core-infrastructure
-npm run test:mono-types
-npm run test:mono-api
+# Core Infrastructure Tests (213 tests)
+npm run test:core-infrastructure    # Module detection, version info (11 tests)
+npm run test:mono-types             # MonoType system (77 tests)
+npm run test:data-operations        # Object/String/Array ops (51 tests)
+npm run test:integration            # Fluent API integration (33 tests)
+npm run test:supporting             # Enums, metadata, logger (41 tests)
 
-# Type system tests
-npm run test:mono-class
-npm run test:mono-method
-npm run test:mono-field
-npm run test:mono-property
-npm run test:generic-types
+# Utility Tests - Standalone (95 tests)
+npm run test:mono-utils             # Utility functions (45 tests)
+npm run test:mono-error-handling    # Error handling (46 tests)
 
-# Runtime object tests
-npm run test:mono-string
-npm run test:mono-array
-npm run test:mono-delegate
-npm run test:mono-object
+# Type System Tests (270 tests)
+npm run test:mono-class             # MonoClass API (56 tests)
+npm run test:mono-method            # MonoMethod API (45 tests)
+npm run test:mono-field             # MonoField API (70 tests)
+npm run test:mono-property          # MonoProperty API (61 tests)
+npm run test:generic-types          # Generic types (29 tests)
+npm run test:custom-attributes      # Custom attributes (9 tests)
 
-# Domain & assembly tests
-npm run test:mono-domain
-npm run test:mono-assembly
-npm run test:mono-image
-npm run test:mono-threading
+# Runtime Object Tests (251 tests)
+npm run test:mono-string            # MonoString ops (70 tests)
+npm run test:mono-array             # MonoArray ops (66 tests)
+npm run test:mono-delegate          # MonoDelegate ops (52 tests)
+npm run test:mono-object            # MonoObject ops (12 tests)
+npm run test:mono-data              # Data operations (41 tests)
+npm run test:runtime-api            # Runtime API (38 tests)
 
-# Advanced feature tests
-npm run test:find-tools
-npm run test:trace-tools
-npm run test:gc-tools
-npm run test:custom-attributes
+# Domain & Assembly Tests (184 tests)
+npm run test:mono-api               # Core Mono API (18 tests)
+npm run test:mono-domain            # MonoDomain ops (3 tests)
+npm run test:mono-assembly          # MonoAssembly ops (42 tests)
+npm run test:mono-image             # MonoImage ops (52 tests)
+npm run test:mono-threading         # Threading (29 tests)
+npm run test:mono-module            # Module management (24 tests)
 
-# Unity tests
-npm run test:unity-gameobject
-npm run test:unity-components
-npm run test:unity-engine-modules
+# Advanced Feature Tests (143 tests)
+npm run test:find-tools             # Search utilities (56 tests)
+npm run test:trace-tools            # Method tracing (33 tests)
+npm run test:gc-tools               # GC utilities (41 tests)
+
+# Unity Integration Tests (42 tests)
+npm run test:unity-gameobject       # GameObject ops (12 tests)
+npm run test:unity-components       # Component system (11 tests)
+npm run test:unity-engine-modules   # Engine modules (19 tests)
 ```
 
-For detailed test documentation, see [tests/README.md](tests/README.md).
+**Test Documentation:**
+
+- Complete test suite documentation: [tests/README.md](tests/README.md)
+- Test framework details and best practices included
+- Individual test file descriptions and examples
 
 ## Advanced Features
 
 ### Search Utilities
 
-The `find` module provides wildcard and regex search across the loaded assemblies:
+The `Mono.find` facade submodule provides wildcard and regex search across the loaded assemblies:
 
 ```typescript
 import Mono from "frida-mono-bridge";
-import { classes, methods, fields, properties } from "frida-mono-bridge";
 
-Mono.perform(() => {
-  const api = Mono.api;
-
+await Mono.perform(() => {
   // Find classes by pattern (wildcard: * and ?)
-  const playerClasses = classes(api, "*Player*");
-  const controllers = classes(api, "Game.?Controller");
+  const playerClasses = Mono.find.classes("*Player*");
+  const controllers = Mono.find.classes("Game.?Controller");
 
   // Find with regex
-  const managers = classes(api, ".*Manager$", { regex: true });
+  const managers = Mono.find.classes(".*Manager$", { regex: true });
 
   // Find with options
-  const limited = classes(api, "*", {
+  const limited = Mono.find.classes("*", {
     limit: 10,
     filter: c => !c.isInterface(),
   });
 
   // Find methods across all classes
-  const attackMethods = methods(api, "*Attack*");
+  const attackMethods = Mono.find.methods("*Attack*");
 
   // Find fields
-  const healthFields = fields(api, "*health*", { caseInsensitive: true });
+  const healthFields = Mono.find.fields("*health*", { caseInsensitive: true });
 
   // Find properties
-  const positionProps = properties(api, "*Position*");
+  const positionProps = Mono.find.properties("*Position*");
 });
 ```
 
 ### Method Tracing
 
-The `trace` module provides method hooking with safe fallbacks for JIT compilation:
+The `Mono.trace` facade submodule provides method hooking with safe fallbacks for JIT compilation:
 
 ```typescript
 import Mono from "frida-mono-bridge";
-import * as Trace from "frida-mono-bridge";
 
-Mono.perform(() => {
+await Mono.perform(() => {
   const playerClass = Mono.domain.assembly("Assembly-CSharp").image.class("Game", "Player");
   const takeDamage = playerClass.method("TakeDamage", 1);
 
   // Basic method tracing
-  const detach = Trace.method(takeDamage, {
+  const detach = Mono.trace.method(takeDamage, {
     onEnter(args) {
       console.log("-> TakeDamage called with:", args[0].toInt32());
     },
     onLeave(retval) {
-      console.log("← Returned:", retval);
+      console.log("<- Returned:", retval);
     },
   });
 
   // Safe tracing (returns null if method not JIT-compiled yet)
-  const safeDetach = Trace.tryMethod(takeDamage, {
+  const safeDetach = Mono.trace.tryMethod(takeDamage, {
     onEnter(args) {
       console.log("Called");
     },
@@ -399,7 +414,7 @@ Mono.perform(() => {
   }
 
   // Extended context access
-  Trace.methodExtended(takeDamage, {
+  Mono.trace.methodExtended(takeDamage, {
     onEnter(args) {
       console.log("Thread:", this.threadId);
       console.log("Return address:", this.returnAddress);
@@ -407,12 +422,12 @@ Mono.perform(() => {
   });
 
   // Replace return value
-  Trace.replaceReturnValue(takeDamage, (original, thisPtr, args) => {
+  Mono.trace.replaceReturnValue(takeDamage, (original, thisPtr, args) => {
     return ptr(100); // Always return 100
   });
 
   // Trace all methods in a class
-  const detachAll = Trace.classAll(playerClass, {
+  const detachAll = Mono.trace.classAll(playerClass, {
     onEnter(args) {
       console.log("Method called");
     },
@@ -427,30 +442,34 @@ Mono.perform(() => {
 ### Error Handling
 
 ```typescript
-import { withErrorHandling, MonoError, MonoMethodError } from "frida-mono-bridge";
+import Mono, { MonoError, MonoErrorCodes, MonoMethodNotFoundError } from "frida-mono-bridge";
 
-// Wrap operations with automatic error handling
-const safeFn = withErrorHandling((damage: number) => {
-  const method = playerClass.method("TakeDamage", 1);
-  return method.invoke(instance, [damage]);
-}, "player damage calculation");
+await Mono.perform(() => {
+  const playerClass = Mono.domain.assembly("Assembly-CSharp").image.class("Game", "Player");
 
-const result = safeFn(100);
+  try {
+    // This will throw if method is missing / incompatible / runtime not ready
+    const method = playerClass.method("TakeDamage", 1);
+    method.invoke(null, []);
+  } catch (e) {
+    if (e instanceof MonoMethodNotFoundError) {
+      console.log("Missing method:", e.message);
+    } else if (e instanceof MonoError) {
+      console.log("MonoError:", e.code, e.message);
+      if (e.code === MonoErrorCodes.RUNTIME_NOT_READY) {
+        console.log("Tip: call via await Mono.perform(...) once runtime is ready");
+      }
+    }
 
-// Catch specific error types
-try {
-  method.invoke(null, []);
-} catch (e) {
-  if (e instanceof MonoMethodError) {
-    console.log("Method error:", e.message);
+    throw e;
   }
-}
+});
 ```
 
 ### Custom Attributes
 
 ```typescript
-Mono.perform(() => {
+await Mono.perform(() => {
   // Get custom attributes from various Mono types
   const assembly = Mono.domain.assembly("Assembly-CSharp");
   const assemblyAttrs = assembly?.getCustomAttributes();
@@ -472,7 +491,7 @@ Mono.perform(() => {
 ### Generic Types
 
 ```typescript
-Mono.perform(() => {
+await Mono.perform(() => {
   // Create generic type instances
   const listDef = Mono.domain.class("System.Collections.Generic.List`1");
   const stringClass = Mono.domain.class("System.String");
@@ -489,21 +508,20 @@ Mono.perform(() => {
 ### GC Utilities
 
 ```typescript
-Mono.perform(() => {
+await Mono.perform(() => {
   const gc = Mono.gc;
 
   // Force garbage collection
   gc.collect(0); // Gen 0
   gc.collect(1); // Gen 1
 
-  // Get GC statistics
-  const heapSize = gc.getHeapSize();
-  const usedSize = gc.getUsedSize();
+  // Get GC statistics (availability depends on the target runtime)
+  const { heapSize, usedHeapSize } = gc.stats;
 
   // Manage GC handles
-  const handle = gc.allocHandle(someObject);
+  const handle = gc.handle(someObject, true);
   // ... use handle ...
-  gc.freeHandle(handle);
+  gc.releaseHandle(handle);
 
   // Release all handles on cleanup
   gc.releaseAll();
