@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "description": "Configuration for mono-signatures generator",
+  "root": "../mono",
+  "outputFile": "src/runtime/signatures.ts",
+  "commonExportsFile": "data/all_valid_exports.txt",
+  "apiPrefixes": ["mono", "unity_mono", "monoeg"],
+  "include": ["data/include/mono-manual.h"],
+  "exclude": [],
+  "verbose": false
+}
