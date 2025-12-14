@@ -724,8 +724,20 @@ export class MonoNamespace {
   }
 
   /**
-   * Clean up resources
-   * Should be called when done with the Mono runtime
+   * Clean up all resources and release all references.
+   * Should be called when done with the Mono runtime.
+   *
+   * After calling dispose():
+   * - All GC handles are released
+   * - All caches are cleared
+   * - All threads are detached
+   * - The instance cannot be reused without re-initialization
+   *
+   * @example
+   * ```typescript
+   * // When done with Mono
+   * Mono.dispose();
+   * ```
    */
   dispose(): void {
     if (this._api) {
@@ -743,6 +755,42 @@ export class MonoNamespace {
     this._domain = null;
     this._version = null;
     this._gcUtils = null;
+    this._exports = null;
+    this._memory = null;
+  }
+
+  /**
+   * Reset internal caches without full disposal.
+   * Use this to free memory from cached data while keeping the runtime usable.
+   *
+   * Clears:
+   * - API function and address caches
+   * - Delegate thunk cache
+   * - GC handles (releases all)
+   *
+   * Does NOT:
+   * - Detach threads
+   * - Reset initialization state
+   * - Invalidate the runtime
+   *
+   * @example
+   * ```typescript
+   * // Clear caches to free memory, but keep runtime usable
+   * Mono.reset();
+   * ```
+   */
+  reset(): void {
+    if (this._api) {
+      // Clear API caches but don't dispose
+      this._api.clearCaches();
+    }
+
+    if (this._gcUtils) {
+      // Release all GC handles
+      this._gcUtils.releaseAll();
+    }
+
+    // Clear cached subsystem references (will be rebuilt on next access)
     this._exports = null;
     this._memory = null;
   }
