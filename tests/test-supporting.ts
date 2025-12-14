@@ -3,10 +3,7 @@
  * Consolidated tests for Definitions, Metadata Collections, and Logger operations
  */
 
-import Mono from "../src";
-import { MonoTypeKind } from "../src/model/type";
-import { MonoDefines, MonoEnums } from "../src/runtime/enums";
-import { Logger } from "../src/utils/log";
+import Mono, { Logger, MonoDefines, MonoEnums, MonoTypeKind } from "../src";
 import {
   assert,
   assertApiAvailable,

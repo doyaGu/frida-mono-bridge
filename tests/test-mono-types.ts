@@ -3,7 +3,7 @@
  * Consolidated tests for Domain, Assembly, and Class operations
  */
 
-import Mono from "../src";
+import Mono, { MonoTypeKind, MonoTypeNameFormat } from "../src";
 import {
   assert,
   assertApiAvailable,
@@ -641,8 +641,6 @@ export async function testMonoTypes(): Promise<TestResult> {
   await suite.addResultAsync(
     createMonoDependentTest("Should identify primitive type kinds", () => {
       const domain = Mono.domain;
-      const { MonoType, MonoTypeKind } = require("../src/model/type");
-
       const primitiveTypes = [
         { name: "System.Boolean", expectedKind: MonoTypeKind.Boolean },
         { name: "System.Byte", expectedKind: MonoTypeKind.U1 },
@@ -682,8 +680,6 @@ export async function testMonoTypes(): Promise<TestResult> {
   await suite.addResultAsync(
     createMonoDependentTest("Should identify String type kind", () => {
       const domain = Mono.domain;
-      const { MonoTypeKind } = require("../src/model/type");
-
       const stringClass = domain.tryClass("System.String");
       assertNotNull(stringClass, "System.String should be available");
 
@@ -703,8 +699,6 @@ export async function testMonoTypes(): Promise<TestResult> {
   await suite.addResultAsync(
     createMonoDependentTest("Should identify Object type kind", () => {
       const domain = Mono.domain;
-      const { MonoTypeKind } = require("../src/model/type");
-
       const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should be available");
 
@@ -721,8 +715,6 @@ export async function testMonoTypes(): Promise<TestResult> {
   await suite.addResultAsync(
     createMonoDependentTest("Should identify ValueType type kind", () => {
       const domain = Mono.domain;
-      const { MonoTypeKind } = require("../src/model/type");
-
       // DateTime is a value type struct
       const dateTimeClass = domain.tryClass("System.DateTime");
       if (dateTimeClass) {
@@ -754,8 +746,6 @@ export async function testMonoTypes(): Promise<TestResult> {
   await suite.addResultAsync(
     createMonoDependentTest("Should identify Enum type kind", () => {
       const domain = Mono.domain;
-      const { MonoTypeKind } = require("../src/model/type");
-
       const dayOfWeekClass = domain.tryClass("System.DayOfWeek");
       if (dayOfWeekClass) {
         const type = dayOfWeekClass.type;
@@ -790,8 +780,6 @@ export async function testMonoTypes(): Promise<TestResult> {
   await suite.addResultAsync(
     createMonoDependentTest("Should identify Class type kind", () => {
       const domain = Mono.domain;
-      const { MonoTypeKind } = require("../src/model/type");
-
       // Exception is a class
       const exceptionClass = domain.tryClass("System.Exception");
       if (exceptionClass) {
@@ -823,8 +811,6 @@ export async function testMonoTypes(): Promise<TestResult> {
   await suite.addResultAsync(
     createMonoDependentTest("Should identify Array type kinds", () => {
       const domain = Mono.domain;
-      const { MonoTypeKind } = require("../src/model/type");
-
       // Single-dimensional array
       const intArrayClass = domain.tryClass("System.Int32[]");
       if (intArrayClass) {
@@ -854,8 +840,6 @@ export async function testMonoTypes(): Promise<TestResult> {
   await suite.addResultAsync(
     createMonoDependentTest("Should identify Generic type kinds", () => {
       const domain = Mono.domain;
-      const { MonoTypeKind } = require("../src/model/type");
-
       // Generic type definition
       const listClass = domain.tryClass("System.Collections.Generic.List`1");
       if (listClass) {
@@ -896,8 +880,6 @@ export async function testMonoTypes(): Promise<TestResult> {
   await suite.addResultAsync(
     createMonoDependentTest("Should identify Pointer/IntPtr type kinds", () => {
       const domain = Mono.domain;
-      const { MonoTypeKind } = require("../src/model/type");
-
       const intPtrClass = domain.tryClass("System.IntPtr");
       if (intPtrClass) {
         const type = intPtrClass.type;
@@ -926,8 +908,6 @@ export async function testMonoTypes(): Promise<TestResult> {
   await suite.addResultAsync(
     createMonoDependentTest("Should identify Void type kind", () => {
       const domain = Mono.domain;
-      const { MonoTypeKind } = require("../src/model/type");
-
       const voidClass = domain.tryClass("System.Void");
       if (voidClass) {
         const type = voidClass.type;
@@ -1091,8 +1071,6 @@ export async function testMonoTypes(): Promise<TestResult> {
   await suite.addResultAsync(
     createMonoDependentTest("Should test MonoType.getUnderlyingType() for enums", () => {
       const domain = Mono.domain;
-      const { MonoTypeKind } = require("../src/model/type");
-
       const dayOfWeekClass = domain.tryClass("System.DayOfWeek");
       if (dayOfWeekClass) {
         const type = dayOfWeekClass.type;
@@ -1116,8 +1094,6 @@ export async function testMonoTypes(): Promise<TestResult> {
   await suite.addResultAsync(
     createMonoDependentTest("Should test MonoType name formats", () => {
       const domain = Mono.domain;
-      const { MonoTypeNameFormat } = require("../src/model/type");
-
       const stringClass = domain.tryClass("System.String");
       if (stringClass) {
         const type = stringClass.type;
@@ -1142,8 +1118,6 @@ export async function testMonoTypes(): Promise<TestResult> {
 
   await suite.addResultAsync(
     createMonoDependentTest("Should verify type kind constants", () => {
-      const { MonoTypeKind } = require("../src/model/type");
-
       // Verify all type kinds are defined
       const expectedKinds = [
         "End",
@@ -1186,7 +1160,7 @@ export async function testMonoTypes(): Promise<TestResult> {
 
       let definedCount = 0;
       for (const kindName of expectedKinds) {
-        if (MonoTypeKind[kindName] !== undefined) {
+        if (Object.prototype.hasOwnProperty.call(MonoTypeKind, kindName)) {
           definedCount++;
         } else {
           console.log(`    Missing type kind: ${kindName}`);

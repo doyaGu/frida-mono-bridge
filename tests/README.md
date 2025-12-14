@@ -568,12 +568,12 @@ The test suite provides comprehensive validation across all library components:
 
 Place your test in the correct file based on what it tests:
 
-- **Core infrastructure** → `test-api.ts`, `test-logger.ts`, etc.
-- **Runtime management** → `test-thread.ts`, `test-domain.ts`, `test-gchandle.ts`
-- **Model operations** → `test-assembly.ts`, `test-class.ts`, `test-method.ts`, etc.
-- **Features** → `test-delegate.ts`, `test-icall.ts`
-- **Integration** → `test-real-usage.ts`
-- **Utilities** → `test-cache.ts`, `test-utils.ts`
+- **Core infrastructure** -> `test-api.ts`, `test-logger.ts`, etc.
+- **Runtime management** -> `test-thread.ts`, `test-domain.ts`, `test-gchandle.ts`
+- **Model operations** -> `test-assembly.ts`, `test-class.ts`, `test-method.ts`, etc.
+- **Features** -> `test-delegate.ts`, `test-icall.ts`
+- **Integration** -> `test-real-usage.ts`
+- **Utilities** -> `test-cache.ts`, `test-utils.ts`
 
 ### 2. Add Your Test
 

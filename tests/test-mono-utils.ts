@@ -1,7 +1,39 @@
 /**
  * Comprehensive Utility and Helper Function Tests (Phase 4)
  * Tests for all utility modules and helper functions
+ *
+ * V2: Uses facade imports where possible. Some tests still need direct module access
+ * to test internal implementation details.
  */
+
+import {
+  // Logger
+  Logger,
+  // Cache utilities
+  LruCache,
+  // Error types
+  MonoError,
+  // Memory utilities
+  allocPointerArray,
+  // String utilities
+  createError,
+  createTimer,
+  ensurePointer,
+  enumerateMonoHandles,
+  isNativePointer,
+  isValidPointer,
+  pointerIsNull,
+  readMonoString,
+  readUtf16String,
+  readUtf8String,
+  resolveNativePointer,
+  safeAlloc,
+  safeStringify,
+  tryMakePointer,
+  unwrapInstance,
+  // Trace types
+  type MethodCallbacks,
+} from "../src";
 
 import {
   TestCategory,
@@ -15,16 +47,6 @@ import {
   createPerformanceTest,
   createStandaloneTest,
 } from "./test-framework";
-
-// Import Mono for real API access
-
-// Import all utility modules (only existing ones)
-import * as CacheUtils from "../src/utils/cache";
-import * as ErrorUtils from "../src/utils/errors";
-import * as LogUtils from "../src/utils/log";
-import * as MemoryUtils from "../src/utils/memory";
-import * as StringOperations from "../src/utils/string";
-import * as TraceUtils from "../src/utils/trace";
 
 // Mock classes for testing pointer-like objects (not Mono API mocks)
 class MockMonoObject {
@@ -105,7 +127,7 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Trace utility - method hooking interface", () => {
       // Test method callbacks interface
-      const callbacks: TraceUtils.MethodCallbacks = {
+      const callbacks: MethodCallbacks = {
         onEnter: (args: NativePointer[]) => {
           assert(Array.isArray(args), "Should receive args array");
         },
@@ -122,7 +144,7 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Trace utility - callback validation", () => {
       // Test callback function validation
-      const validCallbacks: TraceUtils.MethodCallbacks = {
+      const validCallbacks: MethodCallbacks = {
         onEnter: () => {},
         onLeave: () => {},
       };
@@ -131,7 +153,7 @@ export async function testMonoUtils(): Promise<TestResult> {
       assert(typeof validCallbacks.onLeave === "function", "onLeave should be function");
 
       // Test with optional callbacks
-      const partialCallbacks: TraceUtils.MethodCallbacks = {
+      const partialCallbacks: MethodCallbacks = {
         onEnter: () => {},
       };
 
@@ -149,33 +171,30 @@ export async function testMonoUtils(): Promise<TestResult> {
       const testPtr = ptr(0x12345678);
       const mockObject = new MockMonoObject(testPtr);
 
-      assert(MemoryUtils.resolveNativePointer(testPtr) === testPtr, "Should resolve NativePointer");
+      assert(resolveNativePointer(testPtr) === testPtr, "Should resolve NativePointer");
+      assert(resolveNativePointer(mockObject.toPointer()) === testPtr, "Should resolve from object with handle");
       assert(
-        MemoryUtils.resolveNativePointer(mockObject.toPointer()) === testPtr,
-        "Should resolve from object with handle",
-      );
-      assert(
-        MemoryUtils.resolveNativePointer({ pointer: testPtr }) === testPtr,
+        resolveNativePointer({ pointer: testPtr }) === testPtr,
         "Should resolve from object with pointer property",
       );
       assert(
-        MemoryUtils.resolveNativePointer({ toPointer: () => testPtr }) === testPtr,
+        resolveNativePointer({ toPointer: () => testPtr }) === testPtr,
         "Should resolve from object with toPointer method",
       );
-      assert(MemoryUtils.resolveNativePointer(null) === null, "Should return null for null input");
-      assert(MemoryUtils.resolveNativePointer(undefined) === null, "Should return null for undefined input");
+      assert(resolveNativePointer(null) === null, "Should return null for null input");
+      assert(resolveNativePointer(undefined) === null, "Should return null for undefined input");
     }),
   );
 
   await suite.addResultAsync(
     createStandaloneTest("Memory utility - pointer null checking", () => {
       // Test pointer null detection
-      assert(MemoryUtils.pointerIsNull(null), "Should detect null as null");
-      assert(MemoryUtils.pointerIsNull(undefined), "Should detect undefined as null");
-      assert(MemoryUtils.pointerIsNull(0), "Should detect zero as null");
-      assert(MemoryUtils.pointerIsNull(ptr(0)), "Should detect null pointer as null");
-      assert(!MemoryUtils.pointerIsNull(ptr(0x12345678)), "Should not detect valid pointer as null");
-      assert(!MemoryUtils.pointerIsNull(42), "Should not detect non-zero number as null");
+      assert(pointerIsNull(null), "Should detect null as null");
+      assert(pointerIsNull(undefined), "Should detect undefined as null");
+      assert(pointerIsNull(0), "Should detect zero as null");
+      assert(pointerIsNull(ptr(0)), "Should detect null pointer as null");
+      assert(!pointerIsNull(ptr(0x12345678)), "Should not detect valid pointer as null");
+      assert(!pointerIsNull(42), "Should not detect non-zero number as null");
     }),
   );
 
@@ -185,10 +204,10 @@ export async function testMonoUtils(): Promise<TestResult> {
       const validPtr = ptr(0x12345678);
       const invalidPtr = ptr(0);
 
-      assert(MemoryUtils.isValidPointer(validPtr), "Should validate valid pointer");
-      assert(!MemoryUtils.isValidPointer(invalidPtr), "Should not validate null pointer");
-      assert(!MemoryUtils.isValidPointer(null), "Should not validate null");
-      assert(!MemoryUtils.isValidPointer(undefined), "Should not validate undefined");
+      assert(isValidPointer(validPtr), "Should validate valid pointer");
+      assert(!isValidPointer(invalidPtr), "Should not validate null pointer");
+      assert(!isValidPointer(null), "Should not validate null");
+      assert(!isValidPointer(undefined), "Should not validate undefined");
     }),
   );
 
@@ -198,21 +217,21 @@ export async function testMonoUtils(): Promise<TestResult> {
       const testPtr = ptr(0x12345678);
       const mockObject = new MockMonoObject(testPtr);
 
-      assert(MemoryUtils.unwrapInstance(mockObject) === testPtr, "Should unwrap instance to pointer");
-      assert(MemoryUtils.unwrapInstance(testPtr) === testPtr, "Should return pointer as-is");
-      assert(MemoryUtils.unwrapInstance(null).isNull(), "Should return null pointer for null input");
-      assert(MemoryUtils.unwrapInstance(undefined).isNull(), "Should return null pointer for undefined input");
+      assert(unwrapInstance(mockObject) === testPtr, "Should unwrap instance to pointer");
+      assert(unwrapInstance(testPtr) === testPtr, "Should return pointer as-is");
+      assert(unwrapInstance(null).isNull(), "Should return null pointer for null input");
+      assert(unwrapInstance(undefined).isNull(), "Should return null pointer for undefined input");
     }),
   );
 
   await suite.addResultAsync(
     createErrorHandlingTest("Memory utility - safe allocation", () => {
       // Test safe allocation
-      const validPtr = MemoryUtils.safeAlloc(100);
+      const validPtr = safeAlloc(100);
       assertNotNull(validPtr, "Should allocate memory successfully");
 
-      assertThrows(() => MemoryUtils.safeAlloc(0), "Should throw for zero size");
-      assertThrows(() => MemoryUtils.safeAlloc(-10), "Should throw for negative size");
+      assertThrows(() => safeAlloc(0), "Should throw for zero size");
+      assertThrows(() => safeAlloc(-10), "Should throw for negative size");
     }),
   );
 
@@ -220,25 +239,25 @@ export async function testMonoUtils(): Promise<TestResult> {
     createStandaloneTest("Memory utility - isNativePointer check", () => {
       // Test isNativePointer
       const testPtr = ptr(0x12345678);
-      assert(MemoryUtils.isNativePointer(testPtr), "Should detect NativePointer");
-      assert(!MemoryUtils.isNativePointer(null), "Should not detect null as NativePointer");
-      assert(!MemoryUtils.isNativePointer(undefined), "Should not detect undefined as NativePointer");
-      assert(!MemoryUtils.isNativePointer({}), "Should not detect object as NativePointer");
-      assert(!MemoryUtils.isNativePointer("string"), "Should not detect string as NativePointer");
+      assert(isNativePointer(testPtr), "Should detect NativePointer");
+      assert(!isNativePointer(null), "Should not detect null as NativePointer");
+      assert(!isNativePointer(undefined), "Should not detect undefined as NativePointer");
+      assert(!isNativePointer({}), "Should not detect object as NativePointer");
+      assert(!isNativePointer("string"), "Should not detect string as NativePointer");
     }),
   );
 
   await suite.addResultAsync(
     createStandaloneTest("Memory utility - allocPointerArray", () => {
       // Test allocating empty array
-      const emptyResult = MemoryUtils.allocPointerArray([]);
+      const emptyResult = allocPointerArray([]);
       assert(emptyResult.isNull(), "Should return NULL for empty array");
 
       // Test allocating array with pointers
       const ptr1 = ptr(0x1000);
       const ptr2 = ptr(0x2000);
       const ptr3 = ptr(0x3000);
-      const arrayBuffer = MemoryUtils.allocPointerArray([ptr1, ptr2, ptr3]);
+      const arrayBuffer = allocPointerArray([ptr1, ptr2, ptr3]);
 
       assert(!arrayBuffer.isNull(), "Should return valid buffer");
 
@@ -256,27 +275,27 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Memory utility - tryMakePointer", () => {
       // Test with valid number
-      const fromNumber = MemoryUtils.tryMakePointer(0x12345678);
+      const fromNumber = tryMakePointer(0x12345678);
       assertNotNull(fromNumber, "Should create pointer from number");
       assert(fromNumber!.equals(ptr(0x12345678)), "Pointer value should match");
 
       // Test with valid hex string
-      const fromHexString = MemoryUtils.tryMakePointer("0x12345678");
+      const fromHexString = tryMakePointer("0x12345678");
       assertNotNull(fromHexString, "Should create pointer from hex string");
       assert(fromHexString!.equals(ptr(0x12345678)), "Pointer value should match");
 
       // Test with valid decimal string
-      const fromDecString = MemoryUtils.tryMakePointer("305419896");
+      const fromDecString = tryMakePointer("305419896");
       assertNotNull(fromDecString, "Should create pointer from decimal string");
       assert(fromDecString!.equals(ptr(0x12345678)), "Pointer value should match");
 
       // Test with bigint
-      const fromBigint = MemoryUtils.tryMakePointer(BigInt("0x12345678"));
+      const fromBigint = tryMakePointer(BigInt("0x12345678"));
       assertNotNull(fromBigint, "Should create pointer from bigint");
       assert(fromBigint!.equals(ptr(0x12345678)), "Pointer value should match");
 
       // Test with zero
-      const fromZero = MemoryUtils.tryMakePointer(0);
+      const fromZero = tryMakePointer(0);
       assertNotNull(fromZero, "Should create pointer from zero");
       assert(fromZero!.isNull(), "Zero should create null pointer");
     }),
@@ -286,22 +305,22 @@ export async function testMonoUtils(): Promise<TestResult> {
     createErrorHandlingTest("Memory utility - ensurePointer", () => {
       // Test with valid pointer
       const validPtr = ptr(0x12345678);
-      const result = MemoryUtils.ensurePointer(validPtr, "Test pointer");
+      const result = ensurePointer(validPtr, "Test pointer");
       assert(result.equals(validPtr), "Should return the same pointer");
 
       // Test with object that has handle property
       const objWithHandle = { handle: validPtr };
-      const handleResult = MemoryUtils.ensurePointer(objWithHandle as any, "Object with handle");
+      const handleResult = ensurePointer(objWithHandle as any, "Object with handle");
       assert(handleResult.equals(validPtr), "Should extract pointer from handle property");
 
       // Test with null - should throw
-      assertThrows(() => MemoryUtils.ensurePointer(null, "Null test"), "Should throw for null");
+      assertThrows(() => ensurePointer(null, "Null test"), "Should throw for null");
 
       // Test with undefined - should throw
-      assertThrows(() => MemoryUtils.ensurePointer(undefined, "Undefined test"), "Should throw for undefined");
+      assertThrows(() => ensurePointer(undefined, "Undefined test"), "Should throw for undefined");
 
       // Test with null pointer - should throw
-      assertThrows(() => MemoryUtils.ensurePointer(ptr(0), "Null pointer test"), "Should throw for null pointer");
+      assertThrows(() => ensurePointer(ptr(0), "Null pointer test"), "Should throw for null pointer");
     }),
   );
 
@@ -328,7 +347,7 @@ export async function testMonoUtils(): Promise<TestResult> {
         return `Object at ${ptrValue.toString()}`;
       };
 
-      const results = MemoryUtils.enumerateMonoHandles(mockFetch, mockFactory);
+      const results = enumerateMonoHandles(mockFetch, mockFactory);
 
       assert(results.length === 3, "Should return 3 items");
       assert(results[0].includes("0x1000"), "First item should contain correct address");
@@ -346,7 +365,7 @@ export async function testMonoUtils(): Promise<TestResult> {
 
       const mockFactory = (_ptrValue: NativePointer): number => 42;
 
-      const results = MemoryUtils.enumerateMonoHandles(mockFetch, mockFactory);
+      const results = enumerateMonoHandles(mockFetch, mockFactory);
       assert(results.length === 0, "Should return empty array for no results");
     }),
   );
@@ -354,20 +373,20 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Memory utility - pointerIsNull with bigint and string", () => {
       // Test with bigint zero
-      assert(MemoryUtils.pointerIsNull(BigInt(0)), "Should detect bigint zero as null");
+      assert(pointerIsNull(BigInt(0)), "Should detect bigint zero as null");
 
       // Test with bigint non-zero
-      assert(!MemoryUtils.pointerIsNull(BigInt("0x12345678")), "Should not detect non-zero bigint as null");
+      assert(!pointerIsNull(BigInt("0x12345678")), "Should not detect non-zero bigint as null");
 
       // Test with hex string zero
-      assert(MemoryUtils.pointerIsNull("0x0"), "Should detect hex string zero as null");
+      assert(pointerIsNull("0x0"), "Should detect hex string zero as null");
 
       // Test with hex string non-zero
-      assert(!MemoryUtils.pointerIsNull("0x12345678"), "Should not detect non-zero hex string as null");
+      assert(!pointerIsNull("0x12345678"), "Should not detect non-zero hex string as null");
 
       // Test with object that has handle property
-      assert(MemoryUtils.pointerIsNull({ handle: ptr(0) }), "Should detect object with null handle as null");
-      assert(!MemoryUtils.pointerIsNull({ handle: ptr(0x1000) }), "Should not detect object with valid handle as null");
+      assert(pointerIsNull({ handle: ptr(0) }), "Should detect object with null handle as null");
+      assert(!pointerIsNull({ handle: ptr(0x1000) }), "Should not detect object with valid handle as null");
     }),
   );
 
@@ -378,7 +397,7 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Cache utility - LRU cache basic operations", () => {
       // Test LRU cache creation and basic operations
-      const cache = new CacheUtils.LruCache<string, number>(3);
+      const cache = new LruCache<string, number>(3);
 
       assert(cache.size === 0, "Should start empty");
       assert(cache.maxSize === 3, "Should have correct capacity");
@@ -398,7 +417,7 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Cache utility - LRU eviction", () => {
       // Test LRU eviction behavior
-      const cache = new CacheUtils.LruCache<string, number>(2);
+      const cache = new LruCache<string, number>(2);
 
       cache.set("key1", 1);
       cache.set("key2", 2);
@@ -414,7 +433,7 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Cache utility - LRU access order", () => {
       // Test LRU access order updates
-      const cache = new CacheUtils.LruCache<string, number>(3);
+      const cache = new LruCache<string, number>(3);
 
       cache.set("key1", 1);
       cache.set("key2", 2);
@@ -436,7 +455,7 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Cache utility - cache utilities", () => {
       // Test cache utility methods
-      const cache = new CacheUtils.LruCache<string, number>(3);
+      const cache = new LruCache<string, number>(3);
 
       // Test has method
       cache.set("key1", 1);
@@ -467,7 +486,7 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Cache utility - getOrCreate factory", () => {
       // Test getOrCreate with factory function
-      const cache = new CacheUtils.LruCache<string, number>(3);
+      const cache = new LruCache<string, number>(3);
       let callCount = 0;
 
       const factory = () => {
@@ -490,7 +509,7 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Cache utility - single value operations", () => {
       // Test single value operations
-      const cache = new CacheUtils.LruCache<string, number>(3);
+      const cache = new LruCache<string, number>(3);
 
       cache.setSingleValue(100);
       assert(cache.getSingleValue() === 100, "Should get single value");
@@ -509,8 +528,8 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createErrorHandlingTest("Cache utility - invalid capacity", () => {
       // Test invalid capacity handling
-      assertThrows(() => new CacheUtils.LruCache<string, number>(0), "Should throw for zero capacity");
-      assertThrows(() => new CacheUtils.LruCache<string, number>(-1), "Should throw for negative capacity");
+      assertThrows(() => new LruCache<string, number>(0), "Should throw for zero capacity");
+      assertThrows(() => new LruCache<string, number>(-1), "Should throw for negative capacity");
     }),
   );
 
@@ -519,7 +538,7 @@ export async function testMonoUtils(): Promise<TestResult> {
       // Test eviction callback
       const evicted: Array<{ key: string; value: number }> = [];
 
-      const cache = new CacheUtils.LruCache<string, number>({
+      const cache = new LruCache<string, number>({
         capacity: 2,
         onEvict: (key, value) => {
           evicted.push({ key, value });
@@ -549,7 +568,7 @@ export async function testMonoUtils(): Promise<TestResult> {
 
   await suite.addResultAsync(
     createStandaloneTest("Cache utility - iterator methods", () => {
-      const cache = new CacheUtils.LruCache<string, number>(5);
+      const cache = new LruCache<string, number>(5);
 
       cache.set("a", 1);
       cache.set("b", 2);
@@ -577,7 +596,7 @@ export async function testMonoUtils(): Promise<TestResult> {
 
   await suite.addResultAsync(
     createStandaloneTest("Cache utility - forEach method", () => {
-      const cache = new CacheUtils.LruCache<string, number>(5);
+      const cache = new LruCache<string, number>(5);
 
       cache.set("x", 10);
       cache.set("y", 20);
@@ -607,7 +626,7 @@ export async function testMonoUtils(): Promise<TestResult> {
 
   await suite.addResultAsync(
     createStandaloneTest("Cache utility - clear method", () => {
-      const cache = new CacheUtils.LruCache<string, number>(5);
+      const cache = new LruCache<string, number>(5);
 
       cache.set("a", 1);
       cache.set("b", 2);
@@ -629,7 +648,7 @@ export async function testMonoUtils(): Promise<TestResult> {
       // Test constructor with options object
       const evicted: string[] = [];
 
-      const cache = new CacheUtils.LruCache<string, string>({
+      const cache = new LruCache<string, string>({
         capacity: 2,
         onEvict: (key, _value) => {
           evicted.push(key);
@@ -655,12 +674,12 @@ export async function testMonoUtils(): Promise<TestResult> {
     createStandaloneTest("StringOperations - UTF-8 string reading", () => {
       // Test UTF-8 string reading
       // Test with null pointer
-      assert(StringOperations.readUtf8String(null) === "", "Should return empty string for null");
-      assert(StringOperations.readUtf8String(ptr(0)) === "", "Should return empty string for null pointer");
+      assert(readUtf8String(null) === "", "Should return empty string for null");
+      assert(readUtf8String(ptr(0)) === "", "Should return empty string for null pointer");
 
       // Test with mock pointer (would need actual memory in real scenario)
       // For now, just test the function exists and handles null
-      assert(typeof StringOperations.readUtf8String === "function", "Should have readUtf8String function");
+      assert(typeof readUtf8String === "function", "Should have readUtf8String function");
     }),
   );
 
@@ -670,19 +689,19 @@ export async function testMonoUtils(): Promise<TestResult> {
       const mockMonoString = new MockMonoObject(ptr(0x12345678));
 
       // Test with different input types
-      assert(StringOperations.readMonoString("") === "", "Should handle empty string");
-      assert(StringOperations.readMonoString(null) === "", "Should handle null");
-      assert(StringOperations.readMonoString(undefined) === "", "Should handle undefined");
-      assert(typeof StringOperations.readMonoString(mockMonoString) === "string", "Should handle Mono string object");
+      assert(readMonoString("") === "", "Should handle empty string");
+      assert(readMonoString(null) === "", "Should handle null");
+      assert(readMonoString(undefined) === "", "Should handle undefined");
+      assert(typeof readMonoString(mockMonoString) === "string", "Should handle Mono string object");
     }),
   );
 
   await suite.addResultAsync(
     createStandaloneTest("StringOperations - UTF-16 string reading", () => {
       // Test UTF-16 string reading
-      assert(StringOperations.readUtf16String(null) === "", "Should return empty string for null");
-      assert(StringOperations.readUtf16String(ptr(0)) === "", "Should return empty string for null pointer");
-      assert(typeof StringOperations.readUtf16String === "function", "Should have readUtf16String function");
+      assert(readUtf16String(null) === "", "Should return empty string for null");
+      assert(readUtf16String(ptr(0)) === "", "Should return empty string for null pointer");
+      assert(typeof readUtf16String === "function", "Should have readUtf16String function");
     }),
   );
 
@@ -690,17 +709,17 @@ export async function testMonoUtils(): Promise<TestResult> {
     createStandaloneTest("StringOperations - safe stringification", () => {
       // Test safe JSON stringification
       const testObj = { name: "test", value: 42 };
-      const result = StringOperations.safeStringify(testObj);
+      const result = safeStringify(testObj);
       assert(result.includes("test"), "Should stringify object");
 
       // Test with NativePointer - safeStringify wraps in JSON, so output varies
       const mockPtr = ptr(0x12345678);
-      const ptrResult = StringOperations.safeStringify(mockPtr);
+      const ptrResult = safeStringify(mockPtr);
       // NativePointer toString() or custom serialization
       assert(ptrResult.length > 0, "Should handle NativePointer");
 
       // Test with function
-      const funcResult = StringOperations.safeStringify(() => {});
+      const funcResult = safeStringify(() => {});
       // Function serialization
       assert(funcResult.length > 0, "Should handle function");
     }),
@@ -709,8 +728,8 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("StringOperations - error creation", () => {
       // Test error creation with context
-      const error = StringOperations.createError("Test error", { context: "test" });
-      assert(error instanceof ErrorUtils.MonoError, "Should create MonoError");
+      const error = createError("Test error", { context: "test" });
+      assert(error instanceof MonoError, "Should create MonoError");
       assert(error.message.includes("Test error"), "Should include message");
       assert(error.message.includes("context"), "Should include context");
     }),
@@ -719,7 +738,7 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("StringOperations - performance timer", () => {
       // Test performance timer
-      const timer = StringOperations.createTimer();
+      const timer = createTimer();
       assertNotNull(timer, "Should create timer");
 
       const elapsed1 = timer.elapsed();
@@ -744,7 +763,7 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Logger - basic functionality", () => {
       // Test logger creation
-      const logger = new LogUtils.Logger({ tag: "Test", level: "debug" });
+      const logger = new Logger({ tag: "Test", level: "debug" });
       assertNotNull(logger, "Should create logger");
 
       // Test methods exist
@@ -758,20 +777,20 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Logger - static methods", () => {
       // Test static methods exist
-      assert(typeof LogUtils.Logger.debug === "function", "Should have static debug method");
-      assert(typeof LogUtils.Logger.info === "function", "Should have static info method");
-      assert(typeof LogUtils.Logger.warn === "function", "Should have static warn method");
-      assert(typeof LogUtils.Logger.error === "function", "Should have static error method");
-      assert(typeof LogUtils.Logger.withTag === "function", "Should have static withTag method");
-      assert(typeof LogUtils.Logger.withLevel === "function", "Should have static withLevel method");
-      assert(typeof LogUtils.Logger.create === "function", "Should have static create method");
+      assert(typeof Logger.debug === "function", "Should have static debug method");
+      assert(typeof Logger.info === "function", "Should have static info method");
+      assert(typeof Logger.warn === "function", "Should have static warn method");
+      assert(typeof Logger.error === "function", "Should have static error method");
+      assert(typeof Logger.withTag === "function", "Should have static withTag method");
+      assert(typeof Logger.withLevel === "function", "Should have static withLevel method");
+      assert(typeof Logger.create === "function", "Should have static create method");
     }),
   );
 
   await suite.addResultAsync(
     createStandaloneTest("Logger - instance methods", () => {
       // Test instance methods exist and are callable
-      const logger = new LogUtils.Logger({ tag: "Test", level: "debug" });
+      const logger = new Logger({ tag: "Test", level: "debug" });
 
       // Verify methods exist
       assert(typeof logger.debug === "function", "Should have debug method");
@@ -784,17 +803,17 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Logger - factory methods", () => {
       // Test withTag factory
-      const taggedLogger = LogUtils.Logger.withTag("CustomTag");
+      const taggedLogger = Logger.withTag("CustomTag");
       assertNotNull(taggedLogger, "Should create tagged logger");
       assert(typeof taggedLogger.info === "function", "Tagged logger should have info method");
 
       // Test withLevel factory
-      const levelLogger = LogUtils.Logger.withLevel("debug");
+      const levelLogger = Logger.withLevel("debug");
       assertNotNull(levelLogger, "Should create logger with custom level");
       assert(typeof levelLogger.debug === "function", "Level logger should have debug method");
 
       // Test create factory with options
-      const customLogger = LogUtils.Logger.create({ tag: "Custom", level: "warn" });
+      const customLogger = Logger.create({ tag: "Custom", level: "warn" });
       assertNotNull(customLogger, "Should create logger with options");
       assert(typeof customLogger.warn === "function", "Custom logger should have warn method");
     }),
@@ -803,7 +822,7 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createStandaloneTest("Logger - default values", () => {
       // Test default tag and level
-      const defaultLogger = new LogUtils.Logger();
+      const defaultLogger = new Logger();
       assertNotNull(defaultLogger, "Should create logger with defaults");
 
       // Should have all methods
@@ -821,7 +840,7 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createPerformanceTest("Cache utility - LRU cache performance", () => {
       // Test LRU cache performance
-      const cache = new CacheUtils.LruCache<string, number>(1000);
+      const cache = new LruCache<string, number>(1000);
 
       // Fill cache
       for (let i = 0; i < 1000; i++) {
@@ -840,7 +859,7 @@ export async function testMonoUtils(): Promise<TestResult> {
     createPerformanceTest("String operations - performance timer overhead", () => {
       // Test performance timer overhead
       for (let i = 0; i < 10000; i++) {
-        const timer = StringOperations.createTimer();
+        const timer = createTimer();
         timer.elapsed();
         timer.restart();
         timer.elapsedMs();
@@ -858,11 +877,11 @@ export async function testMonoUtils(): Promise<TestResult> {
 
       for (let i = 0; i < 10000; i++) {
         for (const value of testValues) {
-          MemoryUtils.resolveNativePointer(value);
-          MemoryUtils.pointerIsNull(value);
+          resolveNativePointer(value);
+          pointerIsNull(value);
           // Only test isValidPointer with compatible types
           if (value === testPtr || value === null || value === undefined) {
-            MemoryUtils.isValidPointer(value as NativePointer);
+            isValidPointer(value as NativePointer);
           }
         }
       }
@@ -876,11 +895,11 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createIntegrationTest("Utilities integration - cache with memory", () => {
       // Test integration between cache and memory utilities
-      const cache = new CacheUtils.LruCache<string, NativePointer>(10);
+      const cache = new LruCache<string, NativePointer>(10);
 
       // Cache validated pointers
       const validPtr = ptr(0x12345678);
-      if (MemoryUtils.isValidPointer(validPtr)) {
+      if (isValidPointer(validPtr)) {
         cache.set("pointer", validPtr);
       }
 
@@ -892,17 +911,17 @@ export async function testMonoUtils(): Promise<TestResult> {
   await suite.addResultAsync(
     createIntegrationTest("Utilities integration - comprehensive workflow", () => {
       // Test comprehensive workflow using multiple utilities
-      const cache = new CacheUtils.LruCache<string, any>(5);
-      const logger = LogUtils.Logger.withTag("WorkflowTest");
+      const cache = new LruCache<string, any>(5);
+      const logger = Logger.withTag("WorkflowTest");
 
       // Step 1: Cache data
       cache.set("testData", "workflow test");
 
       // Step 2: Process with string operations
-      const stringified = StringOperations.safeStringify({ data: cache.get("testData") });
+      const stringified = safeStringify({ data: cache.get("testData") });
 
       // Step 3: Create timer
-      const timer = StringOperations.createTimer();
+      const timer = createTimer();
 
       // Step 4: Validate results
       assert(cache.get("testData") === "workflow test", "Should get cached data");

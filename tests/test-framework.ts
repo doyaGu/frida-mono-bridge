@@ -5,8 +5,7 @@
  * V2 Migration: All test helpers now use async Mono.perform()
  */
 
-import Mono from "../src";
-import type { MonoDomain } from "../src/model/domain";
+import Mono, { type MonoDomain } from "../src";
 
 export interface TestResult {
   name: string;

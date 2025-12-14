@@ -51,7 +51,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const parameters = concatMethod.parameters;
+      const parameters = concatMethod!.parameters;
 
       assert(parameters.length === 2, "Should have 2 parameters");
 
@@ -69,7 +69,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const callConvention = concatMethod.callConvention;
+      const callConvention = concatMethod!.callConvention;
 
       assert(typeof callConvention === "number", "Call convention should be a number");
     }),
@@ -83,6 +83,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
+      assertNotNull(concatMethod, "Concat method should be found");
 
       // Create test strings
       const str1 = Mono.api.stringNew("Hello");
@@ -185,9 +186,9 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
         // Look for a generic method like Sort
         const sortMethod = arrayClass.tryMethod("Sort", 1);
         if (sortMethod) {
-          const isGeneric = sortMethod.getFullName().includes("`");
+          const isGeneric = sortMethod.fullName.includes("`");
           if (isGeneric) {
-            console.log("  - Found generic method: " + sortMethod.getFullName());
+            console.log("  - Found generic method: " + sortMethod.fullName);
           }
         }
       }
@@ -202,7 +203,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      assert(concatMethod.isStatic, "Concat should be static");
+      assert(concatMethod!.isStatic, "Concat should be static");
 
       const getLengthMethod = stringClass!.tryMethod("get_Length");
       if (getLengthMethod) {
@@ -240,7 +241,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       try {
         const str1 = Mono.api.stringNew("Hello");
         const str2 = Mono.api.stringNew(" World");
-        const result = concatMethod.invoke(null, [str1, str2]);
+        const result = concatMethod!.invoke(null, [str1, str2]);
         assertNotNull(result, "Static method should return result");
       } catch (error) {
         console.log(`  - Static method test failed: ${error}`);
@@ -256,6 +257,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
+      assertNotNull(concatMethod, "Concat method should be found");
       const returnType = concatMethod.returnType;
 
       assertNotNull(returnType, "Return type should be available");
@@ -305,7 +307,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const summary = concatMethod.describe();
+      const summary = concatMethod!.describe();
 
       assertNotNull(summary, "Method summary should be available");
       assert(summary.name === "Concat", "Summary name should be Concat");
@@ -324,7 +326,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const accessibility = concatMethod.accessibility;
+      const accessibility = concatMethod!.accessibility;
 
       assertNotNull(accessibility, "Accessibility should be available");
       assert(typeof accessibility === "string", "Accessibility should be a string");
@@ -337,8 +339,8 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const fullName = concatMethod.getFullName(true);
-      const nameOnly = concatMethod.getFullName(false);
+      const fullName = concatMethod!.getFullName(true);
+      const nameOnly = concatMethod!.getFullName(false);
 
       assertNotNull(fullName, "Full name with signature should be available");
       assertNotNull(nameOnly, "Name only should be available");
@@ -354,7 +356,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const validation = concatMethod.validateArguments(["Hello", "World"]);
+      const validation = concatMethod!.validateArguments(["Hello", "World"]);
 
       assert(validation.isValid === true, "Valid arguments should pass validation");
       assert(validation.errors.length === 0, "Valid arguments should have no errors");
@@ -367,7 +369,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const validation = concatMethod.validateArguments(["Only one arg"]);
+      const validation = concatMethod!.validateArguments(["Only one arg"]);
 
       assert(validation.isValid === false, "Wrong argument count should fail validation");
       assert(validation.errors.length > 0, "Should have validation errors");
@@ -380,10 +382,10 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const staticMethod = stringClass!.tryMethod("Concat", 2);
-      const staticValidation = staticMethod.validateAccessibility({ isStatic: true });
+      const staticValidation = staticMethod!.validateAccessibility({ isStatic: true });
       assert(staticValidation.isValid === true, "Static method should be callable in static context");
 
-      const instanceValidation = staticMethod.validateAccessibility({ isStatic: false });
+      const instanceValidation = staticMethod!.validateAccessibility({ isStatic: false });
       assert(instanceValidation.isValid === false, "Static method should not be callable in instance context");
     }),
   );
@@ -444,7 +446,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       // Try to invoke with wrong parameters - may throw or return unexpected results
       // Different implementations may handle this differently
       try {
-        const result = concatMethod.invoke(null, []);
+        const result = concatMethod!.invoke(null, []);
         // If it doesn't throw, that's also acceptable behavior
         console.log(`  - Method invoked with wrong params returned: ${result}`);
       } catch (error) {
@@ -462,7 +464,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const description = concatMethod.description;
+      const description = concatMethod!.description;
 
       assertNotNull(description, "Description should be available");
       assert(description.includes("Concat"), "Description should include method name");
@@ -476,7 +478,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const stringRep = concatMethod.toString();
+      const stringRep = concatMethod!.toString();
 
       assertNotNull(stringRep, "toString should return a value");
       assert(stringRep.includes("MonoMethod"), "toString should include class type");
@@ -491,7 +493,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const token = concatMethod.token;
+      const token = concatMethod!.token;
 
       assert(typeof token === "number", "Token should be a number");
       assert(token > 0, "Token should be positive");
@@ -506,7 +508,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const declaringClass = concatMethod.declaringClass;
+      const declaringClass = concatMethod!.declaringClass;
 
       assertNotNull(declaringClass, "Declaring class should be available");
       assert(declaringClass.name === "String", "Declaring class should be String");
@@ -642,13 +644,13 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
         // Get all methods and look for generic ones
         const methods = arrayClass.methods;
         const genericMethods = methods.filter(m => {
-          const fullName = m.getFullName(true);
+          const fullName = m.fullName;
           return fullName.includes("`") || fullName.includes("<");
         });
 
         console.log(`  - Array has ${genericMethods.length} generic methods`);
         genericMethods.slice(0, 3).forEach(m => {
-          console.log(`    - ${m.getFullName(true)}`);
+          console.log(`    - ${m.fullName}`);
         });
       }
     }),
@@ -785,8 +787,8 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const flags = concatMethod.flags;
-      const implementationFlags = concatMethod.implementationFlags;
+      const flags = concatMethod!.flags;
+      const implementationFlags = concatMethod!.implementationFlags;
 
       assert(typeof flags === "number", "flags should be a number");
       assert(typeof implementationFlags === "number", "implementationFlags should be a number");
@@ -795,8 +797,8 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       console.log(`  - Concat implementationFlags: 0x${implementationFlags.toString(16)}`);
 
       // Get attribute names
-      const attrNames = concatMethod.attributeNames;
-      const implAttrNames = concatMethod.implementationAttributeNames;
+      const attrNames = concatMethod!.attributeNames;
+      const implAttrNames = concatMethod!.implementationAttributeNames;
 
       console.log(`  - Attribute names: ${attrNames.join(", ")}`);
       console.log(`  - Implementation attribute names: ${implAttrNames.join(", ")}`);
@@ -824,7 +826,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
 
       // Concat should be public
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      assert(concatMethod.accessibility === "public", "Concat should be public");
+      assert(concatMethod!.accessibility === "public", "Concat should be public");
     }),
   );
 
@@ -890,7 +892,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
 
       // Concat is static
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      assert(concatMethod.isStatic, "Concat should be static");
+      assert(concatMethod!.isStatic, "Concat should be static");
 
       // Invoking with instance should work (instance is ignored for static methods)
       const str1 = Mono.api.stringNew("Hello");
@@ -898,7 +900,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
 
       try {
         // Passing an instance to static method - should be ignored
-        const result = concatMethod.invoke(str1, [str1, str2]);
+        const result = concatMethod!.invoke(str1, [str1, str2]);
         assertNotNull(result, "Static method invocation should succeed");
       } catch (error) {
         console.log(`  - Static method invocation error: ${error}`);
@@ -953,7 +955,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
           if (method) {
             assertNotNull(method, "Method should be found by descriptor");
             assert(method.name === "Concat", "Found method should be Concat");
-            console.log(`  - Found method: ${method.getFullName()}`);
+            console.log(`  - Found method: ${method.fullName}`);
           }
         } catch (error) {
           console.log(`  - Descriptor lookup failed (may not be supported): ${error}`);
@@ -1014,7 +1016,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const summary = concatMethod.describe();
+      const summary = concatMethod!.describe();
 
       // Verify all expected fields
       assert(typeof summary.name === "string", "describe() should have name");

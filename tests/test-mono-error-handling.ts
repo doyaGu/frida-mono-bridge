@@ -4,9 +4,9 @@
  * Updated for V2 API with MonoErrorCodes and new error class structure
  */
 
-import Mono from "../src";
-import {
+import Mono, {
   asResult,
+  Logger,
   MonoError,
   MonoErrorCodes,
   monoErrorResult,
@@ -17,8 +17,7 @@ import {
   raiseUnless,
   ValidationBuilder,
   withErrorHandling,
-} from "../src/utils/errors";
-import { Logger } from "../src/utils/log";
+} from "../src";
 import {
   assert,
   createIntegrationTest,

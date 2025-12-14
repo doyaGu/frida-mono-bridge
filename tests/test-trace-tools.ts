@@ -1,12 +1,12 @@
-﻿/**
+/**
  * Trace Tools Tests
  *
  * Tests for Trace module Hook functionality
  * Including method interception, return value replacement, class-level hooks, etc.
  */
 
+import type { FieldAccessCallbacks, MethodCallbacksTimed, MethodStats, PropertyAccessCallbacks } from "../src";
 import Mono from "../src";
-import * as Trace from "../src/utils/trace";
 import { TestResult, assert, assertNotNull, createMonoDependentTest, createStandaloneTest } from "./test-framework";
 
 /**
@@ -26,37 +26,37 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
 
   results.push(
     createStandaloneTest("Trace - method function exists", () => {
-      assert(typeof Trace.method === "function", "Trace.method should be a function");
+      assert(typeof Mono.trace.method === "function", "Mono.trace.method should be a function");
     }),
   );
 
   results.push(
     createStandaloneTest("Trace - methodExtended function exists", () => {
-      assert(typeof Trace.methodExtended === "function", "Trace.methodExtended should be a function");
+      assert(typeof Mono.trace.methodExtended === "function", "Mono.trace.methodExtended should be a function");
     }),
   );
 
   results.push(
     createStandaloneTest("Trace - replaceReturnValue function exists", () => {
-      assert(typeof Trace.replaceReturnValue === "function", "Trace.replaceReturnValue should be a function");
+      assert(typeof Mono.trace.replaceReturnValue === "function", "Mono.trace.replaceReturnValue should be a function");
     }),
   );
 
   results.push(
     createStandaloneTest("Trace - classAll function exists", () => {
-      assert(typeof Trace.classAll === "function", "Trace.classAll should be a function");
+      assert(typeof Mono.trace.classAll === "function", "Mono.trace.classAll should be a function");
     }),
   );
 
   results.push(
     createStandaloneTest("Trace - methodsByPattern function exists", () => {
-      assert(typeof Trace.methodsByPattern === "function", "Trace.methodsByPattern should be a function");
+      assert(typeof Mono.trace.methodsByPattern === "function", "Mono.trace.methodsByPattern should be a function");
     }),
   );
 
   results.push(
     createStandaloneTest("Trace - classesByPattern function exists", () => {
-      assert(typeof Trace.classesByPattern === "function", "Trace.classesByPattern should be a function");
+      assert(typeof Mono.trace.classesByPattern === "function", "Mono.trace.classesByPattern should be a function");
     }),
   );
 
@@ -74,7 +74,7 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       let detach: (() => void) | null = null;
 
       try {
-        detach = Trace.method(getLengthMethod!, {
+        detach = Mono.trace.method(getLengthMethod!, {
           onEnter: _args => {
             // Hook set up successfully
           },
@@ -83,7 +83,7 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
         assert(typeof detach === "function", "method() should return a detach function");
       } finally {
         if (detach) {
-          detach();
+          detach!();
         }
       }
     }),
@@ -97,9 +97,9 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.tryMethod(getLengthMethod!, {});
+      const detach = Mono.trace.tryMethod(getLengthMethod!, {});
       assert(typeof detach === "function", "Expected detach to be a function");
-      detach();
+      detach!();
     }),
   );
 
@@ -111,13 +111,13 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.tryMethod(getLengthMethod!, {
+      const detach = Mono.trace.tryMethod(getLengthMethod!, {
         onEnter: _args => {
           // Callback set up
         },
       });
 
-      detach();
+      detach!();
     }),
   );
 
@@ -129,13 +129,13 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const getHashCodeMethod = objectClass.tryMethod("GetHashCode");
       assertNotNull(getHashCodeMethod, "GetHashCode method should exist");
 
-      const detach = Trace.tryMethod(getHashCodeMethod!, {
+      const detach = Mono.trace.tryMethod(getHashCodeMethod!, {
         onLeave: _retval => {
           // Callback set up
         },
       });
 
-      detach();
+      detach!();
     }),
   );
 
@@ -147,12 +147,12 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.tryMethod(getLengthMethod!, {});
+      const detach = Mono.trace.tryMethod(getLengthMethod!, {});
 
       // Call detach multiple times - should be safe
-      detach();
-      detach();
-      detach();
+      detach!();
+      detach!();
+      detach!();
     }),
   );
 
@@ -167,14 +167,14 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.methodExtended(getLengthMethod!, {
+      const detach = Mono.trace.methodExtended(getLengthMethod!, {
         onEnter(_args) {
           // this should be InvocationContext
         },
       });
 
       assert(typeof detach === "function", "methodExtended should return a function");
-      detach();
+      detach!();
     }),
   );
 
@@ -186,10 +186,10 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.methodExtended(getLengthMethod!, {});
+      const detach = Mono.trace.methodExtended(getLengthMethod!, {});
 
       assert(typeof detach === "function", "Expected detach to be a function");
-      detach();
+      detach!();
     }),
   );
 
@@ -204,12 +204,12 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.replaceReturnValue(getLengthMethod!, (_originalRetval, _thisPtr, _args) => {
+      const detach = Mono.trace.replaceReturnValue(getLengthMethod!, (_originalRetval, _thisPtr, _args) => {
         return ptr(0);
       });
 
       assert(typeof detach === "function", "replaceReturnValue should return a function");
-      detach();
+      detach!();
     }),
   );
 
@@ -221,11 +221,11 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.replaceReturnValue(getLengthMethod!, (_originalRetval, _thisPtr, _args) => {
+      const detach = Mono.trace.replaceReturnValue(getLengthMethod!, (_originalRetval, _thisPtr, _args) => {
         return undefined;
       });
 
-      detach();
+      detach!();
     }),
   );
 
@@ -237,12 +237,12 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const objectClass = Mono.domain.tryClass("System.Object");
       assertNotNull(objectClass, "Object class should exist");
 
-      const detach = Trace.classAll(objectClass, {
+      const detach = Mono.trace.classAll(objectClass, {
         onEnter: _args => {},
       });
 
       assert(typeof detach === "function", "classAll should return a function");
-      detach();
+      detach!();
     }),
   );
 
@@ -251,11 +251,11 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const objectClass = Mono.domain.tryClass("System.Object");
       assertNotNull(objectClass, "Object class should exist");
 
-      const detach = Trace.classAll(objectClass, {
+      const detach = Mono.trace.classAll(objectClass, {
         onEnter: () => {},
       });
 
-      detach();
+      detach!();
     }),
   );
 
@@ -264,24 +264,22 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
   // ============================================
   results.push(
     await createMonoDependentTest("Trace.methodsByPattern - Hook by pattern", () => {
-      const api = Mono.api;
-      const detach = Trace.methodsByPattern(api, "System.String.get_Length", {
+      const detach = Mono.trace.methodsByPattern("System.String.get_Length", {
         onEnter: _args => {},
       });
 
       assert(typeof detach === "function", "methodsByPattern should return a function");
-      detach();
+      detach!();
     }),
   );
 
   results.push(
     await createMonoDependentTest("Trace.methodsByPattern - no match returns empty detach", () => {
-      const api = Mono.api;
-      const detach = Trace.methodsByPattern(api, "NonExistent.Fake.Method12345", {});
+      const detach = Mono.trace.methodsByPattern("NonExistent.Fake.Method12345", {});
 
       assert(typeof detach === "function", "Should return detach function even with no matches");
 
-      detach();
+      detach!();
     }),
   );
 
@@ -290,24 +288,22 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
   // ============================================
   results.push(
     await createMonoDependentTest("Trace.classesByPattern - Hook classes by pattern", () => {
-      const api = Mono.api;
-      const detach = Trace.classesByPattern(api, "System.Object", {
+      const detach = Mono.trace.classesByPattern("System.Object", {
         onEnter: _args => {},
       });
 
       assert(typeof detach === "function", "classesByPattern should return a function");
-      detach();
+      detach!();
     }),
   );
 
   results.push(
     await createMonoDependentTest("Trace.classesByPattern - no match returns empty detach", () => {
-      const api = Mono.api;
-      const detach = Trace.classesByPattern(api, "FakeNamespace.FakeClass12345", {});
+      const detach = Mono.trace.classesByPattern("FakeNamespace.FakeClass12345", {});
 
       assert(typeof detach === "function", "Should return detach function even with no matches");
 
-      detach();
+      detach!();
     }),
   );
 
@@ -322,13 +318,13 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.tryMethod(getLengthMethod!, {
+      const detach = Mono.trace.tryMethod(getLengthMethod!, {
         onEnter: args => {
           assert(Array.isArray(args), "args should be an array");
         },
       });
 
-      detach();
+      detach!();
     }),
   );
 
@@ -342,11 +338,11 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
 
       assert(getLengthMethod!.isInstanceMethod, "get_Length should be instance method");
 
-      const detach = Trace.replaceReturnValue(getLengthMethod!, (_retval, _thisPtr, _args) => {
+      const detach = Mono.trace.replaceReturnValue(getLengthMethod!, (_retval, _thisPtr, _args) => {
         return undefined;
       });
 
-      detach();
+      detach!();
     }),
   );
 
@@ -368,11 +364,11 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
         if (m.isInstanceMethod || !m.canBeHooked) continue;
 
         try {
-          const detach = Trace.replaceReturnValue(m, (_retval, _thisPtr, _args) => {
+          const detach = Mono.trace.replaceReturnValue(m, (_retval, _thisPtr, _args) => {
             return undefined;
           });
           console.log(`[INFO] Successfully hooked static method: ${m.name}`);
-          detach();
+          detach!();
           hooked = true;
         } catch (_e: unknown) {
           // Expected for methods not yet JIT compiled
@@ -401,10 +397,10 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
       // Test that multiple hooks on different callbacks work
-      const detach1 = Trace.tryMethod(getLengthMethod!, {
+      const detach1 = Mono.trace.tryMethod(getLengthMethod!, {
         onEnter: () => {},
       });
-      const detach2 = Trace.tryMethod(getLengthMethod!, {
+      const detach2 = Mono.trace.tryMethod(getLengthMethod!, {
         onLeave: () => {},
       });
 
@@ -421,11 +417,11 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach1 = Trace.tryMethod(getLengthMethod!, {
+      const detach1 = Mono.trace.tryMethod(getLengthMethod!, {
         onEnter: () => {},
       });
 
-      const detach2 = Trace.tryMethod(getLengthMethod!, {
+      const detach2 = Mono.trace.tryMethod(getLengthMethod!, {
         onEnter: () => {},
       });
 
@@ -442,9 +438,9 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach1 = Trace.tryMethod(getLengthMethod!, {});
-      const detach2 = Trace.tryMethod(getLengthMethod!, {});
-      const detach3 = Trace.tryMethod(getLengthMethod!, {});
+      const detach1 = Mono.trace.tryMethod(getLengthMethod!, {});
+      const detach2 = Mono.trace.tryMethod(getLengthMethod!, {});
+      const detach3 = Mono.trace.tryMethod(getLengthMethod!, {});
 
       // Detach in random order
       detach2();
@@ -461,11 +457,11 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       const getLengthMethod = stringClass.tryMethod("get_Length");
       assertNotNull(getLengthMethod, "get_Length method should exist");
 
-      const detach = Trace.tryMethod(getLengthMethod!, {
+      const detach = Mono.trace.tryMethod(getLengthMethod!, {
         onEnter: () => {},
       });
 
-      detach();
+      detach!();
     }),
   );
 
@@ -474,13 +470,13 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
   // ============================================
   results.push(
     createStandaloneTest("Trace - field function exists", () => {
-      assert(typeof Trace.field === "function", "Trace.field should be a function");
+      assert(typeof Mono.trace.field === "function", "Mono.trace.field should be a function");
     }),
   );
 
   results.push(
     createStandaloneTest("Trace - fieldsByPattern function exists", () => {
-      assert(typeof Trace.fieldsByPattern === "function", "Trace.fieldsByPattern should be a function");
+      assert(typeof Mono.trace.fieldsByPattern === "function", "Mono.trace.fieldsByPattern should be a function");
     }),
   );
 
@@ -492,7 +488,7 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       // Try to find a private field that won't have property accessors
       const fields = stringClass!.fields;
       if (fields.length > 0) {
-        const result = Trace.field(fields[0], {
+        const result = Mono.trace.field(fields[0], {
           onRead: () => {},
         });
 
@@ -505,13 +501,13 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
   results.push(
     await createMonoDependentTest("Trace.fieldsByPattern - handles empty results", () => {
       // Use a pattern that won't match anything
-      const detach = Trace.fieldsByPattern(Mono.api, "NonExistentFieldXYZ*", {
+      const detach = Mono.trace.fieldsByPattern("NonExistentFieldXYZ*", {
         onRead: () => {},
       });
 
       // Should return a valid detach function
       assert(typeof detach === "function", "Should return a detach function");
-      detach();
+      detach!();
     }),
   );
 
@@ -519,14 +515,17 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
   // Property Tracing Tests
   // ============================================
   results.push(
-    createStandaloneTest("Trace - propertyTrace function exists", () => {
-      assert(typeof Trace.propertyTrace === "function", "Trace.propertyTrace should be a function");
+    createStandaloneTest("Trace - property function exists", () => {
+      assert(typeof Mono.trace.property === "function", "Mono.trace.property should be a function");
     }),
   );
 
   results.push(
     createStandaloneTest("Trace - propertiesByPattern function exists", () => {
-      assert(typeof Trace.propertiesByPattern === "function", "Trace.propertiesByPattern should be a function");
+      assert(
+        typeof Mono.trace.propertiesByPattern === "function",
+        "Mono.trace.propertiesByPattern should be a function",
+      );
     }),
   );
 
@@ -539,7 +538,7 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       assertNotNull(lengthProperty, "Length property should exist");
 
       let _getterCalled = false;
-      const detach = Trace.propertyTrace(lengthProperty!, {
+      const detach = Mono.trace.property(lengthProperty!, {
         onGet: () => {
           _getterCalled = true;
         },
@@ -547,7 +546,7 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
 
       // The detach function should exist
       assert(typeof detach === "function", "Should return a detach function");
-      detach();
+      detach!();
     }),
   );
 
@@ -555,19 +554,19 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
     await createMonoDependentTest("Trace.propertiesByPattern - traces matching properties", () => {
       // Trace specific Length properties - use more specific pattern to avoid timeout
       // Instead of "*Length*" which matches 380+ properties
-      const detach = Trace.propertiesByPattern(Mono.api, "System.String.Length", {
+      const detach = Mono.trace.propertiesByPattern("System.String.Length", {
         onGet: () => {},
       });
 
       assert(typeof detach === "function", "Should return a detach function");
-      detach();
+      detach!();
     }),
   );
 
   results.push(
     await createMonoDependentTest("Trace - FieldAccessCallbacks interface works", () => {
       // Type-level test
-      const callbacks: Trace.FieldAccessCallbacks = {
+      const callbacks: FieldAccessCallbacks = {
         onRead: (instance, value) => {
           console.log(`Read: instance=${instance}, value=${value}`);
         },
@@ -584,7 +583,7 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
   results.push(
     await createMonoDependentTest("Trace - PropertyAccessCallbacks interface works", () => {
       // Type-level test
-      const callbacks: Trace.PropertyAccessCallbacks = {
+      const callbacks: PropertyAccessCallbacks = {
         onGet: (instance, value) => {
           console.log(`Get: instance=${instance}, value=${value}`);
         },
@@ -603,14 +602,17 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
   // =====================================================
   results.push(
     await createMonoDependentTest("Trace - createPerformanceTracker exists", () => {
-      assertNotNull(Trace.createPerformanceTracker, "createPerformanceTracker should exist");
-      assert(typeof Trace.createPerformanceTracker === "function", "createPerformanceTracker should be a function");
+      assertNotNull(Mono.trace.createPerformanceTracker, "createPerformanceTracker should exist");
+      assert(
+        typeof Mono.trace.createPerformanceTracker === "function",
+        "createPerformanceTracker should be a function",
+      );
     }),
   );
 
   results.push(
     await createMonoDependentTest("Trace - PerformanceTracker can be instantiated", () => {
-      const tracker = Trace.createPerformanceTracker();
+      const tracker = Mono.trace.createPerformanceTracker();
       assertNotNull(tracker, "Tracker should be created");
 
       // Check that it has the expected methods
@@ -628,7 +630,7 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
 
   results.push(
     await createMonoDependentTest("Trace - PerformanceTracker.getReport returns string", () => {
-      const tracker = Trace.createPerformanceTracker();
+      const tracker = Mono.trace.createPerformanceTracker();
       const report = tracker.getReport();
 
       assert(typeof report === "string", "Report should be a string");
@@ -641,15 +643,15 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
 
   results.push(
     await createMonoDependentTest("Trace - methodWithCallStack exists", () => {
-      assertNotNull(Trace.methodWithCallStack, "methodWithCallStack should exist");
-      assert(typeof Trace.methodWithCallStack === "function", "methodWithCallStack should be a function");
+      assertNotNull(Mono.trace.methodWithCallStack, "methodWithCallStack should exist");
+      assert(typeof Mono.trace.methodWithCallStack === "function", "methodWithCallStack should be a function");
     }),
   );
 
   results.push(
     await createMonoDependentTest("Trace - MethodCallbacksTimed interface works", () => {
       // Type-level test
-      const callbacks: Trace.MethodCallbacksTimed = {
+      const callbacks: MethodCallbacksTimed = {
         onEnter: (args, callStack) => {
           console.log(`Enter with ${args.length} args, stack depth: ${callStack.length}`);
         },
@@ -666,7 +668,7 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
   results.push(
     await createMonoDependentTest("Trace - MethodStats interface structure", () => {
       // Type-level test for MethodStats
-      const mockStats: Trace.MethodStats = {
+      const mockStats: MethodStats = {
         callCount: 10,
         totalTime: 100,
         minTime: 5,

@@ -3,8 +3,7 @@
  * Complete tests for MonoArray, MonoString, and MonoObject operations
  */
 
-import Mono from "../src";
-import { readUtf16String } from "../src/utils/string";
+import Mono, { MonoObject, readUtf16String } from "../src";
 import {
   assert,
   assertApiAvailable,
@@ -866,9 +865,7 @@ export async function testMonoData(): Promise<TestResult[]> {
 
       const boxedPtr = Mono.api.native.mono_value_box(domain.pointer, intClass.pointer, valuePtr);
 
-      // Import MonoObject to wrap the boxed value
       // Note: This tests the high-level MonoObject API
-      const { MonoObject } = require("../src/model/object");
       const monoObj = new MonoObject(Mono.api, boxedPtr);
 
       // Test MonoObject methods

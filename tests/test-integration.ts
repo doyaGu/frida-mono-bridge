@@ -3,10 +3,21 @@
  * Consolidated tests for Utils, Consolidated Utils, and Fluent API operations
  */
 
-import Mono from "../src";
-import { MonoManagedExceptionError, MonoValidationError } from "../src/utils/errors";
-import { ensurePointer, pointerIsNull, unwrapInstance, unwrapInstanceRequired } from "../src/utils/memory";
-import { readUtf16String, readUtf8String, safeStringify } from "../src/utils/string";
+import Mono, {
+  ensurePointer,
+  isNativePointer,
+  isValidPointer,
+  LruCache,
+  MonoManagedExceptionError,
+  MonoValidationError,
+  pointerIsNull,
+  readUtf16String,
+  readUtf8String,
+  safeAlloc,
+  safeStringify,
+  unwrapInstance,
+  unwrapInstanceRequired,
+} from "../src";
 import {
   assert,
   assertApiAvailable,
@@ -23,11 +34,6 @@ import {
   TestResult,
   TestSuite,
 } from "./test-framework";
-
-// Import consolidated utilities directly for testing
-import { isNativePointer, isValidPointer, safeAlloc } from "../src/utils/memory";
-
-import { LruCache } from "../src/utils/cache";
 
 function captureManagedSubstringException(): MonoManagedExceptionError {
   const stringClass = Mono.domain.tryClass("System.String");

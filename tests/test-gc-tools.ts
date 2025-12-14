@@ -5,9 +5,7 @@
  * Including GC collection, handles, weak references, and pool management
  */
 
-import Mono from "../src";
-import { GCHandle, GCHandlePool } from "../src/runtime/gchandle";
-import { GCUtilities, createGCUtilities } from "../src/utils/gc";
+import Mono, { GCHandle, GCHandlePool, GCUtilities, createGCUtilities } from "../src";
 import { TestResult, assert, assertNotNull, createMonoDependentTest, createStandaloneTest } from "./test-framework";
 
 /**
