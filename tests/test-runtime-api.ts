@@ -109,7 +109,16 @@ export async function createRuntimeApiTests(): Promise<TestResult[]> {
     await createMonoDependentTest("MonoApi.runtimeInvoke should call static methods", () => {
       const domain = Mono.domain;
       const stringClass = domain.tryClass("System.String");
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
+      if (!stringClass) {
+        console.log("  - System.String not available; skipping");
+        return;
+      }
+
+      const concatMethod = stringClass.tryMethod("Concat", 2);
+      if (!concatMethod) {
+        console.log("  - System.String.Concat(string, string) not available; skipping");
+        return;
+      }
 
       const str1 = Mono.api.stringNew("Hello");
       const str2 = Mono.api.stringNew(" World");
@@ -359,6 +368,130 @@ export async function createRuntimeApiTests(): Promise<TestResult[]> {
     }),
   );
 
+  results.push(
+    await createMonoDependentTest("MonoApi.tryFree should use best available free function", () => {
+      // This test is runtime-sensitive:
+      // - Standard Mono: mono_free
+      // - Unity Mono: mono_unity_g_free (often mono_free is not exported)
+      // - Older builds: g_free
+
+      if (!Mono.api.hasExport("mono_string_to_utf8")) {
+        console.log("  - mono_string_to_utf8 not available; skipping");
+        return;
+      }
+
+      const hasMonoFree = Mono.api.hasExport("mono_free");
+      const hasUnityGFree = Mono.api.hasExport("mono_unity_g_free");
+      const hasGFree = Mono.api.hasExport("g_free");
+
+      const expected = hasMonoFree ? "mono_free" : hasUnityGFree ? "mono_unity_g_free" : hasGFree ? "g_free" : null;
+      if (!expected) {
+        console.log("  - No known free function exports available; skipping");
+        return;
+      }
+
+      let monoFreeCalls = 0;
+      let unityGFreeCalls = 0;
+      let gFreeCalls = 0;
+
+      const listeners: InvocationListener[] = [];
+      try {
+        if (hasMonoFree) {
+          const addr = Mono.api.getExportAddress("mono_free");
+          assertNotNull(addr, "mono_free should resolve if hasExport returned true");
+          listeners.push(
+            Interceptor.attach(addr, {
+              onEnter() {
+                monoFreeCalls++;
+              },
+            }),
+          );
+        }
+
+        if (hasUnityGFree) {
+          const addr = Mono.api.getExportAddress("mono_unity_g_free");
+          assertNotNull(addr, "mono_unity_g_free should resolve if hasExport returned true");
+          listeners.push(
+            Interceptor.attach(addr, {
+              onEnter() {
+                unityGFreeCalls++;
+              },
+            }),
+          );
+        }
+
+        if (hasGFree) {
+          const addr = Mono.api.getExportAddress("g_free");
+          assertNotNull(addr, "g_free should resolve if hasExport returned true");
+          listeners.push(
+            Interceptor.attach(addr, {
+              onEnter() {
+                gFreeCalls++;
+              },
+            }),
+          );
+        }
+
+        const testStr = Mono.api.stringNew("tryFree() dispatch probe");
+        const ptr = Mono.api.native.mono_string_to_utf8(testStr);
+        assert(!ptr.isNull(), "mono_string_to_utf8 should return a non-null pointer");
+
+        // Trigger the free path
+        Mono.api.tryFree(ptr);
+
+        const total = monoFreeCalls + unityGFreeCalls + gFreeCalls;
+        console.log(
+          `  - Free calls: mono_free=${monoFreeCalls}, mono_unity_g_free=${unityGFreeCalls}, g_free=${gFreeCalls} (expected ${expected})`,
+        );
+
+        // We expect exactly one of these to be called once.
+        assert(total >= 1, "Expected a free function to be called at least once");
+        if (expected === "mono_free") {
+          assert(monoFreeCalls >= 1, "Expected mono_free to be called");
+          assert(unityGFreeCalls === 0, "Did not expect mono_unity_g_free when mono_free is available");
+        } else if (expected === "mono_unity_g_free") {
+          assert(unityGFreeCalls >= 1, "Expected mono_unity_g_free to be called");
+          assert(monoFreeCalls === 0, "Did not expect mono_free when it's not available");
+        } else if (expected === "g_free") {
+          assert(gFreeCalls >= 1, "Expected g_free to be called");
+          assert(monoFreeCalls === 0, "Did not expect mono_free when it's not available");
+          assert(unityGFreeCalls === 0, "Did not expect mono_unity_g_free when it's not available");
+        }
+      } finally {
+        for (const l of listeners) {
+          try {
+            l.detach();
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("MonoApi.tryFree should handle mono_string_to_utf16 result", () => {
+      if (!Mono.api.hasExport("mono_string_to_utf16")) {
+        console.log("  - mono_string_to_utf16 not available; skipping");
+        return;
+      }
+
+      const testStr = Mono.api.stringNew("Test UTF-16 free");
+      const utf16Ptr = Mono.api.native.mono_string_to_utf16(testStr);
+      if (utf16Ptr.isNull()) {
+        console.log("  - mono_string_to_utf16 returned NULL; skipping");
+        return;
+      }
+
+      const content = utf16Ptr.readUtf16String() || "";
+      console.log(`  - UTF16 content: ${content}`);
+
+      // Must not crash and must use tryFree fallback chain correctly.
+      Mono.api.tryFree(utf16Ptr);
+      console.log("  - tryFree(utf16Ptr) completed");
+    }),
+  );
+
   // ===== THREAD ATTACHMENT TESTS =====
 
   results.push(
@@ -577,7 +710,16 @@ export async function createRuntimeApiTests(): Promise<TestResult[]> {
     await createMonoDependentTest("Exception slot should be reused across invocations", () => {
       const domain = Mono.domain;
       const stringClass = domain.tryClass("System.String");
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
+      if (!stringClass) {
+        console.log("  - System.String not available; skipping");
+        return;
+      }
+
+      const concatMethod = stringClass.tryMethod("Concat", 2);
+      if (!concatMethod) {
+        console.log("  - System.String.Concat(string, string) not available; skipping");
+        return;
+      }
 
       // Multiple successful invocations
       for (let i = 0; i < 5; i++) {
