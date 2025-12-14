@@ -11,7 +11,7 @@
  */
 
 import { MonoModuleNotFoundError } from "../utils/errors";
-import { MONO_EXPORTS, MonoApiName, MonoExportSignature } from "./signatures";
+import { MONO_EXPORTS, MonoApiName, MonoExportSignature } from "./exports";
 
 // ============================================================================
 // TYPE DEFINITIONS

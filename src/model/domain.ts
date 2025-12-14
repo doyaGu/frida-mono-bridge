@@ -552,15 +552,6 @@ export class MonoDomain extends MonoHandle {
       };
     }
 
-    // Check if mono_assembly_close is available
-    if (!this.api.hasExport("mono_assembly_close")) {
-      return {
-        success: false,
-        reason: "mono_assembly_close API not available in this runtime",
-        supported: false,
-      };
-    }
-
     // Check if this is a system assembly (shouldn't be unloaded)
     if (targetAssembly.isSystemAssembly) {
       return {
@@ -618,10 +609,6 @@ export class MonoDomain extends MonoHandle {
    * @returns New domain or null if not supported
    */
   createDomain(friendlyName: string): MonoDomain | null {
-    if (!this.api.hasExport("mono_domain_create_appdomain")) {
-      return null;
-    }
-
     try {
       const namePtr = Memory.allocUtf8String(friendlyName);
       const configFilePtr = NULL; // No config file
@@ -643,10 +630,6 @@ export class MonoDomain extends MonoHandle {
    * @returns Previous domain, or null if API not available
    */
   setAsCurrent(): MonoDomain | null {
-    if (!this.api.hasExport("mono_domain_set")) {
-      return null;
-    }
-
     try {
       const previousPtr = this.native.mono_domain_set(this.pointer, 0);
       if (pointerIsNull(previousPtr)) {
@@ -768,7 +751,7 @@ export class MonoDomain extends MonoHandle {
    * ```
    */
   hasClass(fullName: string): boolean {
-    return this.class(fullName) !== null;
+    return this.tryClass(fullName) !== null;
   }
 
   /**

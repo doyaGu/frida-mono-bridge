@@ -129,22 +129,10 @@ export class MonoError extends Error {
       // cause might be passed as 4th arg
     }
 
-    // Legacy context support (for backward compatibility)
-    if (typeof codeOrContext === "string" && !isMonoErrorCode(codeOrContext)) {
-      (this as any).context = codeOrContext;
-    }
-
     // Maintain proper stack trace for where our error was thrown
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, MonoError);
     }
-  }
-
-  /**
-   * Legacy context getter for backward compatibility
-   */
-  get context(): string | undefined {
-    return (this as any)._context ?? this.code;
   }
 
   /**
@@ -169,7 +157,6 @@ export class MonoError extends Error {
       code: this.code,
       message: this.message,
       details: this.details,
-      context: this.context,
       cause: this.cause
         ? {
             name: this.cause.name,
@@ -363,11 +350,13 @@ export class MonoTypeError extends MonoError {
 export class MonoManagedExceptionError extends MonoError {
   constructor(
     message: string,
+    public readonly exception?: NativePointer,
     public readonly exceptionType?: string,
+    public readonly exceptionMessage?: string,
     public readonly stackTrace?: string,
     cause?: Error,
   ) {
-    super(message, MonoErrorCodes.MANAGED_EXCEPTION, { exceptionType, stackTrace }, cause);
+    super(message, MonoErrorCodes.MANAGED_EXCEPTION, { exception, exceptionType, exceptionMessage, stackTrace }, cause);
     this.name = "MonoManagedExceptionError";
   }
 }
@@ -491,7 +480,7 @@ export class MonoDisposedError extends MonoError {
 /**
  * Handle Mono errors and convert to appropriate error type
  */
-export function handleMonoError(error: unknown, context?: string): MonoError {
+export function handleMonoError(error: unknown): MonoError {
   if (error instanceof MonoError) {
     return error;
   }
@@ -521,22 +510,22 @@ export function handleMonoError(error: unknown, context?: string): MonoError {
     }
 
     // Generic Mono error
-    return new MonoError(error.message, context, error);
+    return new MonoError(error.message, MonoErrorCodes.UNKNOWN, error);
   }
 
   // Non-Error objects
-  return new MonoError(String(error), context);
+  return new MonoError(String(error), MonoErrorCodes.UNKNOWN);
 }
 
 /**
  * Wrap a function with standardized error handling
  */
-export function withErrorHandling<T extends any[], R>(fn: (...args: T) => R, context?: string): (...args: T) => R {
+export function withErrorHandling<T extends any[], R>(fn: (...args: T) => R): (...args: T) => R {
   return (...args: T): R => {
     try {
       return fn(...args);
     } catch (error) {
-      throw handleMonoError(error, context);
+      throw handleMonoError(error);
     }
   };
 }
@@ -547,12 +536,11 @@ export function withErrorHandling<T extends any[], R>(fn: (...args: T) => R, con
 export async function withAsyncErrorHandling<T extends any[], R>(
   fn: (...params: T) => Promise<R>,
   params: T,
-  context?: string,
 ): Promise<R> {
   try {
     return await fn(...params);
   } catch (error) {
-    throw handleMonoError(error, context);
+    throw handleMonoError(error);
   }
 }
 
@@ -588,13 +576,13 @@ export function monoErrorResult<T>(error: MonoError): MonoResult<T> {
 /**
  * Wrap function to return Result type instead of throwing
  */
-export function asResult<T extends any[], R>(fn: (...args: T) => R, context?: string): (...args: T) => MonoResult<R> {
+export function asResult<T extends any[], R>(fn: (...args: T) => R): (...args: T) => MonoResult<R> {
   return (...args: T): MonoResult<R> => {
     try {
       const result = fn(...args);
       return monoSuccess(result);
     } catch (error) {
-      return monoErrorResult(handleMonoError(error, context));
+      return monoErrorResult(handleMonoError(error));
     }
   };
 }

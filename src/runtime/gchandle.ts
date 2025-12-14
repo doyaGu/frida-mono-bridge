@@ -11,11 +11,8 @@
  */
 
 import { MonoErrorCodes, raise } from "../utils/errors";
-import { Logger } from "../utils/log";
 import { pointerIsNull } from "../utils/memory";
 import { MonoApi } from "./api";
-
-const gcLogger = Logger.withTag("GCHandle");
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -328,10 +325,6 @@ export class GCHandlePool {
     this.ensureNotDisposed();
     this.validateObject(object, "createWeak");
 
-    if (!this.api.hasExport("mono_gchandle_new_weakref")) {
-      gcLogger.warn("Weak GCHandles are not supported on this runtime; using a strong handle instead.");
-      return this.create(object, false);
-    }
     const handleId = this.api.native.mono_gchandle_new_weakref(object, trackResurrection) as number;
     const handle = new GCHandle(this.api, handleId, true);
     this.handles.add(handle);

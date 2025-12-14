@@ -12,11 +12,11 @@
  */
 
 import { LruCache } from "../utils/cache";
-import { MonoErrorCodes, MonoThreadError, raise } from "../utils/errors";
+import { MonoErrorCodes, MonoManagedExceptionError, MonoThreadError, raise } from "../utils/errors";
 import { allocPointerArray, pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
+import { ALL_MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature, tryGetSignature } from "./exports";
 import { MonoModuleInfo } from "./module";
-import { ALL_MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature } from "./signatures";
 import type { ThreadManager } from "./thread";
 
 // ============================================================================
@@ -414,7 +414,7 @@ export class MonoApi {
     if (!pointerIsNull(exception)) {
       const details = this.extractExceptionDetails(exception);
       const message = details.message || `Managed exception thrown: ${details.type || "Unknown"}`;
-      raise(MonoErrorCodes.MANAGED_EXCEPTION, message, details.type ? `Exception type: ${details.type}` : undefined);
+      throw new MonoManagedExceptionError(message, exception, details.type, details.message, undefined);
     }
     return result;
   }
@@ -488,23 +488,19 @@ export class MonoApi {
     if (pointerIsNull(strPtr)) return "";
 
     // Try mono_string_to_utf8 first (most common)
-    if (this.hasExport("mono_string_to_utf8")) {
-      const utf8Ptr = this.native.mono_string_to_utf8(strPtr);
-      if (!pointerIsNull(utf8Ptr)) {
-        const result = utf8Ptr.readUtf8String() || "";
-        this.tryFree(utf8Ptr);
-        return result;
-      }
+    const utf8Ptr = this.native.mono_string_to_utf8(strPtr);
+    if (!pointerIsNull(utf8Ptr)) {
+      const result = utf8Ptr.readUtf8String() || "";
+      this.tryFree(utf8Ptr);
+      return result;
     }
 
     if (!fallbackToChars) return "";
 
     // Fallback: Try mono_string_to_utf16
-    if (this.hasExport("mono_string_to_utf16")) {
-      const utf16Ptr = this.native.mono_string_to_utf16(strPtr);
-      if (!pointerIsNull(utf16Ptr)) {
-        return utf16Ptr.readUtf16String() || "";
-      }
+    const utf16Ptr = this.native.mono_string_to_utf16(strPtr);
+    if (!pointerIsNull(utf16Ptr)) {
+      return utf16Ptr.readUtf16String() || "";
     }
 
     // Last resort: Try mono_string_chars + mono_string_length
@@ -569,6 +565,15 @@ export class MonoApi {
    */
   getDelegateThunk(delegateClass: NativePointer): DelegateThunkInfo {
     this.ensureNotDisposed();
+
+    // NOTE: mono_method_get_unmanaged_thunk is only available in mono-2.0-bdwgc.dll
+    if (!this.hasExport("mono_method_get_unmanaged_thunk")) {
+      raise(
+        MonoErrorCodes.NOT_SUPPORTED,
+        "mono_method_get_unmanaged_thunk is not available on this Mono runtime (only in mono-2.0-bdwgc.dll)",
+        "Consider using runtime_invoke for delegate invocation instead",
+      );
+    }
 
     const key = delegateClass.toString();
     return this.delegateThunkCache.getOrCreate(key, () => {
@@ -727,12 +732,23 @@ export class MonoApi {
 
   /**
    * Check if a Mono export is available.
+   * This method accepts any export name string and never throws.
    *
    * @param name Export name to check
    * @returns True if export exists, false otherwise
    */
-  hasExport(name: MonoApiName): boolean {
-    return this.tryResolveAddress(name) !== null;
+  hasExport(name: MonoApiName | string): boolean {
+    // First try to get the signature - if it doesn't exist, we can't resolve
+    const signature = tryGetSignature(name);
+    if (!signature) {
+      // Unknown export name - try direct module lookup
+      const moduleHandle = this.tryGetModuleHandle();
+      if (!moduleHandle) {
+        return false;
+      }
+      return moduleHandle.findExportByName(name) !== null;
+    }
+    return this.tryResolveAddress(name as MonoApiName, signature) !== null;
   }
 
   /**

@@ -40,8 +40,12 @@ export * from "./version";
 // Attribute flags and utilities
 export * from "./metadata";
 
+// ===== EXPORTS =====
+// Mono export mappings and signature lookup
+export * from "./exports";
+
 // ===== SIGNATURES =====
-// Mono export signatures and bindings
+// Pure signature data definitions
 export * from "./signatures";
 
 // ===== ENUMS =====

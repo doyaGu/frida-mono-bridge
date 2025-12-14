@@ -14,7 +14,7 @@
  */
 
 import { MonoApi } from "./api";
-import { MonoApiName } from "./signatures";
+import { MonoApiName } from "./exports";
 
 // ============================================================================
 // TYPE DEFINITIONS

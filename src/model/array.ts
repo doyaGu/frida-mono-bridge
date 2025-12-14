@@ -188,22 +188,7 @@ export class MonoArray<T = any> extends MonoObject implements Iterable<T> {
 
     // Fallback: Try mono_class_array_element_size (Note: on some Mono versions this may return
     // different values, so mono_array_element_size is preferred)
-    if (this.api.hasExport("mono_class_array_element_size")) {
-      return Number(this.native.mono_class_array_element_size(arrayClass.pointer));
-    }
-
-    // Last resort: Determine from element class using mono_class_value_size
-    const elementClass = this.elementClass;
-    if (elementClass.isValueType) {
-      // Use mono_class_value_size for value types (returns size without boxing)
-      if (this.api.hasExport("mono_class_value_size")) {
-        // mono_class_value_size(klass, &align) - we pass NULL for align
-        return Number(this.native.mono_class_value_size(elementClass.pointer, NULL));
-      }
-    }
-
-    // Reference types are always pointer-sized
-    return Process.pointerSize;
+    return Number(this.native.mono_class_array_element_size(arrayClass.pointer));
   }
 
   /**
@@ -286,10 +271,8 @@ export class MonoArray<T = any> extends MonoObject implements Iterable<T> {
     // Write barrier for SGen GC
     if (value.isNull()) {
       address.writePointer(value);
-    } else if (this.api.hasExport("mono_gc_wbarrier_set_arrayref")) {
-      this.native.mono_gc_wbarrier_set_arrayref(this.pointer, address, value);
     } else {
-      address.writePointer(value);
+      this.native.mono_gc_wbarrier_set_arrayref(this.pointer, address, value);
     }
   }
 

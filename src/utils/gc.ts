@@ -46,19 +46,14 @@ export class GCUtilities {
    * @param generation GC generation to collect (0-2, or -1 for all)
    */
   collect(generation = -1): void {
-    if (this.api.hasExport("mono_gc_collect")) {
-      this.api.native.mono_gc_collect(generation);
-    }
+    this.api.native.mono_gc_collect(generation);
   }
 
   /**
    * Get max GC generation
    */
   get maxGeneration(): number {
-    if (this.api.hasExport("mono_gc_max_generation")) {
-      return this.api.native.mono_gc_max_generation() as number;
-    }
-    return 2; // Default to 2
+    return this.api.native.mono_gc_max_generation() as number;
   }
 
   /**
@@ -106,26 +101,22 @@ export class GCUtilities {
       detailedStatsAvailable: false,
     };
 
-    // Try to get heap size using mono_gc_get_heap_size
-    if (this.api.hasExport("mono_gc_get_heap_size")) {
-      try {
-        const heapSize = this.api.native.mono_gc_get_heap_size();
-        stats.heapSize = Number(heapSize);
-        stats.detailedStatsAvailable = true;
-      } catch {
-        // API not available or failed
-      }
+    // Get heap size using mono_gc_get_heap_size
+    try {
+      const heapSize = this.api.native.mono_gc_get_heap_size();
+      stats.heapSize = Number(heapSize);
+      stats.detailedStatsAvailable = true;
+    } catch {
+      // API not available or failed
     }
 
-    // Try to get used heap size using mono_gc_get_used_size
-    if (this.api.hasExport("mono_gc_get_used_size")) {
-      try {
-        const usedSize = this.api.native.mono_gc_get_used_size();
-        stats.usedHeapSize = Number(usedSize);
-        stats.detailedStatsAvailable = true;
-      } catch {
-        // API not available or failed
-      }
+    // Get used heap size using mono_gc_get_used_size
+    try {
+      const usedSize = this.api.native.mono_gc_get_used_size();
+      stats.usedHeapSize = Number(usedSize);
+      stats.detailedStatsAvailable = true;
+    } catch {
+      // API not available or failed
     }
 
     return stats;
@@ -275,38 +266,31 @@ export class GCUtilities {
   /**
    * Wait for pending finalizers (if supported)
    *
-   * @param timeout Maximum time to wait in milliseconds (0 = no wait, -1 = infinite)
-   * @returns true if waiting was supported and completed
+   * NOTE: This operation is NOT available. The API mono_gc_wait_for_pending_finalizers
+   * does not exist in either mono.dll or mono-2.0-bdwgc.dll export tables.
+   * This method is kept for API compatibility but always returns false.
+   *
+   * @param _timeout Maximum time to wait in milliseconds (unused)
+   * @returns false (operation not supported in any Mono runtime)
    */
   waitForPendingFinalizers(_timeout: number = 0): boolean {
-    try {
-      if (this.api.hasExport("mono_gc_wait_for_pending_finalizers")) {
-        this.api.native.mono_gc_wait_for_pending_finalizers();
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
+    // API doesn't exist in any analyzed Mono runtime
+    return false;
   }
 
   /**
    * Suppress finalization for an object (if supported)
-   * Useful for deterministic cleanup when you know the object won't need finalization
    *
-   * @param objectPtr Pointer to the managed object
-   * @returns true if suppression was supported
+   * NOTE: This operation is NOT available. The API mono_gc_suppress_finalize
+   * does not exist in either mono.dll or mono-2.0-bdwgc.dll export tables.
+   * This method is kept for API compatibility but always returns false.
+   *
+   * @param _objectPtr Pointer to the managed object (unused)
+   * @returns false (operation not supported in any Mono runtime)
    */
-  suppressFinalize(objectPtr: NativePointer): boolean {
-    try {
-      if (this.api.hasExport("mono_gc_suppress_finalize")) {
-        this.api.native.mono_gc_suppress_finalize(objectPtr);
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
+  suppressFinalize(_objectPtr: NativePointer): boolean {
+    // API doesn't exist in any analyzed Mono runtime
+    return false;
   }
 
   /**

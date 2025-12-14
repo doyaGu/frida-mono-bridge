@@ -407,13 +407,11 @@ export class MonoMethod extends MonoHandle {
   @lazy
   get isGenericMethod(): boolean {
     // Try Unity API first
-    if (this.api.hasExport("mono_unity_method_is_generic")) {
-      try {
-        const result = this.native.mono_unity_method_is_generic(this.pointer);
-        return Number(result) !== 0;
-      } catch {
-        // Fall through to name-based detection
-      }
+    try {
+      const result = this.native.unity_mono_method_is_generic(this.pointer);
+      return Number(result) !== 0;
+    } catch {
+      // Fall through to name-based detection
     }
 
     // Fall back to checking method full name for generic markers
@@ -653,11 +651,6 @@ export class MonoMethod extends MonoHandle {
    */
   private makeGenericMethodViaReflection(typeArguments: MonoClass[]): MonoMethod | null {
     try {
-      // Check for mono_method_get_object and required reflection APIs
-      if (!this.api.hasExport("mono_method_get_object") || !this.api.hasExport("mono_reflection_type_get_type")) {
-        return null;
-      }
-
       const domain = this.api.getRootDomain();
 
       // Get System.Type[] for the type arguments
@@ -715,10 +708,6 @@ export class MonoMethod extends MonoHandle {
    */
   private createTypeArray(typeArguments: MonoClass[], domain: NativePointer): NativePointer {
     try {
-      if (!this.api.hasExport("mono_type_get_object") || !this.api.hasExport("mono_array_new")) {
-        return NULL;
-      }
-
       // Get System.Type class
       const mscorlibImage = this.api.native.mono_image_loaded(Memory.allocUtf8String("mscorlib"));
       if (pointerIsNull(mscorlibImage)) {
@@ -750,8 +739,11 @@ export class MonoMethod extends MonoHandle {
           return NULL;
         }
 
-        // mono_array_set for reference types
-        this.native.mono_array_setref(typeArray, i, typeObj);
+        // Set array element using mono_gc_wbarrier_set_arrayref instead of mono_array_setref
+        // NOTE: mono_array_setref is not exported in any Mono DLL (neither mono.dll nor mono-2.0-bdwgc.dll)
+        // mono_gc_wbarrier_set_arrayref(array, slot_ptr, value) is the correct replacement
+        const elementAddr = this.native.mono_array_addr_with_size(typeArray, Process.pointerSize, i);
+        this.native.mono_gc_wbarrier_set_arrayref(typeArray, elementAddr, typeObj);
       }
 
       return typeArray;
@@ -766,21 +758,15 @@ export class MonoMethod extends MonoHandle {
   private getMethodHandleFromMethodInfo(methodInfo: NativePointer): NativePointer | null {
     try {
       // Try Unity-specific API first (common in Unity runtime)
-      if (this.api.hasExport("unity_mono_reflection_method_get_method")) {
-        const method = this.native.unity_mono_reflection_method_get_method(methodInfo);
-        if (!pointerIsNull(method)) {
-          return method;
-        }
+      const method = this.native.unity_mono_reflection_method_get_method(methodInfo);
+      if (!pointerIsNull(method)) {
+        return method;
       }
+    } catch {
+      // Fall through to direct field access
+    }
 
-      // Try mono_reflection_get_method if available
-      if (this.api.hasExport("mono_reflection_get_method")) {
-        const method = this.native.mono_reflection_get_method(methodInfo);
-        if (!pointerIsNull(method)) {
-          return method;
-        }
-      }
-
+    try {
       // Fallback: Try to read the method handle field directly
       // MethodInfo has a RuntimeMethodHandle field at a known offset
       const klass = this.native.mono_object_get_class(methodInfo);

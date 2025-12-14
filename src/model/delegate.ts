@@ -3,6 +3,7 @@ import { lazy } from "../utils/cache";
 import { MonoErrorCodes, MonoManagedExceptionError, raise } from "../utils/errors";
 import { Logger } from "../utils/log";
 import { pointerIsNull } from "../utils/memory";
+import { MonoArray } from "./array";
 import { MonoClass } from "./class";
 import { MonoMethod } from "./method";
 import { MonoObject } from "./object";
@@ -149,7 +150,31 @@ export class MonoDelegate extends MonoObject {
     const methodPtr = method instanceof MonoMethod ? method.pointer : (method as NativePointer);
     const targetPtr = target instanceof MonoObject ? target.pointer : (target ?? NULL);
     const delegate = new MonoDelegate(api, instance.pointer);
-    delegate.native.mono_delegate_ctor(instance.pointer, targetPtr, methodPtr);
+
+    // NOTE: mono_delegate_ctor is NOT exported in any Mono DLL (neither mono.dll nor mono-2.0-bdwgc.dll)
+    // We use an alternative approach: invoke the delegate's constructor via reflection
+    // Find and invoke the delegate constructor that takes (object target, IntPtr method)
+    const ctorMethod = delegateClass.tryMethod(".ctor", 2);
+    if (ctorMethod) {
+      // Invoke constructor: .ctor(object target, IntPtr method)
+      api.runtimeInvoke(ctorMethod.pointer, instance.pointer, [targetPtr, methodPtr]);
+    } else {
+      // Fallback: Try to find any constructor and set fields manually
+      // Delegate internal layout: _target (object), _methodPtr (IntPtr), _methodPtrAux (IntPtr)
+      const targetField = delegateClass.tryField("_target") ?? delegateClass.tryField("m_target");
+      const methodField = delegateClass.tryField("_methodPtr") ?? delegateClass.tryField("method_ptr");
+
+      if (targetField && methodField) {
+        targetField.setValue(instance, targetPtr);
+        methodField.setValue(instance.pointer, methodPtr);
+      } else {
+        throw new Error(
+          "Cannot create delegate: mono_delegate_ctor is not exported and constructor/fields not found. " +
+            "Consider using the managed Delegate.CreateDelegate() method instead.",
+        );
+      }
+    }
+
     return delegate;
   }
 
@@ -226,7 +251,11 @@ export class MonoDelegate extends MonoObject {
 
       // Parse the returned array
       const delegates: MonoDelegate[] = [];
-      const arrayLength = this.native.mono_array_length(resultPtr) as number;
+
+      // NOTE: mono_array_length is only available in mono-2.0-bdwgc.dll, not in mono.dll
+      // Use the MonoArray wrapper which has fallback logic
+      const resultArray = new MonoArray(this.api, resultPtr);
+      const arrayLength = resultArray.length;
 
       for (let i = 0; i < arrayLength; i++) {
         const elementPtr = this.native.mono_array_addr_with_size(resultPtr, Process.pointerSize, i);

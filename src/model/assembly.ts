@@ -40,12 +40,15 @@ export class MonoAssembly extends MonoHandle {
   get name(): string {
     try {
       // Primary method: Get name from MonoAssemblyName structure
-      const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
-      if (!assemblyNamePtr.isNull()) {
-        const namePtr = this.native.mono_assembly_name_get_name(assemblyNamePtr);
-        const name = readUtf8String(namePtr);
-        if (name && name !== "") {
-          return name;
+      // NOTE: mono_assembly_get_name and mono_assembly_name_get_name are only available in mono-2.0-bdwgc.dll
+      if (this.api.hasExport("mono_assembly_get_name") && this.api.hasExport("mono_assembly_name_get_name")) {
+        const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
+        if (!assemblyNamePtr.isNull()) {
+          const namePtr = this.native.mono_assembly_name_get_name(assemblyNamePtr);
+          const name = readUtf8String(namePtr);
+          if (name && name !== "") {
+            return name;
+          }
         }
       }
     } catch (error) {
@@ -53,7 +56,7 @@ export class MonoAssembly extends MonoHandle {
     }
 
     try {
-      // Fallback method: Get name from assembly image
+      // Fallback method: Get name from assembly image (available in both mono.dll and bdwgc)
       const image = this.#getImage();
       const imageNamePtr = this.native.mono_image_get_name(image.pointer);
       const imageName = readUtf8String(imageNamePtr);
@@ -79,21 +82,24 @@ export class MonoAssembly extends MonoHandle {
     const culture = this.culture;
 
     // Try to get public key token
+    // NOTE: mono_assembly_get_name and mono_assembly_name_get_pubkeytoken are only available in mono-2.0-bdwgc.dll
     let publicKeyToken = "null";
     try {
-      const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
-      if (!assemblyNamePtr.isNull() && this.api.hasExport("mono_assembly_name_get_pubkeytoken")) {
-        const tokenPtr = this.native.mono_assembly_name_get_pubkeytoken(assemblyNamePtr);
-        if (!tokenPtr.isNull()) {
-          // Public key token is 8 bytes
-          const bytes: string[] = [];
-          for (let i = 0; i < 8; i++) {
-            const byte = tokenPtr.add(i).readU8();
-            if (byte === 0 && i === 0) break; // No token
-            bytes.push(byte.toString(16).padStart(2, "0"));
-          }
-          if (bytes.length > 0) {
-            publicKeyToken = bytes.join("");
+      if (this.api.hasExport("mono_assembly_get_name") && this.api.hasExport("mono_assembly_name_get_pubkeytoken")) {
+        const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
+        if (!assemblyNamePtr.isNull()) {
+          const tokenPtr = this.native.mono_assembly_name_get_pubkeytoken(assemblyNamePtr);
+          if (!tokenPtr.isNull()) {
+            // Public key token is 8 bytes
+            const bytes: string[] = [];
+            for (let i = 0; i < 8; i++) {
+              const byte = tokenPtr.add(i).readU8();
+              if (byte === 0 && i === 0) break; // No token
+              bytes.push(byte.toString(16).padStart(2, "0"));
+            }
+            if (bytes.length > 0) {
+              publicKeyToken = bytes.join("");
+            }
           }
         }
       }
@@ -109,11 +115,11 @@ export class MonoAssembly extends MonoHandle {
    */
   @lazy
   get culture(): string {
+    // NOTE: mono_assembly_get_name and mono_assembly_name_get_culture are only available in mono-2.0-bdwgc.dll
     try {
-      const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
-      if (!assemblyNamePtr.isNull()) {
-        // Check if the function exists
-        if (this.api.hasExport("mono_assembly_name_get_culture")) {
+      if (this.api.hasExport("mono_assembly_get_name") && this.api.hasExport("mono_assembly_name_get_culture")) {
+        const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
+        if (!assemblyNamePtr.isNull()) {
           const culturePtr = this.native.mono_assembly_name_get_culture(assemblyNamePtr);
           if (!culturePtr.isNull()) {
             const culture = culturePtr.readUtf8String();
@@ -134,22 +140,25 @@ export class MonoAssembly extends MonoHandle {
    */
   @lazy
   get version(): { major: number; minor: number; build: number; revision: number } {
+    // NOTE: mono_assembly_get_name and mono_assembly_name_get_version are only available in mono-2.0-bdwgc.dll
     try {
-      const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
-      if (!assemblyNamePtr.isNull() && this.api.hasExport("mono_assembly_name_get_version")) {
-        // mono_assembly_name_get_version returns major version and takes out params for minor/build/revision
-        const minorPtr = Memory.alloc(4);
-        const buildPtr = Memory.alloc(4);
-        const revisionPtr = Memory.alloc(4);
+      if (this.api.hasExport("mono_assembly_get_name") && this.api.hasExport("mono_assembly_name_get_version")) {
+        const assemblyNamePtr = this.native.mono_assembly_get_name(this.pointer);
+        if (!assemblyNamePtr.isNull()) {
+          // mono_assembly_name_get_version returns major version and takes out params for minor/build/revision
+          const minorPtr = Memory.alloc(4);
+          const buildPtr = Memory.alloc(4);
+          const revisionPtr = Memory.alloc(4);
 
-        const major = this.native.mono_assembly_name_get_version(assemblyNamePtr, minorPtr, buildPtr, revisionPtr);
+          const major = this.native.mono_assembly_name_get_version(assemblyNamePtr, minorPtr, buildPtr, revisionPtr);
 
-        return {
-          major: major as number,
-          minor: minorPtr.readU16(),
-          build: buildPtr.readU16(),
-          revision: revisionPtr.readU16(),
-        };
+          return {
+            major: major as number,
+            minor: minorPtr.readU16(),
+            build: buildPtr.readU16(),
+            revision: revisionPtr.readU16(),
+          };
+        }
       }
     } catch {
       // Fall through to default
@@ -404,11 +413,6 @@ export class MonoAssembly extends MonoHandle {
       // MONO_TABLE_ASSEMBLYREF = 35
       const MONO_TABLE_ASSEMBLYREF = 35;
 
-      // Check if the API is available
-      if (!this.api.hasExport("mono_image_get_table_rows")) {
-        return result;
-      }
-
       // Get number of assembly references
       const refCount = this.native.mono_image_get_table_rows(image.pointer, MONO_TABLE_ASSEMBLYREF);
 
@@ -442,8 +446,9 @@ export class MonoAssembly extends MonoHandle {
 
       this.native.mono_assembly_foreach(callback, NULL);
 
-      // Try to get referenced assembly names using mono_assembly_get_assemblyref
-      if (this.api.hasExport("mono_assembly_get_assemblyref")) {
+      // Get referenced assembly names using mono_assembly_get_assemblyref
+      // NOTE: mono_assembly_name_get_name is only available in mono-2.0-bdwgc.dll
+      if (this.api.hasExport("mono_assembly_name_get_name")) {
         const assemblyNameStruct = Memory.alloc(256); // MonoAssemblyName is a structure
 
         for (let i = 0; i < Number(refCount); i++) {

@@ -135,7 +135,7 @@ export class LruCache<K, V> {
   }
 
   private prune(): void {
-    if (this.capacity === Infinity) {
+    if (!isFinite(this.capacity)) {
       return;
     }
 

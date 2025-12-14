@@ -18,7 +18,6 @@
 
 export * from "./base";
 export * from "./collections";
-export * from "./metadata";
 
 // ============================================================================
 // CORE MONO TYPES (alphabetically ordered)

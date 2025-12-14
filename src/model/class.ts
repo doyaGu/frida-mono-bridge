@@ -168,7 +168,21 @@ export class MonoClass extends MonoHandle {
 
   @lazy
   get isDelegate(): boolean {
-    return (this.native.mono_class_is_delegate(this.pointer) as number) !== 0;
+    // NOTE: mono_class_is_delegate is only available in mono-2.0-bdwgc.dll
+    if (this.api.hasExport("mono_class_is_delegate")) {
+      return (this.native.mono_class_is_delegate(this.pointer) as number) !== 0;
+    }
+    // Fallback: Check if this class inherits from System.Delegate
+    try {
+      const parent = this.parent;
+      if (parent) {
+        const parentName = parent.fullName;
+        return parentName === "System.Delegate" || parentName === "System.MulticastDelegate";
+      }
+    } catch {
+      // Ignore errors in fallback
+    }
+    return false;
   }
 
   @lazy
@@ -448,7 +462,17 @@ export class MonoClass extends MonoHandle {
    * @returns True if this class implements the interface
    */
   implementsInterface(iface: MonoClass): boolean {
-    return (this.native.mono_class_implements_interface(this.pointer, iface.pointer) as number) !== 0;
+    // NOTE: mono_class_implements_interface is only available in mono-2.0-bdwgc.dll
+    if (this.api.hasExport("mono_class_implements_interface")) {
+      return (this.native.mono_class_implements_interface(this.pointer, iface.pointer) as number) !== 0;
+    }
+    // Fallback: Check interfaces manually
+    try {
+      const interfaces = this.interfaces;
+      return interfaces.some(i => i.pointer.toString() === iface.pointer.toString());
+    } catch {
+      return false;
+    }
   }
 
   // ===== OBJECT CREATION AND INITIALIZATION =====
@@ -544,13 +568,11 @@ export class MonoClass extends MonoHandle {
   @lazy
   get isGenericTypeDefinition(): boolean {
     // Try mono_class_is_generic first (standard Mono API)
-    if (this.api.hasExport("mono_class_is_generic")) {
-      try {
-        const result = this.native.mono_class_is_generic(this.pointer);
-        return Number(result) !== 0;
-      } catch {
-        // Fall through to name-based detection
-      }
+    try {
+      const result = this.native.mono_class_is_generic(this.pointer);
+      return Number(result) !== 0;
+    } catch {
+      // Fall through to name-based detection
     }
 
     // Fall back to name-based detection (backtick notation)
@@ -663,10 +685,6 @@ export class MonoClass extends MonoHandle {
       return null;
     }
 
-    if (!this.api.hasExport("mono_unity_class_get_generic_type_definition")) {
-      return null;
-    }
-
     try {
       const defPtr = this.native.mono_unity_class_get_generic_type_definition(this.pointer);
       if (!pointerIsNull(defPtr)) {
@@ -720,18 +738,10 @@ export class MonoClass extends MonoHandle {
       }
     }
 
-    // Fallback: Try Unity-specific API if available
-    if (this.api.hasExport("mono_unity_class_make_generic")) {
-      const result = this.makeGenericTypeViaUnityApi(typeArguments);
-      if (result) {
-        return result;
-      }
-    }
-
     // Cannot create generic type - log warning
     classLogger.warn(
       `makeGenericType: Cannot create ${this.fullName}<${typeArguments.map(t => t.fullName).join(", ")}>. ` +
-        `Neither mono_reflection_type_from_name nor Unity-specific APIs are available or successful.`,
+        `mono_reflection_type_from_name API is not available or failed.`,
     );
     return null;
   }
@@ -787,28 +797,6 @@ export class MonoClass extends MonoHandle {
       return pointerIsNull(klassPtr) ? null : new MonoClass(this.api, klassPtr);
     } catch (e) {
       // Silently fail and return null
-      return null;
-    }
-  }
-
-  /**
-   * Create generic type using Unity-specific mono_unity_class_make_generic API.
-   */
-  private makeGenericTypeViaUnityApi(typeArguments: MonoClass[]): MonoClass | null {
-    try {
-      // Build array of MonoClass pointers for type arguments
-      const argPtrs = typeArguments.map(arg => arg.pointer);
-      const argArray = Memory.alloc(Process.pointerSize * argPtrs.length);
-
-      for (let i = 0; i < argPtrs.length; i++) {
-        argArray.add(i * Process.pointerSize).writePointer(argPtrs[i]);
-      }
-
-      // mono_unity_class_make_generic(MonoClass* klass, MonoClass** types, int count)
-      const resultPtr = this.native.mono_unity_class_make_generic(this.pointer, argArray, argPtrs.length);
-
-      return pointerIsNull(resultPtr) ? null : new MonoClass(this.api, resultPtr);
-    } catch {
       return null;
     }
   }

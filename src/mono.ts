@@ -9,9 +9,9 @@ import { MonoImage } from "./model/image";
 import { MonoMethod } from "./model/method";
 import { MonoString } from "./model/string";
 import { createMonoApi, MonoApi } from "./runtime/api";
+import { ALL_MONO_EXPORTS } from "./runtime/exports";
 import { GCHandle } from "./runtime/gchandle";
 import { MonoModuleInfo, waitForMonoModule } from "./runtime/module";
-import { ALL_MONO_EXPORTS } from "./runtime/signatures";
 import { ThreadManager } from "./runtime/thread";
 import { MonoRuntimeVersion } from "./runtime/version";
 import { MonoErrorCodes, MonoInitializationError, raise } from "./utils/errors";
@@ -797,7 +797,7 @@ export namespace MonoNamespace {
    * Exports subsystem interface - provides access to resolved native exports
    */
   export type Exports = {
-    [K in import("./runtime/signatures").MonoApiName]: NativePointer | null;
+    [K in import("./runtime/exports").MonoApiName]: NativePointer | null;
   };
 
   /**

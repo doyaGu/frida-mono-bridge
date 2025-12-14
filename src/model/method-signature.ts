@@ -79,7 +79,13 @@ export class MonoMethodSignature extends MonoHandle {
   }
 
   isOutParameter(index: number): boolean {
-    return (this.native.mono_signature_param_is_out(this.pointer, index) as number) !== 0;
+    // NOTE: mono_signature_param_is_out is only available in mono-2.0-bdwgc.dll
+    if (this.api.hasExport("mono_signature_param_is_out")) {
+      return (this.native.mono_signature_param_is_out(this.pointer, index) as number) !== 0;
+    }
+    // Fallback: Cannot determine out parameter status without this API
+    // Return false as a conservative default
+    return false;
   }
 
   getDescription(includeNamespace = true): string {

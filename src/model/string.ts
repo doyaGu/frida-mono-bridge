@@ -405,13 +405,16 @@ export class MonoString extends MonoObject implements Iterable<string> {
   // ===== EXTRACTION METHODS =====
 
   /**
-   * Get a substring.
+   * Get a substring (C# semantics).
    * @param start Start index
-   * @param end End index (optional, defaults to end of string)
+   * @param length Length of substring (optional, defaults to end of string)
    * @returns Substring
    */
-  substring(start: number, end?: number): string {
-    return this.content.substring(start, end);
+  substring(start: number, length?: number): string {
+    if (length === undefined) {
+      return this.content.substring(start);
+    }
+    return this.content.substring(start, start + length);
   }
 
   /**

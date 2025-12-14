@@ -576,7 +576,12 @@ export class MonoType extends MonoHandle {
    */
   @lazy
   get pointerType(): boolean {
-    return (this.native.mono_type_is_pointer(this.pointer) as number) !== 0;
+    // NOTE: mono_type_is_pointer is only available in mono-2.0-bdwgc.dll
+    if (this.api.hasExport("mono_type_is_pointer")) {
+      return (this.native.mono_type_is_pointer(this.pointer) as number) !== 0;
+    }
+    // Fallback: Check type kind
+    return this.kind === MonoTypeKind.Pointer;
   }
 
   /**
@@ -610,7 +615,13 @@ export class MonoType extends MonoHandle {
    */
   @lazy
   get genericParameter(): boolean {
-    return (this.native.mono_type_is_generic_parameter(this.pointer) as number) !== 0;
+    // NOTE: mono_type_is_generic_parameter is only available in mono-2.0-bdwgc.dll
+    if (this.api.hasExport("mono_type_is_generic_parameter")) {
+      return (this.native.mono_type_is_generic_parameter(this.pointer) as number) !== 0;
+    }
+    // Fallback: Check type kind for generic parameter variants (GenericVar = T, GenericMethodVar = TMethod)
+    const kind = this.kind;
+    return kind === MonoTypeKind.GenericVar || kind === MonoTypeKind.GenericMethodVar;
   }
 
   /**

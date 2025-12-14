@@ -76,15 +76,19 @@ export class MonoField<T = any> extends MonoHandle {
   /** Gets the full name of this field. */
   @lazy
   get fullName(): string {
-    const namePtr = this.native.mono_field_full_name(this.pointer);
-    if (pointerIsNull(namePtr)) {
-      return `${this.parent.fullName}.${this.name}`;
+    // NOTE: mono_field_full_name is only available in mono-2.0-bdwgc.dll
+    if (this.api.hasExport("mono_field_full_name")) {
+      const namePtr = this.native.mono_field_full_name(this.pointer);
+      if (!pointerIsNull(namePtr)) {
+        try {
+          return readUtf8String(namePtr);
+        } finally {
+          this.api.tryFree(namePtr);
+        }
+      }
     }
-    try {
-      return readUtf8String(namePtr);
-    } finally {
-      this.api.tryFree(namePtr);
-    }
+    // Fallback: construct full name manually
+    return `${this.parent.fullName}.${this.name}`;
   }
 
   /** Gets the flags of this field. */

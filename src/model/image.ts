@@ -128,9 +128,6 @@ export class MonoImage extends MonoHandle {
    */
   @lazy
   get classCount(): number {
-    if (!this.api.hasExport("mono_image_get_table_info")) {
-      return 0;
-    }
     const table = this.native.mono_image_get_table_info(this.pointer, MONO_METADATA_TABLE_TYPEDEF);
     if (pointerIsNull(table)) {
       return 0;
@@ -380,9 +377,6 @@ export class MonoImage extends MonoHandle {
    */
   @lazy
   get classTokens(): number[] {
-    if (!this.api.hasExport("mono_image_get_table_info")) {
-      return [];
-    }
     const count = this.classCount;
     const tokens: number[] = [];
     for (let index = 0; index < count; index += 1) {
@@ -411,9 +405,6 @@ export class MonoImage extends MonoHandle {
    */
   enumerateClasses(visitor: (klass: MonoClass, index: number) => void): void {
     // Generate tokens inline to avoid circular dependency with classTokens getter
-    if (!this.api.hasExport("mono_image_get_table_info")) {
-      return;
-    }
     const count = this.classCount;
     for (let index = 0; index < count; index += 1) {
       const token = MONO_METADATA_TOKEN_TYPEDEF | (index + 1);

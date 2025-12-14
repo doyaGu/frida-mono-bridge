@@ -472,7 +472,7 @@ export function parseCustomAttributes(
     // The cached flag at offset 4 indicates if Mono is managing the lifetime
     try {
       const cached = customAttrInfoPtr.add(4).readInt();
-      if (cached === 0 && api.hasExport("mono_custom_attrs_free")) {
+      if (cached === 0) {
         api.native.mono_custom_attrs_free(customAttrInfoPtr);
       }
     } catch {
