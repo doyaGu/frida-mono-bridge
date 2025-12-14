@@ -2,7 +2,7 @@
  * MonoArray Complete Tests
  *
  * Tests MonoArray API:
- * - length / getLength()
+ * - length
  * - getElementClass()
  * - getElementSize()
  * - getElementAddress(index)
@@ -46,22 +46,25 @@ export async function createMonoArrayTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoArray - getLength() method", () => {
+    await createMonoDependentTest("MonoArray - length property (non-trivial size)", () => {
       const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
       const arr = Mono.array.new(intClass, 15);
-      assert(arr.length === 15, `getLength() should return 15, got ${arr.length}`);
+      assert(arr.length === 15, `length should be 15, got ${arr.length}`);
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoArray - length equals getLength()", () => {
+    await createMonoDependentTest("MonoArray - length is stable across reads", () => {
       const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
       const arr = Mono.array.new(intClass, 20);
-      assert(arr.length === arr.length, `length (${arr.length}) should equal getLength() (${arr.length})`);
+      const first = arr.length;
+      const second = arr.length;
+      assert(first === 20, `length should be 20, got ${first}`);
+      assert(second === 20, `length should remain 20, got ${second}`);
     }),
   );
 
@@ -861,7 +864,7 @@ export async function createMonoArrayTests(): Promise<TestResult[]> {
       const arr = Mono.array.new(intClass, 0);
 
       assert(arr.length === 0, "Empty array length should be 0");
-      assert(arr.length === 0, "Empty array getLength() should be 0");
+      assert(arr.elementSize === 4, `Empty array element size should still be 4, got ${arr.elementSize}`);
     }),
   );
 
