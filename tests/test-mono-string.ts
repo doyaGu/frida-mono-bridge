@@ -2,7 +2,7 @@
  * MonoString Complete Tests
  *
  * Tests MonoString API:
- * - length / getLength()
+ * - length
  * - charAt(index)
  * - substring(start, length?)
  * - contains(search)
@@ -43,24 +43,8 @@ export async function createMonoStringTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoString - getLength() method", () => {
-      const stringClass = Mono.domain.tryClass("System.String");
-      assertNotNull(stringClass, "String class should exist");
-
-      const emptyField = stringClass.tryField("Empty");
-      assertNotNull(emptyField, "String.Empty field should exist");
-
-      const emptyString = emptyField!.getStringValue(null);
-      assertNotNull(emptyString, "Empty string should not be null");
-
-      const length = emptyString!.length;
-      assert(length === 0, `getLength() should return 0 for empty string, got ${length}`);
-    }),
-  );
-
-  results.push(
-    await createMonoDependentTest("MonoString - length property equals getLength()", () => {
-      // Get a non-empty string
+    await createMonoDependentTest("MonoString - length property for non-empty string", () => {
+      // Test with a known non-empty string from runtime
       const boolClass = Mono.domain.tryClass("System.Boolean");
       assertNotNull(boolClass, "Boolean class should exist");
 
@@ -76,9 +60,23 @@ export async function createMonoStringTests(): Promise<TestResult[]> {
         return;
       }
 
-      const lengthProp = trueString.length;
-      const lengthMethod = trueString.length;
-      assert(lengthProp === lengthMethod, `length property (${lengthProp}) should equal getLength() (${lengthMethod})`);
+      const length = trueString.length;
+      assert(length > 0, `TrueString should have length > 0, got ${length}`);
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("MonoString - length is stable across multiple reads", () => {
+      const testValue = "Test String";
+      const str = Mono.string.new(testValue);
+
+      const length1 = str.length;
+      const length2 = str.length;
+      const length3 = str.toString().length;
+
+      assert(length1 === testValue.length, `length should be ${testValue.length}, got ${length1}`);
+      assert(length2 === testValue.length, `length should remain ${testValue.length}, got ${length2}`);
+      assert(length3 === testValue.length, `toString().length should be ${testValue.length}, got ${length3}`);
     }),
   );
 
@@ -645,7 +643,7 @@ export async function createMonoStringTests(): Promise<TestResult[]> {
       const len2 = str.length;
       const len3 = str.toString().length;
 
-      assert(len1 === len2, "length property should equal getLength()");
+      assert(len1 === len2, "Multiple length reads should return same value");
       assert(len1 === len3, "length should equal toString().length");
     }),
   );
