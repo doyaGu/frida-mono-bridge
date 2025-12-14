@@ -197,6 +197,20 @@ export class MonoMethod extends MonoHandle {
     return readUtf8String(namePtr);
   }
 
+  /**
+   * Gets the full name of this method (including declaring type and signature).
+   */
+  @lazy
+  get fullName(): string {
+    return this.getFullName(true);
+  }
+
+  /** Gets the full name of this method without the signature. */
+  @lazy
+  get fullNameWithoutSignature(): string {
+    return this.getFullName(false);
+  }
+
   /** Gets the signature of this method. */
   @lazy
   get signature(): MonoMethodSignature {
@@ -377,7 +391,7 @@ export class MonoMethod extends MonoHandle {
     const retType = this.returnType.getSummary();
     return {
       name: this.name,
-      fullName: this.getFullName(),
+      fullName: this.fullName,
       declaringType: this.declaringClass.fullName,
       attributes: this.flags,
       attributeNames: this.attributeNames,
@@ -415,7 +429,7 @@ export class MonoMethod extends MonoHandle {
     }
 
     // Fall back to checking method full name for generic markers
-    const fullName = this.getFullName(true);
+    const fullName = this.fullName;
     return fullName.includes("<") && fullName.includes(">");
   }
 
@@ -428,7 +442,7 @@ export class MonoMethod extends MonoHandle {
     if (!this.isGenericMethod) {
       return false;
     }
-    const fullName = this.getFullName(true);
+    const fullName = this.fullName;
     const hasUnboundParams = /\[[A-Z][a-zA-Z0-9_,\s]*\]/.test(fullName) || /<[A-Z][a-zA-Z0-9_,\s]*>/.test(fullName);
     return hasUnboundParams;
   }
@@ -443,7 +457,7 @@ export class MonoMethod extends MonoHandle {
   @lazy
   get genericArgumentCount(): number {
     // Parse from method name - generic methods are marked like MethodName`2 or in full name <T, U>
-    const fullName = this.getFullName(true);
+    const fullName = this.fullName;
 
     // Count type parameters in angle brackets
     const match = fullName.match(/<([^>]+)>/);
@@ -530,7 +544,7 @@ export class MonoMethod extends MonoHandle {
 
     // Log warning if all approaches fail
     methodLogger.warn(
-      `makeGenericMethod: Cannot instantiate ${this.getFullName()} with ` +
+      `makeGenericMethod: Cannot instantiate ${this.fullName} with ` +
         `[${typeArguments.map(t => t.fullName).join(", ")}]. ` +
         `No suitable API available.`,
     );
@@ -813,7 +827,7 @@ export class MonoMethod extends MonoHandle {
     if (result === null) {
       raise(
         MonoErrorCodes.JIT_FAILED,
-        `Failed to compile method ${this.getFullName()}`,
+        `Failed to compile method ${this.fullName}`,
         "Use tryCompile() to handle compilation failures gracefully",
       );
     }
@@ -849,13 +863,13 @@ export class MonoMethod extends MonoHandle {
   tryCompile(): NativePointer | null {
     // Check if method can potentially be compiled
     if (this.isAbstract) {
-      methodLogger.debug(`Cannot compile abstract method: ${this.getFullName()}`);
+      methodLogger.debug(`Cannot compile abstract method: ${this.fullName}`);
       return null;
     }
 
     // InternalCall and Runtime methods may not have JIT-able code
     if (this.isInternalCall) {
-      methodLogger.debug(`Method is InternalCall: ${this.getFullName()}`);
+      methodLogger.debug(`Method is InternalCall: ${this.fullName}`);
       // InternalCall methods might still have an address via different mechanism
       // but mono_compile_method typically won't work for them
     }
@@ -864,7 +878,7 @@ export class MonoMethod extends MonoHandle {
       const codeAddr = this.native.mono_compile_method(this.pointer);
 
       if (pointerIsNull(codeAddr)) {
-        methodLogger.debug(`mono_compile_method returned NULL for: ${this.getFullName()}`);
+        methodLogger.debug(`mono_compile_method returned NULL for: ${this.fullName}`);
         return null;
       }
 
@@ -875,7 +889,7 @@ export class MonoMethod extends MonoHandle {
     } catch (error) {
       // mono_compile_method can throw access violations for methods
       // that haven't been JIT compiled and have problematic metadata
-      methodLogger.debug(`Exception compiling ${this.getFullName()}: ${error}`);
+      methodLogger.debug(`Exception compiling ${this.fullName}: ${error}`);
       return null;
     }
   }
@@ -1094,7 +1108,7 @@ export class MonoMethod extends MonoHandle {
       if (type.byRef || isPointerLikeKind(type.kind)) {
         raise(
           MonoErrorCodes.TYPE_MISMATCH,
-          `Parameter ${index} on ${this.getFullName()} expects a pointer or reference; received primitive value`,
+          `Parameter ${index} on ${this.fullName} expects a pointer or reference; received primitive value`,
           "Pass a NativePointer instead of a primitive value",
         );
       }
@@ -1127,7 +1141,7 @@ export class MonoMethod extends MonoHandle {
     if (!klass) {
       raise(
         MonoErrorCodes.CLASS_NOT_FOUND,
-        `Unable to resolve class for parameter type ${effectiveType.fullName} on ${this.getFullName()}`,
+        `Unable to resolve class for parameter type ${effectiveType.fullName} on ${this.fullName}`,
         "Ensure the type is properly defined in the Mono runtime",
       );
     }
@@ -1399,7 +1413,7 @@ export class MethodInvocation {
    */
   getMethodInfo(): string {
     try {
-      return `${this.method.getFullName?.() || "Unknown method"}(${this.args.length} args)`;
+      return `${this.method.fullName || "Unknown method"}(${this.args.length} args)`;
     } catch {
       return "Unknown method";
     }

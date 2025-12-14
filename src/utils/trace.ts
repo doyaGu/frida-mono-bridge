@@ -140,7 +140,7 @@ export function tryMethod(monoMethod: MonoMethod, callbacks: MethodCallbacks): (
 
     return () => listener.detach();
   } catch (error) {
-    traceLogger.debug(`Failed to attach to ${monoMethod.getFullName()}: ${error}`);
+    traceLogger.debug(`Failed to attach to ${monoMethod.fullName}: ${error}`);
     return null;
   }
 }
@@ -200,7 +200,7 @@ export function tryMethodExtended(monoMethod: MonoMethod, callbacks: MethodCallb
 
     return () => listener.detach();
   } catch (error) {
-    traceLogger.debug(`Failed to attach to ${monoMethod.getFullName()}: ${error}`);
+    traceLogger.debug(`Failed to attach to ${monoMethod.fullName}: ${error}`);
     return null;
   }
 }
@@ -270,7 +270,7 @@ export function tryReplaceReturnValue(
 
     return () => listener.detach();
   } catch (error) {
-    traceLogger.debug(`Failed to attach to ${monoMethod.getFullName()}: ${error}`);
+    traceLogger.debug(`Failed to attach to ${monoMethod.fullName}: ${error}`);
     return null;
   }
 }
@@ -291,7 +291,7 @@ export function classAll(klass: MonoClass, callbacks: MethodCallbacks): () => vo
     if (detach) {
       detachers.push(detach);
     } else {
-      traceLogger.debug(`Skipped unhookable method: ${m.getFullName()}`);
+      traceLogger.debug(`Skipped unhookable method: ${m.fullName}`);
     }
   }
 
@@ -327,13 +327,13 @@ export function methodsByPattern(api: MonoApi, pattern: string, callbacks: Metho
     const detach = tryMethod(m, {
       onEnter(args) {
         if (callbacks.onEnter) {
-          traceLogger.debug(`-> ${m.getFullName()}`);
+          traceLogger.debug(`-> ${m.fullName}`);
           callbacks.onEnter(args);
         }
       },
       onLeave(retval) {
         if (callbacks.onLeave) {
-          traceLogger.debug(`<- ${m.getFullName()}`);
+          traceLogger.debug(`<- ${m.fullName}`);
           callbacks.onLeave(retval);
         }
       },
@@ -627,7 +627,7 @@ export class PerformanceTracker {
    * @returns Detach function
    */
   track(monoMethod: MonoMethod): () => void {
-    const methodName = monoMethod.getFullName();
+    const methodName = monoMethod.fullName;
 
     if (!this.stats.has(methodName)) {
       this.stats.set(methodName, {
@@ -725,7 +725,7 @@ export function methodWithCallStack(monoMethod: MonoMethod, callbacks: MethodCal
   if (impl.isNull()) {
     raise(
       MonoErrorCodes.JIT_FAILED,
-      `Failed to compile method ${monoMethod.getFullName()}`,
+      `Failed to compile method ${monoMethod.fullName}`,
       "Use tryCompile() to handle compilation failures gracefully",
     );
   }

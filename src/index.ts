@@ -30,34 +30,116 @@ import { Mono, MonoNamespace } from "./mono";
 export { Mono };
 export default Mono;
 
-// Install global if config allows (default: true)
-// This respects Mono.config.installGlobal which defaults to true
-if (Mono.config.installGlobal !== false) {
-  (globalThis as any).Mono = Mono;
-}
+// NOTE: `globalThis.Mono` installation is handled lazily by the Mono facade
+// (during `Mono.initialize()`/`Mono.perform()`) so `Mono.config.installGlobal`
+// can be configured before first use.
 
 // ============================================================================
 // ERROR TYPES (needed for catch blocks)
 // ============================================================================
 
 export {
+  // Error Result utilities
+  asResult,
   MonoAssemblyNotFoundError,
   MonoClassNotFoundError,
   // Base error class
   MonoError,
   // Error codes enum
   MonoErrorCodes,
+  monoErrorResult,
   MonoExportNotFoundError,
   MonoFieldNotFoundError,
   MonoImageNotFoundError,
+  monoInvariant,
+  // Managed exception error for catch blocks
+  MonoManagedExceptionError,
+  MonoMemoryError,
   MonoMethodNotFoundError,
   // Specific error classes for typed catch
   MonoModuleNotFoundError,
   MonoPropertyNotFoundError,
   MonoRuntimeNotReadyError,
+  monoSuccess,
   MonoThreadError,
   MonoValidationError,
+  // Error generation utilities
+  raise,
+  raiseUnless,
+  ValidationBuilder,
+  withErrorHandling,
 } from "./utils/errors";
+
+// ============================================================================
+// UTILITY EXPORTS (commonly needed in tests and scripts)
+// ============================================================================
+
+// Memory utilities
+export {
+  allocPointerArray,
+  ensurePointer,
+  enumerateMonoHandles,
+  isNativePointer,
+  isValidPointer,
+  pointerIsNull,
+  resolveNativePointer,
+  safeAlloc,
+  tryMakePointer,
+  unwrapInstance,
+  unwrapInstanceRequired,
+} from "./utils/memory";
+
+// String utilities
+export {
+  createError,
+  createTimer,
+  PerformanceTimer,
+  readMonoString,
+  readUtf16String,
+  readUtf8String,
+  safeStringify,
+} from "./utils/string";
+
+// Cache utilities
+export { lazy, LruCache } from "./utils/cache";
+
+// Logger
+export { Logger } from "./utils/log";
+
+// ============================================================================
+// RUNTIME CONSTANTS (enums and defines)
+// ============================================================================
+
+export { MonoDefines, MonoEnums } from "./runtime/enums";
+
+// ============================================================================
+// TYPE CONSTANTS
+// ============================================================================
+
+export { MonoTypeKind, MonoTypeNameFormat } from "./model/type";
+
+// ============================================================================
+// GC TYPES (for advanced GC handle management)
+// ============================================================================
+
+export { GCHandle, GCHandlePool } from "./runtime/gchandle";
+export { createGCUtilities, GCUtilities } from "./utils/gc";
+export type { GenerationStats, MemoryStats } from "./utils/gc";
+
+// ============================================================================
+// TRACE TYPES (for method hooking callbacks)
+// ============================================================================
+
+export type { FindOptions } from "./utils/find";
+export type {
+  FieldAccessCallbacks,
+  MethodCallbacks,
+  MethodCallbacksExtended,
+  MethodCallbacksTimed,
+  MethodStats,
+  PerformanceTracker,
+  PropertyAccessCallbacks,
+} from "./utils/trace";
 
 // ============================================================================
 // TYPE-ONLY EXPORTS (for type annotations, not runtime values)
@@ -74,9 +156,12 @@ export type { MonoDomain } from "./model/domain";
 export type { MonoField } from "./model/field";
 export type { MonoImage } from "./model/image";
 export type { MonoMethod } from "./model/method";
-export type { MonoObject } from "./model/object";
+// MonoObject exported as value for boxing/wrapping scenarios
+export type { CustomAttribute } from "./model/base";
+export { MonoObject } from "./model/object";
 export type { MonoProperty } from "./model/property";
 export type { MonoString } from "./model/string";
+export type { MonoType } from "./model/type";
 
 // Runtime types - type-only export
 export type { MonoApi } from "./runtime/api";

@@ -38,6 +38,7 @@ export class MonoNamespace {
   private _initialized = false;
   private _initializing: Promise<boolean> | null = null;
   private _unloadHookInstalled = false;
+  private _globalInstalled = false;
 
   /**
    * Minimal facade helpers.
@@ -188,6 +189,8 @@ export class MonoNamespace {
    * @returns `true` if initialization was performed, `false` if already initialized
    */
   async initialize(_blocking = false): Promise<boolean> {
+    this.maybeInstallGlobal();
+
     if (this._initialized) {
       return false;
     }
@@ -232,6 +235,22 @@ export class MonoNamespace {
       });
 
     return await this._initializing;
+  }
+
+  private maybeInstallGlobal(): void {
+    if (this._globalInstalled) {
+      return;
+    }
+    if (this.config.installGlobal === false) {
+      return;
+    }
+
+    try {
+      (globalThis as any).Mono = this;
+      this._globalInstalled = true;
+    } catch {
+      // ignore
+    }
   }
 
   /**
@@ -542,6 +561,13 @@ export class MonoNamespace {
         Trace.methodsByPattern(api, pattern, callbacks),
 
       /**
+       * Hook all methods in classes matching pattern
+       * @param pattern Wildcard pattern for class names
+       */
+      classesByPattern: (pattern: string, callbacks: Trace.MethodCallbacks) =>
+        Trace.classesByPattern(api, pattern, callbacks),
+
+      /**
        * Replace a method's return value
        */
       replaceReturnValue: Trace.replaceReturnValue,
@@ -550,6 +576,39 @@ export class MonoNamespace {
        * Try to replace return value, returning null on failure
        */
       tryReplaceReturnValue: Trace.tryReplaceReturnValue,
+
+      /**
+       * Trace field access (read/write) via property accessors
+       * @returns detach function or null if field cannot be traced
+       */
+      field: Trace.field,
+
+      /**
+       * Trace fields matching a pattern
+       */
+      fieldsByPattern: (pattern: string, callbacks: Trace.FieldAccessCallbacks) =>
+        Trace.fieldsByPattern(api, pattern, callbacks),
+
+      /**
+       * Trace property access (get/set)
+       */
+      property: Trace.propertyTrace,
+
+      /**
+       * Trace properties matching a pattern
+       */
+      propertiesByPattern: (pattern: string, callbacks: Trace.PropertyAccessCallbacks) =>
+        Trace.propertiesByPattern(api, pattern, callbacks),
+
+      /**
+       * Create a performance tracker for method timing
+       */
+      createPerformanceTracker: Trace.createPerformanceTracker,
+
+      /**
+       * Hook a method with call stack capture and timing
+       */
+      methodWithCallStack: Trace.methodWithCallStack,
     };
   }
 
@@ -964,6 +1023,7 @@ export namespace MonoNamespace {
     ): (() => void) | null;
     classAll(klass: import("./model/class").MonoClass, callbacks: import("./utils/trace").MethodCallbacks): () => void;
     methodsByPattern(pattern: string, callbacks: import("./utils/trace").MethodCallbacks): () => void;
+    classesByPattern(pattern: string, callbacks: import("./utils/trace").MethodCallbacks): () => void;
     replaceReturnValue(
       monoMethod: import("./model/method").MonoMethod,
       replacement: (
@@ -980,6 +1040,21 @@ export namespace MonoNamespace {
         args: NativePointer[],
       ) => NativePointer | void,
     ): (() => void) | null;
+    field(
+      monoField: import("./model/field").MonoField,
+      callbacks: import("./utils/trace").FieldAccessCallbacks,
+    ): (() => void) | null;
+    fieldsByPattern(pattern: string, callbacks: import("./utils/trace").FieldAccessCallbacks): () => void;
+    property(
+      monoProperty: import("./model/property").MonoProperty,
+      callbacks: import("./utils/trace").PropertyAccessCallbacks,
+    ): () => void;
+    propertiesByPattern(pattern: string, callbacks: import("./utils/trace").PropertyAccessCallbacks): () => void;
+    createPerformanceTracker(): import("./utils/trace").PerformanceTracker;
+    methodWithCallStack(
+      monoMethod: import("./model/method").MonoMethod,
+      callbacks: import("./utils/trace").MethodCallbacksTimed,
+    ): () => void;
   }
 }
 
