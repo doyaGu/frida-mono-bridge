@@ -84,6 +84,7 @@
     "test:mono-types": "frida-compile tests/runners/test-mono-types.ts -o dist/test-mono-types.js",
     "test:generic-types": "frida-compile tests/runners/test-generic-types.ts -o dist/test-generic-types.js",
     "test:custom-attributes": "frida-compile tests/runners/test-custom-attributes.ts -o dist/test-custom-attributes.js",
+    "test:internal-call": "frida-compile tests/runners/test-internal-call.ts -o dist/test-internal-call.js",
     "test:find-tools": "frida-compile tests/runners/test-find-tools.ts -o dist/test-find-tools.js",
     "test:trace-tools": "frida-compile tests/runners/test-trace-tools.ts -o dist/test-trace-tools.js",
     "test:gc-tools": "frida-compile tests/runners/test-gc-tools.ts -o dist/test-gc-tools.js",
