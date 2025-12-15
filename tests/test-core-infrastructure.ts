@@ -18,7 +18,7 @@ import {
   TestSuite,
 } from "./test-framework";
 
-export async function testCoreInfrastructure(): Promise<TestResult> {
+export async function createCoreInfrastructureTests(): Promise<TestResult> {
   console.log("\nCore Infrastructure:");
 
   // Core infrastructure tests are mixed - some standalone, some Mono-dependent

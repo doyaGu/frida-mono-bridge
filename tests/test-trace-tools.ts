@@ -19,43 +19,43 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
   // API Existence Tests
   // ============================================
   results.push(
-    createStandaloneTest("Trace - Mono.trace exists", () => {
+    await createMonoDependentTest("Trace - Mono.trace exists", () => {
       assert(typeof Mono.trace !== "undefined", "Mono.trace should exist");
     }),
   );
 
   results.push(
-    createStandaloneTest("Trace - method function exists", () => {
+    await createMonoDependentTest("Trace - method function exists", () => {
       assert(typeof Mono.trace.method === "function", "Mono.trace.method should be a function");
     }),
   );
 
   results.push(
-    createStandaloneTest("Trace - methodExtended function exists", () => {
+    await createMonoDependentTest("Trace - methodExtended function exists", () => {
       assert(typeof Mono.trace.methodExtended === "function", "Mono.trace.methodExtended should be a function");
     }),
   );
 
   results.push(
-    createStandaloneTest("Trace - replaceReturnValue function exists", () => {
+    await createMonoDependentTest("Trace - replaceReturnValue function exists", () => {
       assert(typeof Mono.trace.replaceReturnValue === "function", "Mono.trace.replaceReturnValue should be a function");
     }),
   );
 
   results.push(
-    createStandaloneTest("Trace - classAll function exists", () => {
+    await createMonoDependentTest("Trace - classAll function exists", () => {
       assert(typeof Mono.trace.classAll === "function", "Mono.trace.classAll should be a function");
     }),
   );
 
   results.push(
-    createStandaloneTest("Trace - methodsByPattern function exists", () => {
+    await createMonoDependentTest("Trace - methodsByPattern function exists", () => {
       assert(typeof Mono.trace.methodsByPattern === "function", "Mono.trace.methodsByPattern should be a function");
     }),
   );
 
   results.push(
-    createStandaloneTest("Trace - classesByPattern function exists", () => {
+    await createMonoDependentTest("Trace - classesByPattern function exists", () => {
       assert(typeof Mono.trace.classesByPattern === "function", "Mono.trace.classesByPattern should be a function");
     }),
   );
@@ -469,13 +469,13 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
   // Field Tracing Tests
   // ============================================
   results.push(
-    createStandaloneTest("Trace - field function exists", () => {
+    await createMonoDependentTest("Trace - field function exists", () => {
       assert(typeof Mono.trace.field === "function", "Mono.trace.field should be a function");
     }),
   );
 
   results.push(
-    createStandaloneTest("Trace - fieldsByPattern function exists", () => {
+    await createMonoDependentTest("Trace - fieldsByPattern function exists", () => {
       assert(typeof Mono.trace.fieldsByPattern === "function", "Mono.trace.fieldsByPattern should be a function");
     }),
   );
@@ -515,13 +515,13 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
   // Property Tracing Tests
   // ============================================
   results.push(
-    createStandaloneTest("Trace - property function exists", () => {
+    await createMonoDependentTest("Trace - property function exists", () => {
       assert(typeof Mono.trace.property === "function", "Mono.trace.property should be a function");
     }),
   );
 
   results.push(
-    createStandaloneTest("Trace - propertiesByPattern function exists", () => {
+    await createMonoDependentTest("Trace - propertiesByPattern function exists", () => {
       assert(
         typeof Mono.trace.propertiesByPattern === "function",
         "Mono.trace.propertiesByPattern should be a function",

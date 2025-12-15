@@ -6,34 +6,30 @@
  * to test internal implementation details.
  */
 
+import { MonoError } from "../src";
+import { LruCache } from "../src/utils/cache";
+import { Logger } from "../src/utils/log";
 import {
-  // Logger
-  Logger,
-  // Cache utilities
-  LruCache,
-  // Error types
-  MonoError,
-  // Memory utilities
   allocPointerArray,
-  // String utilities
-  createError,
-  createTimer,
   ensurePointer,
   enumerateMonoHandles,
   isNativePointer,
   isValidPointer,
   pointerIsNull,
+  resolveNativePointer,
+  safeAlloc,
+  tryMakePointer,
+  unwrapInstance,
+} from "../src/utils/memory";
+import {
+  createError,
+  createTimer,
   readMonoString,
   readUtf16String,
   readUtf8String,
-  resolveNativePointer,
-  safeAlloc,
   safeStringify,
-  tryMakePointer,
-  unwrapInstance,
-  // Trace types
-  type MethodCallbacks,
-} from "../src";
+} from "../src/utils/string";
+import type { MethodCallbacks } from "../src/model/trace";
 
 import {
   TestCategory,
@@ -56,7 +52,7 @@ class MockMonoObject {
   }
 }
 
-export async function testMonoUtils(): Promise<TestResult> {
+export async function createMonoUtilsTests(): Promise<TestResult> {
   console.log("\nComprehensive Utility and Helper Function Tests:");
 
   const suite = new TestSuite("Mono Utils Complete Tests", TestCategory.STANDALONE);

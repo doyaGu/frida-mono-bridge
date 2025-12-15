@@ -22,7 +22,7 @@ import {
   TestSuite,
 } from "./test-framework";
 
-export async function testMonoModule(): Promise<TestResult> {
+export async function createMonoModuleTests(): Promise<TestResult> {
   console.log("\nComprehensive Mono Module Tests:");
 
   const suite = new TestSuite("Mono Module Complete Tests", TestCategory.MONO_DEPENDENT);

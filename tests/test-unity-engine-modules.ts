@@ -19,7 +19,7 @@ import {
   TestSuite,
 } from "./test-framework";
 
-export async function testUnityEngineModules(): Promise<TestResult> {
+export async function createUnityEngineModulesTests(): Promise<TestResult> {
   console.log("\nUnity Engine Modules Tests:");
 
   const suite = new TestSuite("Unity Engine Modules Tests", TestCategory.MONO_DEPENDENT);

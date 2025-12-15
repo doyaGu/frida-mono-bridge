@@ -25,7 +25,7 @@ import {
   TestSuite,
 } from "./test-framework";
 
-export async function testMonoDomain(): Promise<TestResult> {
+export async function createMonoDomainTests(): Promise<TestResult> {
   console.log("\nComprehensive Mono Domain Tests:");
 
   const suite = new TestSuite("Mono Domain Complete Tests", TestCategory.MONO_DEPENDENT);

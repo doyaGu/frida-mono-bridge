@@ -21,7 +21,7 @@ import {
   TestSuite,
 } from "./test-framework";
 
-export async function testDataOperations(): Promise<TestResult> {
+export async function createDataOperationsTests(): Promise<TestResult> {
   console.log("\nData Operations (Object, String, Array):");
 
   const suite = new TestSuite("Data Operations Tests", TestCategory.MONO_DEPENDENT);

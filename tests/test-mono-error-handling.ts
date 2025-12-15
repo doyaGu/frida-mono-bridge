@@ -6,7 +6,6 @@
 
 import Mono, {
   asResult,
-  Logger,
   MonoError,
   MonoErrorCodes,
   monoErrorResult,
@@ -18,6 +17,7 @@ import Mono, {
   ValidationBuilder,
   withErrorHandling,
 } from "../src";
+import { Logger } from "../src/utils/log";
 import {
   assert,
   createIntegrationTest,
@@ -32,7 +32,7 @@ import {
 /**
  * Run Mono Error Handling test suite
  */
-export async function runMonoErrorHandlingTests(): Promise<TestResult> {
+export async function createMonoErrorHandlingTests(): Promise<TestResult> {
   const suite = new TestSuite("Mono Error Handling Tests");
 
   // ============================================================================
@@ -554,4 +554,4 @@ export async function runMonoErrorHandlingTests(): Promise<TestResult> {
 }
 
 // Export for test runner
-export default runMonoErrorHandlingTests;
+export default createMonoErrorHandlingTests;

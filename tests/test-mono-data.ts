@@ -3,7 +3,9 @@
  * Complete tests for MonoArray, MonoString, and MonoObject operations
  */
 
-import Mono, { MonoObject, readUtf16String } from "../src";
+import Mono from "../src";
+import { MonoObject } from "../src/model/object";
+import { readUtf16String } from "../src/utils/string";
 import {
   assert,
   assertApiAvailable,
@@ -19,7 +21,7 @@ import {
   TestSuite,
 } from "./test-framework";
 
-export async function testMonoData(): Promise<TestResult[]> {
+export async function createMonoDataTests(): Promise<TestResult[]> {
   console.log("\nComprehensive Mono Data Operations Tests:");
 
   const suite = new TestSuite("Mono Data Operations Complete", TestCategory.MONO_DEPENDENT);

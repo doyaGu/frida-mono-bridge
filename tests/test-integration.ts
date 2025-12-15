@@ -3,21 +3,18 @@
  * Consolidated tests for Utils, Consolidated Utils, and Fluent API operations
  */
 
-import Mono, {
+import Mono, { MonoManagedExceptionError, MonoValidationError } from "../src";
+import { LruCache } from "../src/utils/cache";
+import {
   ensurePointer,
   isNativePointer,
   isValidPointer,
-  LruCache,
-  MonoManagedExceptionError,
-  MonoValidationError,
   pointerIsNull,
-  readUtf16String,
-  readUtf8String,
   safeAlloc,
-  safeStringify,
   unwrapInstance,
   unwrapInstanceRequired,
-} from "../src";
+} from "../src/utils/memory";
+import { readUtf16String, readUtf8String, safeStringify } from "../src/utils/string";
 import {
   assert,
   assertApiAvailable,
@@ -78,7 +75,7 @@ function captureManagedSubstringException(): MonoManagedExceptionError {
   );
 }
 
-export async function testIntegration(): Promise<TestResult> {
+export async function createIntegrationTests(): Promise<TestResult> {
   console.log("\nIntegration (Utils, Fluent API):");
 
   const suite = new TestSuite("Integration Tests", TestCategory.INTEGRATION);

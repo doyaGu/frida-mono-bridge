@@ -24,7 +24,7 @@ import {
   TestSuite,
 } from "./test-framework";
 
-export async function testMonoThreading(): Promise<TestResult> {
+export async function createMonoThreadingTests(): Promise<TestResult> {
   console.log("\nComprehensive Mono Threading Tests:");
 
   const suite = new TestSuite("Mono Threading Complete Tests", TestCategory.MONO_DEPENDENT);

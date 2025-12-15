@@ -18,17 +18,17 @@ import "./test-utilities";
 // ============================================================================
 // CATEGORY 1: Core Infrastructure Tests
 // ============================================================================
-import { testCoreInfrastructure } from "./test-core-infrastructure";
-import { testDataOperations } from "./test-data-operations";
-import { testIntegration } from "./test-integration";
-import { testMonoTypes } from "./test-mono-types";
-import { testSupporting } from "./test-supporting";
+import { createCoreInfrastructureTests } from "./test-core-infrastructure";
+import { createDataOperationsTests } from "./test-data-operations";
+import { createIntegrationTests } from "./test-integration";
+import { createMonoTypesTests } from "./test-mono-types";
+import { createSupportingTests } from "./test-supporting";
 
 // ============================================================================
 // CATEGORY 2: Utility Tests (STANDALONE - No Mono dependency)
 // ============================================================================
-import runMonoErrorHandlingTests from "./test-mono-error-handling";
-import { testMonoUtils } from "./test-mono-utils";
+import { createMonoErrorHandlingTests } from "./test-mono-error-handling";
+import { createMonoUtilsTests } from "./test-mono-utils";
 
 // ============================================================================
 // CATEGORY 3: Type System Tests (MONO_DEPENDENT)
@@ -43,7 +43,7 @@ import { createMonoPropertyTests } from "./test-mono-property";
 // CATEGORY 4: Runtime Object Tests (MONO_DEPENDENT)
 // ============================================================================
 import { createMonoArrayTests } from "./test-mono-array";
-import { testMonoData } from "./test-mono-data";
+import { createMonoDataTests } from "./test-mono-data";
 import { createMonoDelegateTests } from "./test-mono-delegate";
 import { createMonoObjectTests } from "./test-mono-object";
 import { createMonoStringTests } from "./test-mono-string";
@@ -51,12 +51,12 @@ import { createMonoStringTests } from "./test-mono-string";
 // ============================================================================
 // CATEGORY 5: Domain & Assembly Tests (MONO_DEPENDENT)
 // ============================================================================
-import { testMonoApi } from "./test-mono-api";
+import { createMonoApiTests } from "./test-mono-api";
 import { createMonoAssemblyTests } from "./test-mono-assembly";
-import { testMonoDomain } from "./test-mono-domain";
+import { createMonoDomainTests } from "./test-mono-domain";
 import { createMonoImageTests } from "./test-mono-image";
-import { testMonoModule } from "./test-mono-module";
-import { testMonoThreading } from "./test-mono-threading";
+import { createMonoModuleTests } from "./test-mono-module";
+import { createMonoThreadingTests } from "./test-mono-threading";
 import { createRuntimeApiTests } from "./test-runtime-api";
 
 // ============================================================================
@@ -64,52 +64,54 @@ import { createRuntimeApiTests } from "./test-runtime-api";
 // ============================================================================
 import { createFindToolTests } from "./test-find-tools";
 import { createGCToolsTests } from "./test-gc-tools";
+import { createInternalCallTests } from "./test-internal-call";
 import { createTraceToolsTests } from "./test-trace-tools";
 
 // ============================================================================
 // CATEGORY 7: Unity Integration Tests (MONO_DEPENDENT)
 // ============================================================================
-import { testUnityComponents } from "./test-unity-components";
-import { testUnityEngineModules } from "./test-unity-engine-modules";
-import { testUnityGameObject } from "./test-unity-gameobject";
+import { createUnityComponentsTests } from "./test-unity-components";
+import { createUnityEngineModulesTests } from "./test-unity-engine-modules";
+import { createUnityGameObjectTests } from "./test-unity-gameobject";
 
 // Export consolidated test modules for selective testing
 export {
+  // Core Infrastructure Tests
+  createCoreInfrastructureTests,
+  createDataOperationsTests,
+  createIntegrationTests,
+  createMonoTypesTests,
+  createSupportingTests,
+  // Utility Tests (STANDALONE)
+  createMonoErrorHandlingTests,
+  createMonoUtilsTests,
+  // Type System Tests
+  createGenericTypeTests,
+  createMonoClassTests,
+  createMonoFieldTests,
+  createMonoMethodTests,
+  createMonoPropertyTests,
+  // Runtime Object Tests
+  createMonoArrayTests,
+  createMonoDataTests,
+  createMonoDelegateTests,
+  createMonoObjectTests,
+  createMonoStringTests,
+  createRuntimeApiTests,
+  // Domain & Assembly Tests
+  createMonoApiTests,
+  createMonoAssemblyTests,
+  createMonoDomainTests,
+  createMonoImageTests,
+  createMonoModuleTests,
+  createMonoThreadingTests,
   // Advanced Feature Tests
   createFindToolTests,
   createGCToolsTests,
-  createGenericTypeTests,
-  createMonoArrayTests,
-  createMonoAssemblyTests,
-  // Type System Tests
-  createMonoClassTests,
-  createMonoDelegateTests,
-  createMonoFieldTests,
-  createMonoImageTests,
-  createMonoMethodTests,
-  createMonoObjectTests,
-  createMonoPropertyTests,
-  // Runtime Object Tests
-  createMonoStringTests,
-  createRuntimeApiTests,
+  createInternalCallTests,
   createTraceToolsTests,
-  // Core Infrastructure Tests
-  testCoreInfrastructure,
-  testDataOperations,
-  testIntegration,
-  // Domain & Assembly Tests
-  testMonoApi,
-  testMonoData,
-  testMonoDomain,
-  runMonoErrorHandlingTests as testMonoErrorHandling,
-  testMonoModule,
-  testMonoThreading,
-  testMonoTypes,
-  // Utility Tests (STANDALONE)
-  testMonoUtils,
-  testSupporting,
-  testUnityComponents,
-  testUnityEngineModules,
   // Unity Integration Tests
-  testUnityGameObject,
+  createUnityComponentsTests,
+  createUnityEngineModulesTests,
+  createUnityGameObjectTests,
 };

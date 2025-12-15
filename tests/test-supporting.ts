@@ -3,7 +3,10 @@
  * Consolidated tests for Definitions, Metadata Collections, and Logger operations
  */
 
-import Mono, { Logger, MonoDefines, MonoEnums, MonoTypeKind } from "../src";
+import Mono from "../src";
+import { MonoDefines, MonoEnums } from "../src/runtime/enums";
+import { MonoTypeKind } from "../src/model/type";
+import { Logger } from "../src/utils/log";
 import {
   assert,
   assertApiAvailable,
@@ -22,7 +25,7 @@ import {
   TestSuite,
 } from "./test-framework";
 
-export async function testSupporting(): Promise<TestResult> {
+export async function createSupportingTests(): Promise<TestResult> {
   console.log("\nSupporting Features (Definitions, Metadata, Logger):");
 
   const suite = new TestSuite("Supporting Features Tests", TestCategory.INTEGRATION);

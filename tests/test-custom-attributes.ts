@@ -9,7 +9,8 @@
  * - MonoProperty
  */
 
-import Mono, { type CustomAttribute } from "../src";
+import Mono from "../src";
+import type { CustomAttribute } from "../src/model/attribute";
 import { TestResult, assert, createMonoDependentTest } from "./test-framework";
 
 export async function createCustomAttributeTests(): Promise<TestResult[]> {

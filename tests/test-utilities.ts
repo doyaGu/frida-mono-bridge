@@ -4,7 +4,8 @@
  * This file consolidates functionality from multiple specialized helper files for consistency
  */
 
-import Mono, { readUtf16String } from "../src";
+import Mono from "../src";
+import { readUtf16String } from "../src/utils/string";
 import {
   DEFAULT_PERFORMANCE_OPTIONS,
   PerformanceMetrics,

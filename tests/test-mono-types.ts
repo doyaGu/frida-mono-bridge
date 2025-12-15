@@ -3,7 +3,8 @@
  * Consolidated tests for Domain, Assembly, and Class operations
  */
 
-import Mono, { MonoTypeKind, MonoTypeNameFormat } from "../src";
+import Mono from "../src";
+import { MonoTypeKind, MonoTypeNameFormat } from "../src/model/type";
 import {
   assert,
   assertApiAvailable,
@@ -23,7 +24,7 @@ import {
   TestSuite,
 } from "./test-framework";
 
-export async function testMonoTypes(): Promise<TestResult> {
+export async function createMonoTypesTests(): Promise<TestResult> {
   console.log("\nMono Types (Domain, Assembly, Class):");
 
   const suite = new TestSuite("Mono Types Tests", TestCategory.MONO_DEPENDENT);

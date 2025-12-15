@@ -54,7 +54,7 @@ function tryDestroyUnityObject(obj: any): void {
   }
 }
 
-export async function testUnityGameObject(): Promise<TestResult> {
+export async function createUnityGameObjectTests(): Promise<TestResult> {
   console.log("\nUnity GameObject Tests:");
 
   const suite = new TestSuite("Unity GameObject Tests", TestCategory.MONO_DEPENDENT);

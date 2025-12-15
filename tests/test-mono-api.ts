@@ -25,7 +25,7 @@ import {
 } from "./test-framework";
 import { createBasicStringTests } from "./test-utilities";
 
-export async function testMonoApi(): Promise<TestResult> {
+export async function createMonoApiTests(): Promise<TestResult> {
   console.log("\nComprehensive Mono API Tests:");
 
   const suite = new TestSuite("Mono API Complete Tests", TestCategory.MONO_DEPENDENT);

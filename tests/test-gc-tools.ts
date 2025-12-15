@@ -5,7 +5,9 @@
  * Including GC collection, handles, weak references, and pool management
  */
 
-import Mono, { GCHandle, GCHandlePool, GCUtilities, createGCUtilities } from "../src";
+import Mono from "../src";
+import { GCHandle, GCHandlePool } from "../src/runtime/gchandle";
+import { GarbageCollector, createGarbageCollector } from "../src/model/gc";
 import { TestResult, assert, assertNotNull, createMonoDependentTest, createStandaloneTest } from "./test-framework";
 
 /**
@@ -74,14 +76,14 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    createStandaloneTest("GC - GCUtilities class exists", () => {
-      assert(typeof GCUtilities === "function", "GCUtilities should be a class");
+    createStandaloneTest("GC - GarbageCollector class exists", () => {
+      assert(typeof GarbageCollector === "function", "GarbageCollector should be a class");
     }),
   );
 
   results.push(
-    createStandaloneTest("GC - createGCUtilities function exists", () => {
-      assert(typeof createGCUtilities === "function", "createGCUtilities should be a function");
+    createStandaloneTest("GC - createGarbageCollector function exists", () => {
+      assert(typeof createGarbageCollector === "function", "createGarbageCollector should be a function");
     }),
   );
 

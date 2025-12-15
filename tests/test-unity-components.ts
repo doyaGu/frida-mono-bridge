@@ -36,7 +36,7 @@ function tryGetSystemTypeObject(monoClass: any): NativePointer | null {
   }
 }
 
-export async function testUnityComponents(): Promise<TestResult> {
+export async function createUnityComponentsTests(): Promise<TestResult> {
   console.log("\nUnity Components Tests:");
 
   const suite = new TestSuite("Unity Components Tests", TestCategory.MONO_DEPENDENT);
