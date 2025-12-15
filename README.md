@@ -14,7 +14,7 @@ A TypeScript bridge that exposes the Mono runtime (Unity/Xamarin/embedded Mono) 
 - **Performance**: LRU caching, native delegate thunks, optimized invocation paths
 - **Thread-Safe**: Automatic thread attachment with proper lifecycle management
 - **Resilient**: Graceful fallbacks for unhookable methods and lazy JIT compilation
-- **Well-Tested**: Comprehensive test suite with 1000+ tests across 30+ test modules
+- **Well-Tested**: Comprehensive test suite with 1,104 tests across 36 test files
 
 ## Quick Start
 
@@ -42,6 +42,11 @@ await Mono.perform(async () => {
   // Find and invoke method
   const method = playerClass.method("Say", 1);
   const result = method.invoke(null, ["Hello"]);
+
+  // Use facade helpers for object creation
+  const str = Mono.string.new("Hello, World!");
+  const intClass = domain.class("System.Int32");
+  const intArray = Mono.array.new(intClass, 10);
 });
 ```
 
@@ -90,7 +95,12 @@ frida-mono-bridge/
 │   │   ├── thread.ts       # ThreadManager - thread attachment/lifecycle
 │   │   ├── module.ts       # Module discovery (mono-2.0-bdwgc.dll, etc.)
 │   │   ├── version.ts      # Runtime version & feature detection
-│   │   └── exports.ts      # Export resolution with aliasing support
+│   │   ├── exports.ts      # Export resolution with aliasing support
+│   │   ├── enums.ts        # Mono runtime enumerations
+│   │   ├── metadata.ts     # Metadata table access
+│   │   ├── memory.ts       # Memory subsystem utilities
+│   │   ├── gchandle.ts     # GC handle wrapper
+│   │   └── signatures.ts   # Native function signatures
 │   ├── model/              # High-level object model
 │   │   ├── domain.ts       # MonoDomain - application domain
 │   │   ├── assembly.ts     # MonoAssembly - loaded assemblies
@@ -103,22 +113,27 @@ frida-mono-bridge/
 │   │   ├── string.ts       # MonoString - string operations
 │   │   ├── array.ts        # MonoArray - array operations
 │   │   ├── delegate.ts     # MonoDelegate - delegate handling
-│   │   └── type.ts         # MonoType - type information and metadata
+│   │   ├── type.ts         # MonoType - type information and metadata
+│   │   ├── handle.ts       # MonoHandle - base handle class
+│   │   ├── reference.ts    # MonoReference - lazy loading wrapper
+│   │   ├── attribute.ts    # Custom attribute parsing
+│   │   ├── collections.ts  # Lazy collections and indexing
+│   │   ├── gc.ts           # Garbage collector utilities
+│   │   ├── trace.ts        # Method tracing and hooking
+│   │   ├── internal-call.ts # Internal call registration
+│   │   ├── method-signature.ts # Method signature parsing
+│   │   └── value-conversion.ts # Value boxing/unboxing
 │   ├── utils/              # Utility modules
-│   │   ├── find.ts         # Search utilities (classes, methods, fields)
-│   │   ├── trace.ts        # Method hooking/tracing
-│   │   ├── gc.ts           # GC utilities and handle management
 │   │   ├── errors.ts       # Error types and handling (MonoError, codes)
 │   │   ├── memory.ts       # Memory utilities (boxing, pointers, read/write)
 │   │   ├── log.ts          # Logging infrastructure (Logger class)
 │   │   ├── cache.ts        # LRU caching utilities
-│   │   ├── validation.ts   # Input validation and error builders
-│   │   └── metadata.ts     # Metadata collection and namespace grouping
+│   │   └── string.ts       # String utilities
 │   ├── mono.ts             # MonoNamespace - main fluent API facade
 │   └── index.ts            # Package entry point and exports
-├── tests/                  # Test suite (30+ modules, 1000+ tests)
-│   ├── test-*.ts           # 30 test modules covering all APIs
-│   ├── runners/            # 30 individual test runners for selective execution
+├── tests/                  # Test suite (36 test files, 1,104 tests)
+│   ├── test-*.ts           # 36 test modules covering all APIs
+│   ├── runners/            # Individual test runners for selective execution
 │   ├── test-framework.ts   # Test framework and utilities
 │   ├── test-common.ts      # Common test setup and helpers
 │   └── README.md           # Test documentation
@@ -157,20 +172,73 @@ await Mono.perform(async () => {
 Mono.detachIfExiting(); // Only detaches if thread is exiting
 ```
 
+### Facade Helpers
+
+The `Mono` namespace provides convenient helpers for creating and wrapping managed objects:
+
+```typescript
+await Mono.perform(() => {
+  // String helpers
+  const str = Mono.string.new("Hello");
+  const wrappedStr = Mono.string.wrap(ptr);
+  const maybeStr = Mono.string.tryWrap(nullablePtr); // returns null if invalid
+
+  // Array helpers
+  const intClass = Mono.domain.class("System.Int32");
+  const arr = Mono.array.new(intClass, 10);
+  const wrappedArr = Mono.array.wrap(ptr);
+
+  // Object helpers
+  const obj = Mono.object.wrap(ptr);
+  const maybeObj = Mono.object.tryWrap(nullablePtr);
+
+  // Delegate helpers
+  const delegateClass = Mono.domain.class("System.Action");
+  const del = Mono.delegate.new(delegateClass, targetObj, method);
+
+  // Method helpers
+  const method = Mono.method.find(image, "MyClass:MyMethod(int)");
+  const maybeMethod = Mono.method.tryFind(image, "NotExist:Method()"); // returns null
+
+  // Assembly/Image helpers
+  const asm = Mono.assembly.open("mscorlib");
+  const img = Mono.image.fromAssemblyPath("MyAssembly.dll");
+
+  // Class/Field/Property helpers
+  const klass = Mono.class.wrap(klassPtr);
+  const field = Mono.field.wrap(fieldPtr);
+  const prop = Mono.property.wrap(propPtr);
+
+  // Type helpers
+  const type = Mono.type.fromClass(klass);
+});
+```
+
 ### MonoNamespace Properties
 
-| Property  | Description                                                                               |
-| --------- | ----------------------------------------------------------------------------------------- |
-| `config`  | Configuration (module discovery, export aliasing, timeouts, perform mode, global install) |
-| `domain`  | Root application domain                                                                   |
-| `api`     | Low-level Mono C API wrapper (internal/advanced)                                          |
-| `module`  | Discovered Mono module info                                                               |
-| `version` | Runtime version and feature detection                                                     |
-| `exports` | Resolved native export addresses with alias support                                       |
-| `memory`  | Memory utilities (boxing/unboxing, string/array helpers, typed read/write)                |
-| `gc`      | Garbage collection utilities                                                              |
-| `find`    | Search utilities (facade submodule)                                                       |
-| `trace`   | Tracing utilities (facade submodule)                                                      |
+| Property   | Description                                                                               |
+| ---------- | ----------------------------------------------------------------------------------------- |
+| `config`   | Configuration (module discovery, export aliasing, timeouts, perform mode, global install) |
+| `domain`   | Root application domain                                                                   |
+| `api`      | Low-level Mono C API wrapper (internal/advanced)                                          |
+| `module`   | Discovered Mono module info                                                               |
+| `version`  | Runtime version and feature detection                                                     |
+| `memory`   | Memory utilities (boxing/unboxing, string/array helpers, typed read/write)                |
+| `gc`       | Garbage collection utilities                                                              |
+| `find`     | Search utilities (facade submodule)                                                       |
+| `trace`    | Tracing utilities (facade submodule)                                                      |
+| `icall`    | Internal call registration and management                                                 |
+| `array`    | Array creation and wrapping helpers                                                       |
+| `string`   | String creation and wrapping helpers                                                      |
+| `object`   | Object wrapping helpers                                                                   |
+| `delegate` | Delegate creation and wrapping helpers                                                    |
+| `method`   | Method lookup and wrapping helpers                                                        |
+| `image`    | Image loading and wrapping helpers                                                        |
+| `assembly` | Assembly loading and wrapping helpers                                                     |
+| `class`    | Class wrapping helpers                                                                    |
+| `field`    | Field wrapping helpers                                                                    |
+| `property` | Property wrapping helpers                                                                 |
+| `type`     | Type utilities and wrapping helpers                                                       |
 
 ### MonoNamespace Methods
 
@@ -251,26 +319,27 @@ import type { MonoDomain, MonoClass, MonoMethod, MonoApi } from "frida-mono-brid
 
 Notes:
 
-- v0.3.0+ no longer re-exports `runtime/`, `model/`, `utils/` as runtime values. Use facade submodules instead: `Mono.find`, `Mono.trace`, `Mono.gc`, `Mono.memory`, `Mono.exports`.
+- v0.3.0+ no longer re-exports `runtime/`, `model/`, `utils/` as runtime values. Use facade submodules instead: `Mono.find`, `Mono.trace`, `Mono.gc`, `Mono.memory`, `Mono.icall`.
+- Use facade helpers for object creation: `Mono.array`, `Mono.string`, `Mono.object`, `Mono.delegate`, `Mono.method`, `Mono.image`, `Mono.assembly`, `Mono.class`, `Mono.field`, `Mono.property`, `Mono.type`.
 - `globalThis.Mono` is installed by default on first `Mono.initialize()` / `Mono.perform()`. Disable by setting `Mono.config.installGlobal = false` before first use.
 
 ## Testing
 
-The test suite contains **1,181 individual test cases** organized into **7 categories** across **35 test files**.
+The test suite contains **1,104 individual test cases** organized into **7 categories** across **36 test files**.
 See [tests/README.md](tests/README.md) for complete documentation and [docs/API_QUALITY_REPORT.md](docs/API_QUALITY_REPORT.md) for quality metrics.
 
 ### Test Categories
 
 | Category            | Tests     | Files  | Description                                     |
 | ------------------- | --------- | ------ | ----------------------------------------------- |
-| Core Infrastructure | 213       | 5      | Module detection, type system, metadata         |
-| Utility Tests       | 95        | 3      | Standalone tests (no Mono dependency)           |
-| Type System         | 270       | 6      | MonoClass, MonoMethod, MonoField, MonoProperty  |
-| Runtime Objects     | 251       | 6      | MonoString, MonoArray, MonoDelegate, MonoObject |
-| Domain & Assembly   | 184       | 8      | MonoDomain, MonoAssembly, MonoImage, threading  |
-| Advanced Features   | 143       | 4      | Find, Trace, GC, Custom Attributes              |
-| Unity Integration   | 42        | 3      | GameObject, Components, Engine Modules          |
-| **TOTAL**           | **1,181** | **35** | Complete test coverage                          |
+| Core Infrastructure | ~115      | 5      | Module detection, type system, metadata         |
+| Utility Tests       | ~80       | 3      | Standalone tests (no Mono dependency)           |
+| Type System         | ~260      | 6      | MonoClass, MonoMethod, MonoField, MonoProperty  |
+| Runtime Objects     | ~275      | 6      | MonoString, MonoArray, MonoDelegate, MonoObject |
+| Domain & Assembly   | ~125      | 5      | MonoDomain, MonoAssembly, MonoImage, threading  |
+| Advanced Features   | ~160      | 4      | Find, Trace, GC, Internal Calls                 |
+| Unity Integration   | ~30       | 3      | GameObject, Components, Engine Modules          |
+| **TOTAL**           | **1,104** | **36** | Complete test coverage                          |
 
 ### Running Tests
 
@@ -288,8 +357,8 @@ frida -n "UnityGame.exe" -l dist/tests.js
 
 **Test Execution Model:**
 
-- **Phase 1**: Standalone tests (95 tests) - No Mono runtime required
-- **Phase 2**: Mono-dependent tests (1,086 tests) - Requires active Mono runtime
+- **Phase 1**: Standalone tests (~80 tests) - No Mono runtime required
+- **Phase 2**: Mono-dependent tests (~1,024 tests) - Requires active Mono runtime
 - **Selective Execution**: Run individual test categories for faster iteration
 - **Manual Invocation**: Tests don't auto-run; explicit execution required
 
@@ -525,6 +594,37 @@ await Mono.perform(() => {
 
   // Release all handles on cleanup
   gc.releaseAll();
+});
+```
+
+### Internal Call Registration
+
+```typescript
+await Mono.perform(() => {
+  // Register a custom internal call
+  Mono.icall.register({
+    name: "MyNamespace.MyClass::MyInternalMethod",
+    implementation: new NativeCallback(
+      (arg1, arg2) => {
+        console.log("Internal call invoked!", arg1, arg2);
+        return ptr(0);
+      },
+      "pointer",
+      ["pointer", "int32"],
+    ),
+  });
+
+  // Register multiple internal calls
+  Mono.icall.registerAll([
+    { name: "MyClass::Method1", implementation: ptr(0x12345678) },
+    { name: "MyClass::Method2", implementation: myNativeCallback },
+  ]);
+
+  // Check registration status
+  if (Mono.icall.has("MyClass::Method1")) {
+    const info = Mono.icall.get("MyClass::Method1");
+    console.log("Registered:", info?.name);
+  }
 });
 ```
 
