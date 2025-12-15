@@ -416,16 +416,11 @@ export class MonoApi {
     if (!pointerIsNull(exception)) {
       const details = this.extractExceptionDetails(exception);
       const message = details.message || `Managed exception thrown: ${details.type || "Unknown"}`;
-      raise(
-        MonoErrorCodes.MANAGED_EXCEPTION,
-        message,
-        "Inspect exception details in `error.details`",
-        {
-          exception,
-          exceptionType: details.type,
-          exceptionMessage: details.message,
-        },
-      );
+      raise(MonoErrorCodes.MANAGED_EXCEPTION, message, "Inspect exception details in `error.details`", {
+        exception,
+        exceptionType: details.type,
+        exceptionMessage: details.message,
+      });
     }
     return result;
   }

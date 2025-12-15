@@ -22,13 +22,13 @@
  */
 
 import type { MonoApi } from "../runtime/api";
+import { MonoErrorCodes, raise } from "../utils/errors";
+import { Logger } from "../utils/log";
 import type { MonoClass } from "./class";
 import type { MonoDomain } from "./domain";
 import type { MonoField } from "./field";
 import type { MonoMethod } from "./method";
 import type { MonoProperty } from "./property";
-import { Logger } from "../utils/log";
-import { MonoErrorCodes, raise } from "../utils/errors";
 
 // =============================================================================
 // TYPES
@@ -388,7 +388,11 @@ export class PerformanceTracker {
 
   private ensureNotDisposed(): void {
     if (this.disposed) {
-      raise(MonoErrorCodes.DISPOSED, "PerformanceTracker has been disposed", "Create a new PerformanceTracker instance");
+      raise(
+        MonoErrorCodes.DISPOSED,
+        "PerformanceTracker has been disposed",
+        "Create a new PerformanceTracker instance",
+      );
     }
   }
 

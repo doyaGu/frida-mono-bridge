@@ -2,8 +2,8 @@ import { MonoEnums } from "../runtime/enums";
 import { lazy } from "../utils/cache";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { MonoHandle } from "./handle";
 import { MonoClass } from "./class";
+import { MonoHandle } from "./handle";
 
 const MonoTypeEnum = MonoEnums.MonoTypeEnum;
 

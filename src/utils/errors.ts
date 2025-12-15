@@ -100,7 +100,11 @@ export function raise(
       );
       break;
     case MonoErrorCodes.RUNTIME_NOT_READY:
-      error = new MonoRuntimeNotReadyError(fullMessage, typeof details?.waitedMs === "number" ? details.waitedMs : undefined, cause);
+      error = new MonoRuntimeNotReadyError(
+        fullMessage,
+        typeof details?.waitedMs === "number" ? details.waitedMs : undefined,
+        cause,
+      );
       break;
     case MonoErrorCodes.EXPORT_NOT_FOUND:
       error = new MonoExportNotFoundError(
@@ -406,13 +410,7 @@ export class MonoMemoryError extends MonoError {
 export function monoInvariant(condition: unknown, errorFactory: () => MonoError): asserts condition {
   if (!condition) {
     const error = errorFactory();
-    raiseFrom(
-      error,
-      error.code,
-      stripMonoCodePrefix(error.message),
-      undefined,
-      error.details,
-    );
+    raiseFrom(error, error.code, stripMonoCodePrefix(error.message), undefined, error.details);
   }
 }
 

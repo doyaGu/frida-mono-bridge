@@ -3,9 +3,9 @@ import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { MonoHandle } from "./handle";
 import { MonoClass } from "./class";
 import { MonoDomain } from "./domain";
+import { MonoHandle } from "./handle";
 
 /**
  * Summary information for a MonoImage, providing essential metadata about

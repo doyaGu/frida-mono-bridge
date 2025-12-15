@@ -13,11 +13,11 @@ import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull, unwrapInstance, unwrapInstanceRequired } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
 import type { CustomAttribute } from "./attribute";
+import { createFieldAttributeContext, getCustomAttributes } from "./attribute";
+import { MonoClass } from "./class";
+import { MonoDomain } from "./domain";
 import type { MemberAccessibility } from "./handle";
 import { MonoHandle } from "./handle";
-import { MonoClass } from "./class";
-import { createFieldAttributeContext, getCustomAttributes } from "./attribute";
-import { MonoDomain } from "./domain";
 import { MonoObject } from "./object";
 import { MonoString } from "./string";
 import {

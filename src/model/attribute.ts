@@ -621,7 +621,11 @@ export function getCustomAttributes(
   }
 }
 
-export function createClassAttributeContext(api: MonoApi, classPtr: NativePointer, native: any): CustomAttributeContext {
+export function createClassAttributeContext(
+  api: MonoApi,
+  classPtr: NativePointer,
+  native: any,
+): CustomAttributeContext {
   return {
     api,
     exportName: "mono_custom_attrs_from_class",
@@ -629,7 +633,11 @@ export function createClassAttributeContext(api: MonoApi, classPtr: NativePointe
   };
 }
 
-export function createMethodAttributeContext(api: MonoApi, methodPtr: NativePointer, native: any): CustomAttributeContext {
+export function createMethodAttributeContext(
+  api: MonoApi,
+  methodPtr: NativePointer,
+  native: any,
+): CustomAttributeContext {
   return {
     api,
     exportName: "mono_custom_attrs_from_method",

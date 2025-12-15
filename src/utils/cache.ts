@@ -47,12 +47,10 @@ export class LruCache<K, V> {
     }
 
     if (this.capacity <= 0) {
-      raise(
-        MonoErrorCodes.INVALID_ARGUMENT,
-        "LRU capacity must be positive",
-        "Provide a capacity >= 1",
-        { parameter: "capacity", value: this.capacity },
-      );
+      raise(MonoErrorCodes.INVALID_ARGUMENT, "LRU capacity must be positive", "Provide a capacity >= 1", {
+        parameter: "capacity",
+        value: this.capacity,
+      });
     }
   }
 

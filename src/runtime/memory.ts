@@ -60,12 +60,9 @@ export function createMemorySubsystem(api: MonoApi): MonoNamespace.Memory {
     read(ptr: NativePointer, type: MonoNamespace.MemoryType): any {
       const kind = simpleTypeToKind[type];
       if (kind === undefined) {
-        raise(
-          MonoErrorCodes.INVALID_ARGUMENT,
-          `Unknown memory type: ${type}`,
-          `Use one of: ${knownMemoryTypes}`,
-          { type },
-        );
+        raise(MonoErrorCodes.INVALID_ARGUMENT, `Unknown memory type: ${type}`, `Use one of: ${knownMemoryTypes}`, {
+          type,
+        });
       }
       return readPrimitiveValue(ptr, kind);
     },
@@ -73,12 +70,9 @@ export function createMemorySubsystem(api: MonoApi): MonoNamespace.Memory {
     write(ptr: NativePointer, value: any, type: MonoNamespace.MemoryType): void {
       const kind = simpleTypeToKind[type];
       if (kind === undefined) {
-        raise(
-          MonoErrorCodes.INVALID_ARGUMENT,
-          `Unknown memory type: ${type}`,
-          `Use one of: ${knownMemoryTypes}`,
-          { type },
-        );
+        raise(MonoErrorCodes.INVALID_ARGUMENT, `Unknown memory type: ${type}`, `Use one of: ${knownMemoryTypes}`, {
+          type,
+        });
       }
       writePrimitiveValue(ptr, kind, value);
     },

@@ -42,7 +42,7 @@ import { GCHandle } from "./runtime/gchandle";
 import { MonoModuleInfo, waitForMonoModule } from "./runtime/module";
 import { ThreadManager } from "./runtime/thread";
 import { MonoRuntimeVersion } from "./runtime/version";
-import { MonoErrorCodes, handleMonoError, raise, raiseFrom } from "./utils/errors";
+import { handleMonoError, MonoErrorCodes, raise, raiseFrom } from "./utils/errors";
 
 import { createMemorySubsystem } from "./runtime/memory";
 
@@ -577,9 +577,10 @@ export class MonoNamespace {
         this._gc = null;
         this._tracer = null;
         this._initialized = false;
-        const message = error instanceof Error
-          ? `Failed to initialize Mono runtime: ${error.message}`
-          : `Failed to initialize Mono runtime: ${String(error)}`;
+        const message =
+          error instanceof Error
+            ? `Failed to initialize Mono runtime: ${error.message}`
+            : `Failed to initialize Mono runtime: ${String(error)}`;
         raiseFrom(error, MonoErrorCodes.INIT_FAILED, message);
       })
       .finally(() => {

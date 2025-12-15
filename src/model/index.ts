@@ -16,10 +16,10 @@
 // BASE TYPES AND UTILITIES
 // ============================================================================
 
-export * from "./handle";
-export * from "./reference";
 export * from "./attribute";
 export * from "./collections";
+export * from "./handle";
+export * from "./reference";
 
 // ============================================================================
 // CORE MONO TYPES (alphabetically ordered)
@@ -144,13 +144,13 @@ export {
 // ============================================================================
 
 export {
-  // Domain object
-  createGarbageCollector,
-  GarbageCollector,
   // Types
   CollectionReport,
+  // Domain object
+  createGarbageCollector,
   DEFAULT_GC_CONFIG,
   FinalizationInfo,
+  GarbageCollector,
   GarbageCollectorConfig,
   GenerationStats,
   HandleStats,
@@ -164,17 +164,17 @@ export {
 // ============================================================================
 
 export {
+  // Types
+  AccessTraceInfo,
   // Domain objects
   createPerformanceTracker,
   createTracer,
-  PerformanceTracker,
-  Tracer,
-  // Types
-  AccessTraceInfo,
   DEFAULT_TRACER_CONFIG,
   HookInfo,
   HookResult,
   HookStats,
+  PerformanceTracker,
+  Tracer,
   TracerConfig,
   type FieldAccessCallbacks,
   type MethodCallbacks,

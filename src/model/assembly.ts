@@ -3,9 +3,9 @@ import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { readUtf8String } from "../utils/string";
 import type { CustomAttribute } from "./attribute";
-import { MonoHandle } from "./handle";
-import { MonoClass } from "./class";
 import { createAssemblyAttributeContext, getCustomAttributes } from "./attribute";
+import { MonoClass } from "./class";
+import { MonoHandle } from "./handle";
 import { MonoImage } from "./image";
 
 /**

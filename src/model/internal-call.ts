@@ -483,11 +483,7 @@ export class InternalCallRegistrar {
    */
   private isNativeCallback(value: unknown): value is NativeCallback<any, any> {
     // NativeCallback has specific constructor name in Frida
-    return (
-      value !== null &&
-      typeof value === "object" &&
-      value.constructor?.name === "NativeCallback"
-    );
+    return value !== null && typeof value === "object" && value.constructor?.name === "NativeCallback";
   }
 }
 

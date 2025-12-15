@@ -146,12 +146,10 @@ export function pointerIsNull(
 export function ensurePointer(value: NativePointer | null | undefined, message: string): NativePointer {
   const pointer = resolveNativePointer(value);
   if (!pointer || pointer.isNull()) {
-    raise(
-      MonoErrorCodes.INVALID_ARGUMENT,
-      message || "Invalid pointer",
-      "Provide a non-null NativePointer",
-      { parameter: "pointer", value: value ?? null },
-    );
+    raise(MonoErrorCodes.INVALID_ARGUMENT, message || "Invalid pointer", "Provide a non-null NativePointer", {
+      parameter: "pointer",
+      value: value ?? null,
+    });
   }
   return pointer;
 }
@@ -274,12 +272,10 @@ function describeContext(
  */
 export function safeAlloc(size: number): NativePointer {
   if (size <= 0) {
-    raise(
-      MonoErrorCodes.INVALID_ARGUMENT,
-      "Allocation size must be positive",
-      "Provide a size > 0",
-      { parameter: "size", value: size },
-    );
+    raise(MonoErrorCodes.INVALID_ARGUMENT, "Allocation size must be positive", "Provide a size > 0", {
+      parameter: "size",
+      value: size,
+    });
   }
 
   try {
@@ -300,12 +296,10 @@ export function safeAlloc(size: number): NativePointer {
  */
 export function safeWriteMemory(pointer: NativePointer, data: ArrayBuffer | number[]): void {
   if (!isValidPointer(pointer)) {
-    raise(
-      MonoErrorCodes.INVALID_ARGUMENT,
-      "Invalid pointer for memory write",
-      "Provide a non-null NativePointer",
-      { parameter: "pointer", value: pointer },
-    );
+    raise(MonoErrorCodes.INVALID_ARGUMENT, "Invalid pointer for memory write", "Provide a non-null NativePointer", {
+      parameter: "pointer",
+      value: pointer,
+    });
   }
 
   try {

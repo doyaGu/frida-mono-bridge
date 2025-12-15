@@ -8,11 +8,11 @@
  * @module model/gc
  */
 
-import type { GCHandle } from "../runtime/gchandle";
 import { MonoApi } from "../runtime/api";
+import type { GCHandle } from "../runtime/gchandle";
 import { GCHandlePool } from "../runtime/gchandle";
-import { Logger } from "../utils/log";
 import { MonoErrorCodes, raise } from "../utils/errors";
+import { Logger } from "../utils/log";
 
 // =============================================================================
 // TYPES
@@ -97,29 +97,29 @@ const gcLogger = Logger.withTag("GC");
 
 /**
  * High-level garbage collection manager for Mono runtime.
- * 
+ *
  * Provides:
  * - Manual GC collection with generation control
  * - Memory statistics and reporting
  * - GC handle lifecycle management with pooling
  * - Finalization queue control
  * - Configuration-based limits and warnings
- * 
+ *
  * @example
  * ```typescript
  * const gc = createGarbageCollector(monoApi, {
  *   maxHandles: 5000,
  *   warnOnHighUsage: true
  * });
- * 
+ *
  * // Trigger collection and get report
  * const report = gc.collectAndReport();
  * console.log(`Freed ${report.delta} bytes in ${report.durationMs}ms`);
- * 
+ *
  * // Create handles
  * const handle = gc.createHandle(objPtr);
  * const weakHandle = gc.createWeakHandle(objPtr);
- * 
+ *
  * // Get statistics
  * console.log(gc.getMemorySummary());
  * ```
@@ -617,7 +617,7 @@ function formatBytes(bytes: number): string {
  * @param api - MonoApi instance for runtime access
  * @param config - Optional configuration overrides
  * @returns Configured GarbageCollector instance
- * 
+ *
  * @example
  * ```typescript
  * const gc = createGarbageCollector(monoApi, {
