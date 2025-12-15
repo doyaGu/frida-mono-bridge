@@ -9,11 +9,6 @@ export * from "./string";
 // Error handling
 export * from "./errors";
 
-// Mono-specific utilities
-export * from "./find";
-export * from "./gc";
-export * from "./trace";
-
 // Development and debugging
 export * from "./log";
 

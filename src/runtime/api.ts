@@ -12,7 +12,7 @@
  */
 
 import { LruCache } from "../utils/cache";
-import { MonoErrorCodes, MonoManagedExceptionError, MonoThreadError, raise } from "../utils/errors";
+import { MonoErrorCodes, raise } from "../utils/errors";
 import { allocPointerArray, pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
 import { ALL_MONO_EXPORTS, MonoApiName, MonoExportSignature, getSignature, tryGetSignature } from "./exports";
@@ -220,14 +220,16 @@ export class MonoApi {
 
   /**
    * Attach the current thread to the Mono runtime.
-   * @throws MonoThreadError if attachment fails
+   * @throws {MonoThreadError} if attachment fails
    */
   attachThread(): NativePointer {
     const rootDomain = this.getRootDomain();
     const thread = this.native.mono_thread_attach(rootDomain);
     if (pointerIsNull(thread)) {
-      throw new MonoThreadError(
-        "mono_thread_attach returned NULL. Ensure the Mono runtime is initialised before attaching threads",
+      raise(
+        MonoErrorCodes.THREAD_ATTACH_FAILED,
+        "mono_thread_attach returned NULL",
+        "Ensure the Mono runtime is initialised before attaching threads",
       );
     }
     return thread;
@@ -414,7 +416,16 @@ export class MonoApi {
     if (!pointerIsNull(exception)) {
       const details = this.extractExceptionDetails(exception);
       const message = details.message || `Managed exception thrown: ${details.type || "Unknown"}`;
-      throw new MonoManagedExceptionError(message, exception, details.type, details.message, undefined);
+      raise(
+        MonoErrorCodes.MANAGED_EXCEPTION,
+        message,
+        "Inspect exception details in `error.details`",
+        {
+          exception,
+          exceptionType: details.type,
+          exceptionMessage: details.message,
+        },
+      );
     }
     return result;
   }
@@ -851,7 +862,7 @@ export class MonoApi {
 
   /**
    * Get a native function, throwing if not found.
-   * @throws MonoExportNotFoundError if export not found
+   * @throws {MonoExportNotFoundError} if export not found
    */
   getNativeFunction(name: MonoApiName): NativeFunction<NativeFunctionReturnValue, NativeFunctionArgumentValue[]> {
     this.ensureNotDisposed();
@@ -898,7 +909,7 @@ export class MonoApi {
 
   /**
    * Resolve an export address, throwing if not found.
-   * @throws MonoExportNotFoundError if export not found
+   * @throws {MonoExportNotFoundError} if export not found
    */
   resolveAddress(name: MonoApiName, signature: MonoExportSignature = getSignature(name)): NativePointer {
     const address = this.tryResolveAddress(name, signature);
@@ -915,7 +926,6 @@ export class MonoApi {
 
   /**
    * Get the resolved address for an export by name.
-   * This is a public accessor for building the Mono.exports proxy.
    *
    * @param name Export name
    * @returns Resolved address or null if not found

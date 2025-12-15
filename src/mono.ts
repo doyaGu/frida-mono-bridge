@@ -1,101 +1,449 @@
 /**
  * Global Mono namespace - Main entry point for frida-mono-bridge
+ *
+ * This module provides the unified Mono facade for all runtime interactions.
+ * All functionality is accessed through the `Mono` singleton instance.
+ *
+ * @module mono
+ *
+ * @example
+ * ```typescript
+ * import { Mono } from "frida-mono-bridge";
+ *
+ * await Mono.perform(() => {
+ *   // Access domain and assemblies
+ *   const assemblies = Mono.domain.assemblies;
+ *
+ *   // Find classes
+ *   const Player = Mono.find.classExact("Game.Player");
+ *
+ *   // Hook methods
+ *   Mono.trace.method(Player.method("Update"), {
+ *     onEnter() { console.log("Player.Update called"); }
+ *   });
+ * });
+ * ```
  */
 
 import { MonoArray } from "./model/array";
-import type { MonoClass } from "./model/class";
+import { MonoAssembly } from "./model/assembly";
+import { MonoClass } from "./model/class";
+import { MonoDelegate } from "./model/delegate";
 import { MonoDomain } from "./model/domain";
+import { MonoField } from "./model/field";
 import { MonoImage } from "./model/image";
 import { MonoMethod } from "./model/method";
+import { MonoObject } from "./model/object";
+import { MonoProperty } from "./model/property";
 import { MonoString } from "./model/string";
+import { MonoType } from "./model/type";
 import { createMonoApi, MonoApi } from "./runtime/api";
-import { ALL_MONO_EXPORTS } from "./runtime/exports";
 import { GCHandle } from "./runtime/gchandle";
 import { MonoModuleInfo, waitForMonoModule } from "./runtime/module";
 import { ThreadManager } from "./runtime/thread";
 import { MonoRuntimeVersion } from "./runtime/version";
-import { MonoErrorCodes, MonoInitializationError, raise } from "./utils/errors";
+import { MonoErrorCodes, handleMonoError, raise, raiseFrom } from "./utils/errors";
 
 import { createMemorySubsystem } from "./runtime/memory";
 
-// Import utilities
-import * as Find from "./utils/find";
-import { GCUtilities } from "./utils/gc";
-import * as Trace from "./utils/trace";
+// Import domain objects from model
+import { GarbageCollector } from "./model/gc";
+import { FieldAccessCallbacks, MethodCallbacks, PropertyAccessCallbacks, Tracer } from "./model/trace";
+
+// Import internal call registrar
+import {
+  createInternalCallRegistrar,
+  DuplicatePolicy,
+  InternalCallRegistrar,
+  type InternalCallDefinition,
+  type InternalCallRegistrationInfo,
+  type InternalCallRegistrationOptions,
+} from "./model/internal-call";
 
 /**
- * Main Mono namespace
- * This is the primary entry point for all Mono runtime interactions
+ * Primary entry point for all Mono runtime interactions.
+ *
+ * Most consumers should only interact with the exported `Mono` singleton.
+ *
+ * Thread-safety and lifecycle:
+ * - Use `await Mono.perform(...)` for almost all operations; it guarantees
+ *   runtime readiness and a thread attachment context.
+ * - `Mono.initialize()` only waits for module discovery + root domain readiness.
+ *   It does NOT attach the current thread.
+ * - Accessing getters synchronously before initialization completes will throw
+ *   a `MonoError` with code `RUNTIME_NOT_READY`.
+ *
+ * Global installation:
+ * - By default, `Mono` is assigned to `globalThis.Mono` on first initialization.
+ *   Disable via `Mono.config.installGlobal = false`.
+ *
+ * @example
+ * ```typescript
+ * import { Mono } from "frida-mono-bridge";
+ *
+ * await Mono.perform(() => {
+ *   const klass = Mono.find.classExact("Game.Player");
+ *   if (!klass) return;
+ *
+ *   Mono.trace.classAll(klass, {
+ *     onEnter(method) {
+ *       console.log("enter", method.name);
+ *     },
+ *   });
+ * });
+ * ```
  */
 export class MonoNamespace {
+  // ============================================================================
+  // PRIVATE STATE
+  // ============================================================================
+
+  // Core runtime state
   private _module: MonoModuleInfo | null = null;
   private _api: MonoApi | null = null;
   private _domain: MonoDomain | null = null;
   private _version: MonoRuntimeVersion | null = null;
-  private _gcUtils: GCUtilities | null = null;
-  private _exports: MonoNamespace.Exports | null = null;
-  private _memory: MonoNamespace.Memory | null = null;
   private _initialized = false;
   private _initializing: Promise<boolean> | null = null;
   private _unloadHookInstalled = false;
   private _globalInstalled = false;
 
+  // Subsystem caches
+  private _gc: GarbageCollector | null = null;
+  private _tracer: Tracer | null = null;
+  private _icallRegistrar: InternalCallRegistrar | null = null;
+  private _memory: MonoNamespace.Memory | null = null;
+  private _find: MonoNamespace.Find | null = null;
+  private _traceSubsystem: MonoNamespace.Trace | null = null;
+  private _gcSubsystem: MonoNamespace.GC | null = null;
+  private _icall: MonoNamespace.ICall | null = null;
+
+  // ============================================================================
+  // FACADE HELPERS
+  // ============================================================================
+
   /**
-   * Minimal facade helpers.
-   * These intentionally wrap internal model statics so consumers/tests don't
-   * need to import from src/model/*.
+   * Facade helpers wrap internal model statics for convenience.
+   * Consumers don't need to import from src/model/*.
+   *
+   * These provide factory methods for creating managed objects and
+   * performing common operations without direct model imports.
+   */
+
+  /**
+   * Array creation and utilities.
+   * @example
+   * ```typescript
+   * const intArray = Mono.array.new(intClass, 10);
+   * ```
    */
   readonly array = {
+    /** Create a new managed array */
     new: <T = any>(elementClass: MonoClass, length: number): MonoArray<T> => {
       return MonoArray.new(this.api, elementClass, length);
     },
+
+    /** Wrap an existing array pointer */
+    wrap: <T = any>(ptr: NativePointer): MonoArray<T> => {
+      return new MonoArray<T>(this.api, ptr);
+    },
+
+    /** Try to wrap an existing array pointer */
+    tryWrap: <T = any>(ptr: NativePointer | null | undefined): MonoArray<T> | null => {
+      if (!ptr || ptr.isNull()) {
+        return null;
+      }
+      return new MonoArray<T>(this.api, ptr);
+    },
   };
 
+  /**
+   * String creation and utilities.
+   * @example
+   * ```typescript
+   * const str = Mono.string.new("Hello, World!");
+   * ```
+   */
   readonly string = {
+    /** Create a new managed string */
     new: (value: string): MonoString => {
       return MonoString.new(this.api, value);
     },
+
+    /** Wrap an existing string pointer */
+    wrap: (ptr: NativePointer): MonoString => {
+      return new MonoString(this.api, ptr);
+    },
+
+    /** Try to wrap an existing string pointer */
+    tryWrap: (ptr: NativePointer | null | undefined): MonoString | null => {
+      if (!ptr || ptr.isNull()) {
+        return null;
+      }
+      return new MonoString(this.api, ptr);
+    },
   };
 
+  /**
+   * Object creation and utilities.
+   * @example
+   * ```typescript
+   * const obj = Mono.object.wrap(ptr);
+   * const klassObj = domain.class("MyClass").newInstance();
+   * ```
+   */
+  readonly object = {
+    /** Wrap an existing native pointer as MonoObject */
+    wrap: (ptr: NativePointer): MonoObject => {
+      return new MonoObject(this.api, ptr);
+    },
+
+    /** Try to wrap an existing object pointer */
+    tryWrap: (ptr: NativePointer | null | undefined): MonoObject | null => {
+      if (!ptr || ptr.isNull()) {
+        return null;
+      }
+      return new MonoObject(this.api, ptr);
+    },
+  };
+
+  /**
+   * Delegate creation and utilities.
+   * @example
+   * ```typescript
+   * const del = Mono.delegate.new(delegateClass, instance, method);
+   * ```
+   */
+  readonly delegate = {
+    /** Create a delegate from a method */
+    new: (delegateClass: MonoClass, target: MonoObject | null, method: MonoMethod): MonoDelegate => {
+      return MonoDelegate.new(this.api, delegateClass, target, method);
+    },
+    /** Wrap an existing delegate pointer */
+    wrap: (ptr: NativePointer): MonoDelegate => {
+      return new MonoDelegate(this.api, ptr);
+    },
+
+    /** Try to wrap an existing delegate pointer */
+    tryWrap: (ptr: NativePointer | null | undefined): MonoDelegate | null => {
+      if (!ptr || ptr.isNull()) {
+        return null;
+      }
+      return new MonoDelegate(this.api, ptr);
+    },
+  };
+
+  /**
+   * Method lookup and utilities.
+   * @example
+   * ```typescript
+   * const method = Mono.method.find(image, "MyClass:MyMethod(int)");
+   * ```
+   */
   readonly method = {
+    /** Find a method by descriptor */
     find: (image: MonoImage, descriptor: string): MonoMethod => {
       return MonoMethod.find(this.api, image, descriptor);
     },
+    /** Try to find a method, returns null if not found */
+    tryFind: (image: MonoImage, descriptor: string): MonoMethod | null => {
+      return MonoMethod.tryFind(this.api, image, descriptor);
+    },
+
+    /** Wrap an existing method pointer */
+    wrap: (ptr: NativePointer): MonoMethod => {
+      return new MonoMethod(this.api, ptr);
+    },
+
+    /** Try to wrap an existing method pointer */
+    tryWrap: (ptr: NativePointer | null | undefined): MonoMethod | null => {
+      if (!ptr || ptr.isNull()) {
+        return null;
+      }
+      return new MonoMethod(this.api, ptr);
+    },
   };
 
+  /**
+   * Image/Assembly loading and utilities.
+   * @example
+   * ```typescript
+   * const image = Mono.image.fromAssemblyPath("MyAssembly.dll");
+   * ```
+   */
   readonly image = {
+    /** Load an image from assembly path */
     fromAssemblyPath: (path: string, domain: MonoDomain = this.domain): MonoImage => {
       return MonoImage.fromAssemblyPath(this.api, path, domain);
     },
+
+    /** Wrap an existing image pointer */
+    wrap: (ptr: NativePointer): MonoImage => {
+      return new MonoImage(this.api, ptr);
+    },
+
+    /** Try to wrap an existing image pointer */
+    tryWrap: (ptr: NativePointer | null | undefined): MonoImage | null => {
+      if (!ptr || ptr.isNull()) {
+        return null;
+      }
+      return new MonoImage(this.api, ptr);
+    },
   };
+
+  /**
+   * Assembly loading and utilities.
+   * @example
+   * ```typescript
+   * const asm = Mono.assembly.open("Assembly-CSharp");
+   * const img = asm.image;
+   * ```
+   */
+  readonly assembly = {
+    /** Open/load an assembly in a domain */
+    open: (nameOrPath: string, domain: MonoDomain = this.domain): MonoAssembly => {
+      return domain.assemblyOpen(nameOrPath);
+    },
+
+    /** Wrap an existing assembly pointer */
+    wrap: (ptr: NativePointer): MonoAssembly => {
+      return new MonoAssembly(this.api, ptr);
+    },
+
+    /** Try to wrap an existing assembly pointer */
+    tryWrap: (ptr: NativePointer | null | undefined): MonoAssembly | null => {
+      if (!ptr || ptr.isNull()) {
+        return null;
+      }
+      return new MonoAssembly(this.api, ptr);
+    },
+  };
+
+  /**
+   * Class utilities.
+   * @example
+   * ```typescript
+   * const klass = Mono.domain.class("Game.Player");
+   * const wrapped = Mono.class.wrap(klass.pointer);
+   * ```
+   */
+  readonly class = {
+    /** Wrap an existing class pointer */
+    wrap: (ptr: NativePointer): MonoClass => {
+      return new MonoClass(this.api, ptr);
+    },
+
+    /** Try to wrap an existing class pointer */
+    tryWrap: (ptr: NativePointer | null | undefined): MonoClass | null => {
+      if (!ptr || ptr.isNull()) {
+        return null;
+      }
+      return new MonoClass(this.api, ptr);
+    },
+  };
+
+  /**
+   * Field utilities.
+   */
+  readonly field = {
+    /** Wrap an existing field pointer */
+    wrap: <T = any>(ptr: NativePointer): MonoField<T> => {
+      return new MonoField<T>(this.api, ptr);
+    },
+
+    /** Try to wrap an existing field pointer */
+    tryWrap: <T = any>(ptr: NativePointer | null | undefined): MonoField<T> | null => {
+      if (!ptr || ptr.isNull()) {
+        return null;
+      }
+      return new MonoField<T>(this.api, ptr);
+    },
+  };
+
+  /**
+   * Property utilities.
+   */
+  readonly property = {
+    /** Wrap an existing property pointer */
+    wrap: <TValue = any>(ptr: NativePointer): MonoProperty<TValue> => {
+      return new MonoProperty<TValue>(this.api, ptr);
+    },
+
+    /** Try to wrap an existing property pointer */
+    tryWrap: <TValue = any>(ptr: NativePointer | null | undefined): MonoProperty<TValue> | null => {
+      if (!ptr || ptr.isNull()) {
+        return null;
+      }
+      return new MonoProperty<TValue>(this.api, ptr);
+    },
+  };
+
+  /**
+   * Type utilities and inspection.
+   * @example
+   * ```typescript
+   * const type = Mono.type.fromClass(myClass);
+   * console.log(type.fullName);
+   * ```
+   */
+  readonly type = {
+    /** Get MonoType from a class */
+    fromClass: (klass: MonoClass): MonoType => {
+      const typePtr = this.api.native.mono_class_get_type(klass.pointer);
+      return new MonoType(this.api, typePtr);
+    },
+    /** Wrap an existing type pointer */
+    wrap: (ptr: NativePointer): MonoType => {
+      return new MonoType(this.api, ptr);
+    },
+
+    /** Try to wrap an existing type pointer */
+    tryWrap: (ptr: NativePointer | null | undefined): MonoType | null => {
+      if (!ptr || ptr.isNull()) {
+        return null;
+      }
+      return new MonoType(this.api, ptr);
+    },
+  };
+
+  // ============================================================================
+  // CONFIGURATION
+  // ============================================================================
 
   /**
    * Runtime configuration.
    * Values are mutable and read at initialization time.
+   *
+   * Note: Changing these values after initialization will not affect the already
+   * initialized runtime unless you fully dispose and re-initialize.
    */
   readonly config: MonoNamespace.Config = {
+    /**
+     * Target Mono module name(s) to wait for.
+     * If undefined, the bridge tries to auto-detect a Mono module.
+     */
     moduleName: undefined,
-    exports: undefined,
+
+    /** Maximum time to wait for module discovery + root domain readiness. */
     initializeTimeoutMs: 30_000,
+
+    /** Emit a warning if initialization takes longer than this threshold. */
     warnAfterMs: 10_000,
+
+    /** Whether to assign `globalThis.Mono = Mono` on first initialization. */
     installGlobal: true,
+
+    /** Default log level used by internal components. */
     logLevel: "info",
+
+    /** Default perform mode used by `perform()` when not specified. */
     performMode: "bind",
   };
 
-  /**
-   * Execute code with guaranteed thread attachment and runtime initialization
-   * This is the recommended way to interact with the Mono runtime
-   *
-   * @param callback Function to execute with Mono runtime ready
-   * @returns Result of the callback
-   *
-   * @example
-   * Mono.perform(() => {
-   *   const Player = Mono.domain.class("Game.Player");
-   *   console.log(Player.methods.map(m => m.name));
-   * });
-   */
+  // ============================================================================
+  // PUBLIC API - CORE METHODS
+  // ============================================================================
+
   /**
    * Execute code with guaranteed thread attachment and runtime initialization.
    * This is the **only recommended way** to interact with the Mono runtime.
@@ -123,7 +471,11 @@ export class MonoNamespace {
     await this.initialize();
 
     if (!this._api) {
-      throw new MonoInitializationError("Mono API not initialized");
+      raise(
+        MonoErrorCodes.INIT_FAILED,
+        "Mono API not initialized",
+        "Call `await Mono.initialize()` or wrap your code in `await Mono.perform(...)`",
+      );
     }
 
     const threadManager = this._api._threadManager;
@@ -157,9 +509,9 @@ export class MonoNamespace {
     } catch (error: any) {
       // Rethrow on next tick to preserve visibility in Frida.
       Script.nextTick(_ => {
-        throw _;
+        raiseFrom(_, MonoErrorCodes.UNKNOWN, "Unhandled error in Mono.perform callback");
       }, error);
-      return Promise.reject<T>(error);
+      return Promise.reject<T>(handleMonoError(error));
     } finally {
       // Step 6: Handle mode-specific cleanup
       if (mode === "free" && attachedByBridge) {
@@ -178,15 +530,13 @@ export class MonoNamespace {
 
   /**
    * Initializes the Mono runtime, waiting for the module and root domain to become ready.
-   */
-  /**
-   * Initializes the Mono runtime, waiting for the module and root domain to become ready.
    *
    * **Important**: This method only waits for module discovery and runtime readiness.
    * It does NOT attach the current thread. Use `Mono.perform()` for thread-safe operations.
    *
    * @param _blocking Reserved for future use
    * @returns `true` if initialization was performed, `false` if already initialized
+   * @throws {MonoInitializationError} If module discovery or runtime readiness fails
    */
   async initialize(_blocking = false): Promise<boolean> {
     this.maybeInstallGlobal();
@@ -224,11 +574,13 @@ export class MonoNamespace {
         this._api = null;
         this._domain = null;
         this._version = null;
-        this._gcUtils = null;
+        this._gc = null;
+        this._tracer = null;
         this._initialized = false;
-        throw error instanceof Error
-          ? new MonoInitializationError(`Failed to initialize Mono runtime: ${error.message}`, error)
-          : new MonoInitializationError(`Failed to initialize Mono runtime: ${String(error)}`);
+        const message = error instanceof Error
+          ? `Failed to initialize Mono runtime: ${error.message}`
+          : `Failed to initialize Mono runtime: ${String(error)}`;
+        raiseFrom(error, MonoErrorCodes.INIT_FAILED, message);
       })
       .finally(() => {
         this._initializing = null;
@@ -252,6 +604,10 @@ export class MonoNamespace {
       // ignore
     }
   }
+
+  // ============================================================================
+  // PUBLIC API - GETTERS
+  // ============================================================================
 
   /**
    * Get the current application domain
@@ -283,31 +639,6 @@ export class MonoNamespace {
   get module(): MonoModuleInfo {
     this.ensureInitializedSync();
     return this._module!;
-  }
-
-  /**
-   * Get resolved native exports with user alias support.
-   * Supports `Mono.config.exports` override: user > built-in aliases > default names.
-   *
-   * @example
-   * ```typescript
-   * // Check if an export is available
-   * const rootDomain = Mono.exports.mono_get_root_domain;
-   * if (rootDomain) {
-   *   console.log(`mono_get_root_domain @ ${rootDomain}`);
-   * }
-   *
-   * // Get all available exports
-   * console.log(Object.keys(Mono.exports));
-   * ```
-   */
-  get exports(): MonoNamespace.Exports {
-    this.ensureInitializedSync();
-
-    if (!this._exports) {
-      this._exports = this.buildExportsProxy();
-    }
-    return this._exports;
   }
 
   /**
@@ -355,268 +686,71 @@ export class MonoNamespace {
   get gc(): MonoNamespace.GC {
     this.ensureInitializedSync();
 
-    if (!this._gcUtils) {
-      this._gcUtils = new GCUtilities(this._api!);
+    if (!this._gcSubsystem) {
+      if (!this._gc) {
+        this._gc = new GarbageCollector(this._api!);
+      }
+      this._gcSubsystem = this.buildGCSubsystem(this._gc);
     }
 
-    const gcUtils = this._gcUtils;
-
-    // Return GC utilities object
-    return {
-      /**
-       * Force a garbage collection
-       * @param generation GC generation to collect (0-2, or -1 for all)
-       */
-      collect: (generation = -1) => gcUtils.collect(generation),
-
-      /**
-       * Get the maximum GC generation
-       */
-      get maxGeneration() {
-        return gcUtils.maxGeneration;
-      },
-
-      /**
-       * Create a GC handle for an object (prevents garbage collection)
-       */
-      handle: (obj: NativePointer, pinned = false) => gcUtils.handle(obj, pinned),
-
-      /**
-       * Create a weak GC handle (allows garbage collection)
-       */
-      weakHandle: (obj: NativePointer, trackResurrection = false) => gcUtils.weakHandle(obj, trackResurrection),
-
-      /**
-       * Release a specific GC handle
-       */
-      releaseHandle: (handle: GCHandle) => gcUtils.releaseHandle(handle),
-
-      /**
-       * Release all GC handles
-       */
-      releaseAll: () => gcUtils.releaseAll(),
-
-      /**
-       * Get current memory statistics
-       */
-      get stats() {
-        return gcUtils.getMemoryStats();
-      },
-
-      /**
-       * Get current memory statistics (alias)
-       */
-      getMemoryStats: () => gcUtils.getMemoryStats(),
-
-      /**
-       * Get the number of active GC handles
-       */
-      getActiveHandleCount: () => gcUtils.getActiveHandleCount(),
-
-      /**
-       * Get statistics for each GC generation
-       */
-      getGenerationStats: () => gcUtils.getGenerationStats(),
-
-      /**
-       * Get a formatted memory summary string
-       */
-      getMemorySummary: () => gcUtils.getMemorySummary(),
-
-      /**
-       * Check if a weak handle's target has been collected
-       */
-      isCollected: (handle: GCHandle) => gcUtils.isCollected(handle),
-
-      /**
-       * Perform a full GC and return memory delta
-       * Useful for identifying memory leaks
-       */
-      collectAndReport: () => gcUtils.collectAndReport(),
-
-      /**
-       * Check the finalization queue status
-       */
-      getFinalizationQueueInfo: () => gcUtils.getFinalizationQueueInfo(),
-
-      /**
-       * Request finalization to run (if available)
-       */
-      requestFinalization: () => gcUtils.requestFinalization(),
-
-      /**
-       * Wait for pending finalizers (if supported)
-       * @param timeout Maximum time to wait in milliseconds (0 = no wait, -1 = infinite)
-       */
-      waitForPendingFinalizers: (timeout = 0) => gcUtils.waitForPendingFinalizers(timeout),
-
-      /**
-       * Suppress finalization for an object (if supported)
-       * @param objectPtr Pointer to the managed object
-       */
-      suppressFinalize: (objectPtr: NativePointer) => gcUtils.suppressFinalize(objectPtr),
-    };
+    return this._gcSubsystem;
   }
 
   /**
    * Search utilities for finding classes, methods, fields
-   *
-   * @example
-   * // Find all Player classes
-   * const players = Mono.find.classes("*Player*");
-   *
-   * // Find methods by pattern
-   * const attacks = Mono.find.methods("*Attack*");
    */
   get find(): MonoNamespace.Find {
     this.ensureInitializedSync();
-    const api = this._api!;
 
-    return {
-      /**
-       * Find classes by name pattern
-       * @param pattern Wildcard pattern (* for any, ? for single char) or regex
-       * @param options Search options (regex mode, case sensitivity, limit)
-       */
-      classes: (pattern: string, options?: Find.FindOptions) => Find.classes(api, pattern, options),
+    if (!this._find) {
+      this._find = this.buildFindSubsystem(this._api!);
+    }
 
-      /**
-       * Find methods by name pattern
-       * @param pattern Wildcard pattern or regex
-       * @param options Search options
-       */
-      methods: (pattern: string, options?: Find.FindOptions) => Find.methods(api, pattern, options),
-
-      /**
-       * Find fields by name pattern
-       * @param pattern Wildcard pattern or regex
-       * @param options Search options
-       */
-      fields: (pattern: string, options?: Find.FindOptions) => Find.fields(api, pattern, options),
-
-      /**
-       * Find properties by name pattern
-       * @param pattern Wildcard pattern or regex
-       * @param options Search options
-       */
-      properties: (pattern: string, options?: Find.FindOptions) => Find.properties(api, pattern, options),
-
-      /**
-       * Find a class by exact full name (namespace.class)
-       * @param fullName Exact full class name
-       */
-      classExact: (fullName: string) => Find.classExact(api, fullName),
-    };
+    return this._find;
   }
 
   /**
    * Tracing utilities for method interception
-   *
-   * @example
-   * // Hook a method
-   * const detach = Mono.trace.method(myMethod, {
-   *   onEnter(args) { console.log("called"); }
-   * });
-   *
-   * // Hook all methods in a class
-   * const detach = Mono.trace.classAll(myClass, callbacks);
    */
   get trace(): MonoNamespace.Trace {
     this.ensureInitializedSync();
-    const api = this._api!;
 
-    return {
-      /**
-       * Hook a single method
-       * @throws if method cannot be compiled (not yet JIT-compiled, abstract, etc.)
-       */
-      method: Trace.method,
+    if (!this._traceSubsystem) {
+      if (!this._tracer) {
+        this._tracer = new Tracer(this._api!);
+      }
+      this._traceSubsystem = this.buildTraceSubsystem(this._tracer);
+    }
 
-      /**
-       * Try to hook a method, returning null on failure
-       * Safer alternative that doesn't throw on non-JIT-compiled methods
-       */
-      tryMethod: Trace.tryMethod,
-
-      /**
-       * Hook a method with extended context access (InvocationContext)
-       */
-      methodExtended: Trace.methodExtended,
-
-      /**
-       * Try to hook with extended context, returning null on failure
-       */
-      tryMethodExtended: Trace.tryMethodExtended,
-
-      /**
-       * Hook all methods in a class
-       */
-      classAll: Trace.classAll,
-
-      /**
-       * Hook methods by pattern
-       * @param pattern Wildcard pattern for method names
-       */
-      methodsByPattern: (pattern: string, callbacks: Trace.MethodCallbacks) =>
-        Trace.methodsByPattern(api, pattern, callbacks),
-
-      /**
-       * Hook all methods in classes matching pattern
-       * @param pattern Wildcard pattern for class names
-       */
-      classesByPattern: (pattern: string, callbacks: Trace.MethodCallbacks) =>
-        Trace.classesByPattern(api, pattern, callbacks),
-
-      /**
-       * Replace a method's return value
-       */
-      replaceReturnValue: Trace.replaceReturnValue,
-
-      /**
-       * Try to replace return value, returning null on failure
-       */
-      tryReplaceReturnValue: Trace.tryReplaceReturnValue,
-
-      /**
-       * Trace field access (read/write) via property accessors
-       * @returns detach function or null if field cannot be traced
-       */
-      field: Trace.field,
-
-      /**
-       * Trace fields matching a pattern
-       */
-      fieldsByPattern: (pattern: string, callbacks: Trace.FieldAccessCallbacks) =>
-        Trace.fieldsByPattern(api, pattern, callbacks),
-
-      /**
-       * Trace property access (get/set)
-       */
-      property: Trace.propertyTrace,
-
-      /**
-       * Trace properties matching a pattern
-       */
-      propertiesByPattern: (pattern: string, callbacks: Trace.PropertyAccessCallbacks) =>
-        Trace.propertiesByPattern(api, pattern, callbacks),
-
-      /**
-       * Create a performance tracker for method timing
-       */
-      createPerformanceTracker: Trace.createPerformanceTracker,
-
-      /**
-       * Hook a method with call stack capture and timing
-       */
-      methodWithCallStack: Trace.methodWithCallStack,
-    };
+    return this._traceSubsystem;
   }
+
+  /**
+   * Internal call registration utilities.
+   * Register native functions callable from managed code.
+   */
+  get icall(): MonoNamespace.ICall {
+    this.ensureInitializedSync();
+
+    if (!this._icall) {
+      if (!this._icallRegistrar) {
+        this._icallRegistrar = createInternalCallRegistrar(this._api!);
+      }
+      this._icall = this.buildICallSubsystem(this._icallRegistrar);
+    }
+
+    return this._icall;
+  }
+
+  // ============================================================================
+  // PRIVATE HELPERS
+  // ============================================================================
 
   /**
    * Ensure the runtime is initialized, auto-triggering initialize() if needed.
    *
    * @internal Called automatically when accessing core getters
-   * @throws {MonoInitializationError} if initialization fails
+   * @throws {MonoRuntimeNotReadyError} If runtime is not ready yet
    */
   private ensureInitializedSync(): void {
     if (this._initialized) {
@@ -651,48 +785,6 @@ export class MonoNamespace {
   }
 
   /**
-   * Build the exports proxy object with user config override support.
-   * Priority: Mono.config.exports > built-in aliases > default export name
-   * @internal
-   */
-  private buildExportsProxy(): MonoNamespace.Exports {
-    const api = this._api!;
-    const moduleInfo = this._module!;
-    const userOverrides = this.config.exports ?? {};
-    const moduleHandle = Process.findModuleByName(moduleInfo.name);
-
-    const resolvedExports: Record<string, NativePointer | null> = {};
-
-    // Build exports map with override support
-    for (const exportName of ALL_MONO_EXPORTS) {
-      // Check user override first
-      const userAlias = userOverrides[exportName];
-      if (userAlias && moduleHandle) {
-        const aliases = Array.isArray(userAlias) ? userAlias : [userAlias];
-        let resolved: NativePointer | null = null;
-        for (const alias of aliases) {
-          const addr = moduleHandle.findExportByName(alias);
-          if (addr && !addr.isNull()) {
-            resolved = addr;
-            break;
-          }
-        }
-        resolvedExports[exportName] = resolved;
-      } else {
-        // Use api's resolution (includes built-in aliases)
-        try {
-          const addr = api.getExportAddress(exportName);
-          resolvedExports[exportName] = addr;
-        } catch {
-          resolvedExports[exportName] = null;
-        }
-      }
-    }
-
-    return resolvedExports as MonoNamespace.Exports;
-  }
-
-  /**
    * Build the memory subsystem with unified read/write/box/unbox/string/array support.
    * All memory operations delegate to type.ts for consistency.
    * @internal
@@ -701,6 +793,10 @@ export class MonoNamespace {
     return createMemorySubsystem(this._api!);
   }
 
+  /**
+   * Installs best-effort cleanup on script unload.
+   * Only used for `perform(mode="bind")`.
+   */
   private installUnloadCleanup(): void {
     if (this._unloadHookInstalled) {
       return;
@@ -723,6 +819,10 @@ export class MonoNamespace {
     }
   }
 
+  // ============================================================================
+  // PUBLIC API - LIFECYCLE METHODS
+  // ============================================================================
+
   /**
    * Clean up all resources and release all references.
    * Should be called when done with the Mono runtime.
@@ -731,6 +831,7 @@ export class MonoNamespace {
    * - All GC handles are released
    * - All caches are cleared
    * - All threads are detached
+   * - Internal call registrar is cleared
    * - The instance cannot be reused without re-initialization
    *
    * @example
@@ -740,23 +841,46 @@ export class MonoNamespace {
    * ```
    */
   dispose(): void {
+    // Dispose tracer (detaches all hooks)
+    if (this._tracer) {
+      this._tracer.dispose();
+    }
+
+    // Dispose GC (releases all handles)
+    if (this._gc) {
+      this._gc.dispose();
+    }
+
+    // Clear internal call registrar tracking
+    if (this._icallRegistrar) {
+      this._icallRegistrar.clear();
+    }
+
+    // Dispose API (detaches threads)
     if (this._api) {
       this._api.dispose();
     }
 
-    if (this._gcUtils) {
-      this._gcUtils.releaseAll();
-    }
-
+    // Clear all state
     this._initialized = false;
     this._initializing = null;
+    this._unloadHookInstalled = false;
+
+    // Clear core state
     this._module = null;
     this._api = null;
     this._domain = null;
     this._version = null;
-    this._gcUtils = null;
-    this._exports = null;
+
+    // Clear subsystem caches
+    this._gc = null;
+    this._tracer = null;
+    this._icallRegistrar = null;
     this._memory = null;
+    this._find = null;
+    this._traceSubsystem = null;
+    this._gcSubsystem = null;
+    this._icall = null;
   }
 
   /**
@@ -767,11 +891,13 @@ export class MonoNamespace {
    * - API function and address caches
    * - Delegate thunk cache
    * - GC handles (releases all)
+   * - All subsystem caches (memory, find, trace, gc, icall)
    *
    * Does NOT:
    * - Detach threads
    * - Reset initialization state
    * - Invalidate the runtime
+   * - Clear internal call registrations (use icall.clear() for that)
    *
    * @example
    * ```typescript
@@ -780,25 +906,38 @@ export class MonoNamespace {
    * ```
    */
   reset(): void {
+    // Clear API caches but don't dispose
     if (this._api) {
-      // Clear API caches but don't dispose
       this._api.clearCaches();
     }
 
-    if (this._gcUtils) {
-      // Release all GC handles
-      this._gcUtils.releaseAll();
+    // Detach all hooks
+    if (this._tracer) {
+      this._tracer.detachAll();
     }
 
-    // Clear cached subsystem references (will be rebuilt on next access)
-    this._exports = null;
+    // Release all GC handles
+    if (this._gc) {
+      this._gc.releaseAllHandles();
+    }
+
+    // Clear all subsystem caches (will be rebuilt on next access)
     this._memory = null;
+    this._find = null;
+    this._traceSubsystem = null;
+    this._gcSubsystem = null;
+    this._icall = null;
   }
+
+  // ============================================================================
+  // PUBLIC API - THREAD MANAGEMENT
+  // ============================================================================
 
   /**
    * Attach the current thread to the Mono runtime
    * Usually not needed - use perform() instead
    * @returns Native pointer to the attached thread
+   * @throws {import("./utils/errors").MonoError} If runtime is not ready yet (RUNTIME_NOT_READY)
    */
   ensureThreadAttached(): NativePointer {
     this.ensureInitializedSync();
@@ -829,6 +968,116 @@ export class MonoNamespace {
       this._api._threadManager.detachAll();
     }
   }
+
+  // ============================================================================
+  // SUBSYSTEM BUILDERS (Private)
+  // ============================================================================
+
+  /**
+   * Build GC subsystem interface
+   * @internal
+   */
+  private buildGCSubsystem(gc: GarbageCollector): MonoNamespace.GC {
+    return {
+      collect: (generation = -1) => gc.collect(generation),
+      get maxGeneration() {
+        return gc.maxGeneration;
+      },
+      handle: (obj: NativePointer, pinned = false) => gc.createHandle(obj, pinned),
+      weakHandle: (obj: NativePointer, trackResurrection = false) => gc.createWeakHandle(obj, trackResurrection),
+      releaseHandle: (handle: GCHandle) => gc.releaseHandle(handle),
+      releaseAll: () => gc.releaseAllHandles(),
+      get stats() {
+        return gc.getMemoryStats();
+      },
+      getMemoryStats: () => gc.getMemoryStats(),
+      getActiveHandleCount: () => gc.activeHandleCount,
+      getGenerationStats: () => gc.getGenerationStats(),
+      getMemorySummary: () => gc.getMemorySummary(),
+      isCollected: (handle: GCHandle) => gc.isCollected(handle),
+      collectAndReport: () => gc.collectAndReport(),
+      getFinalizationQueueInfo: () => gc.getFinalizationInfo(),
+      requestFinalization: () => gc.requestFinalization(),
+      waitForPendingFinalizers: (timeout = 0) => gc.waitForPendingFinalizers(timeout),
+      suppressFinalize: (objectPtr: NativePointer) => gc.suppressFinalize(objectPtr),
+    };
+  }
+
+  /**
+   * Build Find subsystem interface
+   * @internal
+   */
+  private buildFindSubsystem(api: MonoApi): MonoNamespace.Find {
+    return {
+      classes: (pattern: string, options?: import("./model/domain").FindOptions) =>
+        MonoDomain.findClasses(api, pattern, options),
+      methods: (pattern: string, options?: import("./model/domain").FindOptions) =>
+        MonoDomain.findMethods(api, pattern, options),
+      fields: (pattern: string, options?: import("./model/domain").FindOptions) =>
+        MonoDomain.findFields(api, pattern, options),
+      properties: (pattern: string, options?: import("./model/domain").FindOptions) =>
+        MonoDomain.findProperties(api, pattern, options),
+      classExact: (fullName: string) => MonoDomain.classExact(api, fullName),
+    };
+  }
+
+  /**
+   * Build Trace subsystem interface
+   * @internal
+   */
+  private buildTraceSubsystem(tracer: Tracer): MonoNamespace.Trace {
+    return {
+      method: (m, cb) => tracer.method(m, cb),
+      tryMethod: (m, cb) => tracer.tryMethod(m, cb),
+      methodExtended: (m, cb) => tracer.methodExtended(m, cb),
+      tryMethodExtended: (m, cb) => tracer.tryMethodExtended(m, cb),
+      classAll: (k, cb) => tracer.classAll(k, cb),
+      methodsByPattern: (pattern: string, callbacks: MethodCallbacks) => tracer.methodsByPattern(pattern, callbacks),
+      classesByPattern: (pattern: string, callbacks: MethodCallbacks) => tracer.classesByPattern(pattern, callbacks),
+      replaceReturnValue: (m, r) => tracer.replaceReturnValue(m, r),
+      tryReplaceReturnValue: (m, r) => tracer.tryReplaceReturnValue(m, r),
+      field: (f, cb) => tracer.field(f, cb),
+      fieldsByPattern: (pattern: string, callbacks: FieldAccessCallbacks) => tracer.fieldsByPattern(pattern, callbacks),
+      property: (p, cb) => tracer.property(p, cb),
+      propertiesByPattern: (pattern: string, callbacks: PropertyAccessCallbacks) =>
+        tracer.propertiesByPattern(pattern, callbacks),
+      createPerformanceTracker: () => tracer.createPerformanceTracker(),
+      methodWithCallStack: (m, cb) => tracer.methodWithCallStack(m, cb),
+    };
+  }
+
+  /**
+   * Build ICall subsystem interface
+   * @internal
+   */
+  private buildICallSubsystem(registrar: InternalCallRegistrar): MonoNamespace.ICall {
+    return {
+      get isSupported(): boolean {
+        return registrar.isSupported();
+      },
+      requireSupported: () => registrar.ensureSupported(),
+      register: (definition: InternalCallDefinition, options?: InternalCallRegistrationOptions) =>
+        registrar.register(definition, options),
+      tryRegister: (definition: InternalCallDefinition, options?: InternalCallRegistrationOptions): boolean =>
+        registrar.tryRegister(definition, options),
+      registerAll: (definitions: InternalCallDefinition[], options?: InternalCallRegistrationOptions) =>
+        registrar.registerAll(definitions, options),
+      tryRegisterAll: (definitions: InternalCallDefinition[], options?: InternalCallRegistrationOptions): number =>
+        registrar.tryRegisterAll(definitions, options),
+      has: (name: string): boolean => registrar.has(name),
+      get: (name: string): InternalCallRegistrationInfo | undefined => registrar.get(name),
+      getAll: (): InternalCallRegistrationInfo[] => registrar.getAll(),
+      get count(): number {
+        return registrar.count;
+      },
+      get names(): string[] {
+        return registrar.names;
+      },
+      getSummary: () => registrar.getSummary(),
+      clear: () => registrar.clear(),
+      DuplicatePolicy,
+    };
+  }
 }
 
 // ============================================================================
@@ -836,15 +1085,31 @@ export class MonoNamespace {
 // ============================================================================
 
 export namespace MonoNamespace {
+  /**
+   * Thread detachment behavior used by `Mono.perform()`.
+   * - `bind`: keep thread attached and clean up on script unload (default)
+   * - `free`: detach if this `perform()` call attached the thread
+   * - `leak`: never detach (caller takes responsibility)
+   */
   export type PerformMode = "bind" | "free" | "leak";
 
   export interface Config {
+    /** Mono module name(s) to wait for. Leave undefined to auto-detect. */
     moduleName?: string | string[];
-    exports?: Record<string, string | string[]>;
+
+    /** Maximum time to wait for initialization. */
     initializeTimeoutMs: number;
+
+    /** Warn after this many milliseconds while initializing. */
     warnAfterMs: number;
+
+    /** Whether to install `Mono` on `globalThis` during initialization. */
     installGlobal: boolean;
+
+    /** Default log verbosity used by internal components. */
     logLevel: "silent" | "error" | "warn" | "info" | "debug";
+
+    /** Default perform mode used by `perform()` when not specified. */
     performMode: PerformMode;
   }
 
@@ -858,16 +1123,17 @@ export namespace MonoNamespace {
     weakHandle(obj: NativePointer, trackResurrection?: boolean): import("./runtime/gchandle").GCHandle;
     releaseHandle(handle: import("./runtime/gchandle").GCHandle): void;
     releaseAll(): void;
-    readonly stats: import("./utils/gc").MemoryStats;
-    getMemoryStats(): import("./utils/gc").MemoryStats;
+    readonly stats: import("./model/gc").MemoryStats;
+    getMemoryStats(): import("./model/gc").MemoryStats;
     getActiveHandleCount(): number;
-    getGenerationStats(): import("./utils/gc").GenerationStats[];
+    getGenerationStats(): import("./model/gc").GenerationStats[];
     getMemorySummary(): string;
     isCollected(handle: import("./runtime/gchandle").GCHandle): boolean;
     collectAndReport(): {
-      before: import("./utils/gc").MemoryStats;
-      after: import("./utils/gc").MemoryStats;
+      before: import("./model/gc").MemoryStats;
+      after: import("./model/gc").MemoryStats;
       delta: number | null;
+      durationMs: number;
     };
     getFinalizationQueueInfo(): { available: boolean; pendingCount: number | null; message: string };
     requestFinalization(): boolean;
@@ -902,13 +1168,6 @@ export namespace MonoNamespace {
     /** Return raw wrapper objects (MonoString, MonoArray) instead of coerced JS values */
     returnRaw?: boolean;
   }
-
-  /**
-   * Exports subsystem interface - provides access to resolved native exports
-   */
-  export type Exports = {
-    [K in import("./runtime/exports").MonoApiName]: NativePointer | null;
-  };
 
   /**
    * Memory subsystem interface for managed object manipulation.
@@ -1039,12 +1298,12 @@ export namespace MonoNamespace {
    * Find/search subsystem interface
    */
   export interface Find {
-    classes(pattern: string, options?: import("./utils/find").FindOptions): import("./model/class").MonoClass[];
-    methods(pattern: string, options?: import("./utils/find").FindOptions): import("./model/method").MonoMethod[];
-    fields(pattern: string, options?: import("./utils/find").FindOptions): import("./model/field").MonoField[];
+    classes(pattern: string, options?: import("./model/domain").FindOptions): import("./model/class").MonoClass[];
+    methods(pattern: string, options?: import("./model/domain").FindOptions): import("./model/method").MonoMethod[];
+    fields(pattern: string, options?: import("./model/domain").FindOptions): import("./model/field").MonoField[];
     properties(
       pattern: string,
-      options?: import("./utils/find").FindOptions,
+      options?: import("./model/domain").FindOptions,
     ): import("./model/property").MonoProperty[];
     classExact(fullName: string): import("./model/class").MonoClass | null;
   }
@@ -1055,23 +1314,23 @@ export namespace MonoNamespace {
   export interface Trace {
     method(
       monoMethod: import("./model/method").MonoMethod,
-      callbacks: import("./utils/trace").MethodCallbacks,
+      callbacks: import("./model/trace").MethodCallbacks,
     ): () => void;
     tryMethod(
       monoMethod: import("./model/method").MonoMethod,
-      callbacks: import("./utils/trace").MethodCallbacks,
+      callbacks: import("./model/trace").MethodCallbacks,
     ): (() => void) | null;
     methodExtended(
       monoMethod: import("./model/method").MonoMethod,
-      callbacks: import("./utils/trace").MethodCallbacksExtended,
+      callbacks: import("./model/trace").MethodCallbacksExtended,
     ): () => void;
     tryMethodExtended(
       monoMethod: import("./model/method").MonoMethod,
-      callbacks: import("./utils/trace").MethodCallbacksExtended,
+      callbacks: import("./model/trace").MethodCallbacksExtended,
     ): (() => void) | null;
-    classAll(klass: import("./model/class").MonoClass, callbacks: import("./utils/trace").MethodCallbacks): () => void;
-    methodsByPattern(pattern: string, callbacks: import("./utils/trace").MethodCallbacks): () => void;
-    classesByPattern(pattern: string, callbacks: import("./utils/trace").MethodCallbacks): () => void;
+    classAll(klass: import("./model/class").MonoClass, callbacks: import("./model/trace").MethodCallbacks): () => void;
+    methodsByPattern(pattern: string, callbacks: import("./model/trace").MethodCallbacks): () => void;
+    classesByPattern(pattern: string, callbacks: import("./model/trace").MethodCallbacks): () => void;
     replaceReturnValue(
       monoMethod: import("./model/method").MonoMethod,
       replacement: (
@@ -1090,19 +1349,79 @@ export namespace MonoNamespace {
     ): (() => void) | null;
     field(
       monoField: import("./model/field").MonoField,
-      callbacks: import("./utils/trace").FieldAccessCallbacks,
+      callbacks: import("./model/trace").FieldAccessCallbacks,
     ): (() => void) | null;
-    fieldsByPattern(pattern: string, callbacks: import("./utils/trace").FieldAccessCallbacks): () => void;
+    fieldsByPattern(pattern: string, callbacks: import("./model/trace").FieldAccessCallbacks): () => void;
     property(
       monoProperty: import("./model/property").MonoProperty,
-      callbacks: import("./utils/trace").PropertyAccessCallbacks,
+      callbacks: import("./model/trace").PropertyAccessCallbacks,
     ): () => void;
-    propertiesByPattern(pattern: string, callbacks: import("./utils/trace").PropertyAccessCallbacks): () => void;
-    createPerformanceTracker(): import("./utils/trace").PerformanceTracker;
+    propertiesByPattern(pattern: string, callbacks: import("./model/trace").PropertyAccessCallbacks): () => void;
+    createPerformanceTracker(): import("./model/trace").PerformanceTracker;
     methodWithCallStack(
       monoMethod: import("./model/method").MonoMethod,
-      callbacks: import("./utils/trace").MethodCallbacksTimed,
+      callbacks: import("./model/trace").MethodCallbacksTimed,
     ): () => void;
+  }
+
+  /**
+   * Internal call registration subsystem interface.
+   * Following IL2CPP-style try/require semantics.
+   */
+  export interface ICall {
+    /** Whether internal call registration is supported by this runtime */
+    readonly isSupported: boolean;
+
+    /** Require internal call support, throwing if unavailable */
+    requireSupported(): void;
+
+    /** Register an internal call (throws on failure) */
+    register(
+      definition: import("./model/internal-call").InternalCallDefinition,
+      options?: import("./model/internal-call").InternalCallRegistrationOptions,
+    ): void;
+
+    /** Try to register an internal call (returns false on failure) */
+    tryRegister(
+      definition: import("./model/internal-call").InternalCallDefinition,
+      options?: import("./model/internal-call").InternalCallRegistrationOptions,
+    ): boolean;
+
+    /** Register multiple internal calls (throws on failure) */
+    registerAll(
+      definitions: import("./model/internal-call").InternalCallDefinition[],
+      options?: import("./model/internal-call").InternalCallRegistrationOptions,
+    ): void;
+
+    /** Try to register multiple internal calls (returns success count) */
+    tryRegisterAll(
+      definitions: import("./model/internal-call").InternalCallDefinition[],
+      options?: import("./model/internal-call").InternalCallRegistrationOptions,
+    ): number;
+
+    /** Check if an internal call is registered */
+    has(name: string): boolean;
+
+    /** Get registration info for an internal call */
+    get(name: string): import("./model/internal-call").InternalCallRegistrationInfo | undefined;
+
+    /** Get all registered internal calls */
+    getAll(): import("./model/internal-call").InternalCallRegistrationInfo[];
+
+    /** Number of registered internal calls */
+    readonly count: number;
+
+    /** All registered method names */
+    readonly names: string[];
+
+    /** Get registrar summary */
+    getSummary(): import("./model/internal-call").InternalCallRegistrarSummary;
+
+    /** Clear local tracking (does NOT unregister from Mono) */
+    clear(): void;
+
+    /** Duplicate handling policy constants */
+    DuplicatePolicy: typeof import("./model/internal-call").DuplicatePolicy;
   }
 }
 
@@ -1119,3 +1438,40 @@ export namespace MonoNamespace {
  * });
  */
 export const Mono = new MonoNamespace();
+
+/**
+ * Type namespace merged with the `Mono` value (IL2CPP-style).
+ *
+ * This enables patterns like:
+ * - `Mono.Config` (type)
+ * - `Mono.GC` (type)
+ * - `Mono.PerformMode` (type)
+ */
+export namespace Mono {
+  /** See `MonoNamespace.PerformMode`. */
+  export type PerformMode = MonoNamespace.PerformMode;
+
+  /** See `MonoNamespace.Config`. */
+  export type Config = MonoNamespace.Config;
+
+  /** See `MonoNamespace.GC`. */
+  export type GC = MonoNamespace.GC;
+
+  /** See `MonoNamespace.MemoryType`. */
+  export type MemoryType = MonoNamespace.MemoryType;
+
+  /** See `MonoNamespace.TypedReadOptions`. */
+  export type TypedReadOptions = MonoNamespace.TypedReadOptions;
+
+  /** See `MonoNamespace.Memory`. */
+  export type Memory = MonoNamespace.Memory;
+
+  /** See `MonoNamespace.Find`. */
+  export type Find = MonoNamespace.Find;
+
+  /** See `MonoNamespace.Trace`. */
+  export type Trace = MonoNamespace.Trace;
+
+  /** See `MonoNamespace.ICall`. */
+  export type ICall = MonoNamespace.ICall;
+}

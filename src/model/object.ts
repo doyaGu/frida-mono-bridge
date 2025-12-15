@@ -1,7 +1,7 @@
 import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
-import { MonoHandle } from "./base";
+import { MonoHandle } from "./handle";
 import { MonoClass } from "./class";
 import { MonoField } from "./field";
 import { MonoMethod } from "./method";

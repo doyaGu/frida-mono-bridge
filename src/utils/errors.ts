@@ -42,6 +42,9 @@ export const MonoErrorCodes = {
   MEMORY_ERROR: "MEMORY_ERROR",
   GC_HANDLE_ERROR: "GC_HANDLE_ERROR",
 
+  // Resource Management
+  RESOURCE_LIMIT: "RESOURCE_LIMIT",
+
   // Validation
   INVALID_ARGUMENT: "INVALID_ARGUMENT",
   NULL_POINTER: "NULL_POINTER",
@@ -68,9 +71,176 @@ export type MonoErrorCode = (typeof MonoErrorCodes)[keyof typeof MonoErrorCodes]
  * @param hint Suggestion for fixing the issue
  * @param details Additional context (optional)
  */
-export function raise(code: MonoErrorCode, message: string, hint?: string, details?: Record<string, unknown>): never {
+export function raise(
+  code: MonoErrorCode,
+  message: string,
+  hint?: string,
+  details?: Record<string, unknown>,
+  cause?: Error,
+): never {
   const fullMessage = hint ? `${message}. ${hint}` : message;
-  throw new MonoError(fullMessage, code, details);
+
+  let error: MonoError;
+  switch (code) {
+    case MonoErrorCodes.INVALID_ARGUMENT: {
+      const parameter = typeof details?.parameter === "string" ? details.parameter : undefined;
+      const value = details?.value;
+      error = new MonoValidationError(fullMessage, parameter, value, details, cause);
+      break;
+    }
+    case MonoErrorCodes.INIT_FAILED:
+      error = new MonoInitializationError(fullMessage, cause);
+      break;
+    case MonoErrorCodes.MODULE_NOT_FOUND:
+      error = new MonoModuleNotFoundError(
+        fullMessage,
+        Array.isArray(details?.candidates) ? (details?.candidates as string[]) : undefined,
+        Array.isArray(details?.loadedModules) ? (details?.loadedModules as string[]) : undefined,
+        cause,
+      );
+      break;
+    case MonoErrorCodes.RUNTIME_NOT_READY:
+      error = new MonoRuntimeNotReadyError(fullMessage, typeof details?.waitedMs === "number" ? details.waitedMs : undefined, cause);
+      break;
+    case MonoErrorCodes.EXPORT_NOT_FOUND:
+      error = new MonoExportNotFoundError(
+        fullMessage,
+        typeof details?.exportName === "string" ? details.exportName : undefined,
+        typeof details?.moduleName === "string" ? details.moduleName : undefined,
+        cause,
+      );
+      break;
+    case MonoErrorCodes.THREAD_ATTACH_FAILED:
+    case MonoErrorCodes.THREAD_DETACH_FAILED:
+      error = new MonoThreadError(fullMessage, cause);
+      break;
+    case MonoErrorCodes.INVOKE_FAILED:
+      error = new MonoMethodError(
+        fullMessage,
+        typeof details?.methodName === "string" ? details.methodName : undefined,
+        typeof details?.className === "string" ? details.className : undefined,
+        cause,
+      );
+      break;
+    case MonoErrorCodes.ASSEMBLY_NOT_FOUND: {
+      const assemblyName = typeof details?.assemblyName === "string" ? details.assemblyName : undefined;
+      const domainName = typeof details?.domainName === "string" ? details.domainName : undefined;
+      error = domainName
+        ? new MonoAssemblyNotFoundError(fullMessage, assemblyName, domainName, cause)
+        : new MonoAssemblyError(fullMessage, assemblyName, cause);
+      break;
+    }
+    case MonoErrorCodes.TYPE_MISMATCH:
+      error = new MonoTypeError(
+        fullMessage,
+        typeof details?.expectedType === "string" ? details.expectedType : undefined,
+        typeof details?.actualType === "string" ? details.actualType : undefined,
+        cause,
+      );
+      break;
+    case MonoErrorCodes.MANAGED_EXCEPTION:
+      error = new MonoManagedExceptionError(
+        fullMessage,
+        details?.exception instanceof NativePointer ? details.exception : undefined,
+        typeof details?.exceptionType === "string" ? details.exceptionType : undefined,
+        typeof details?.exceptionMessage === "string" ? details.exceptionMessage : undefined,
+        typeof details?.stackTrace === "string" ? details.stackTrace : undefined,
+        cause,
+      );
+      break;
+    case MonoErrorCodes.CLASS_NOT_FOUND:
+      error = new MonoClassNotFoundError(
+        fullMessage,
+        typeof details?.className === "string" ? details.className : undefined,
+        typeof details?.namespace === "string" ? details.namespace : undefined,
+        typeof details?.imageName === "string" ? details.imageName : undefined,
+        cause,
+      );
+      break;
+    case MonoErrorCodes.METHOD_NOT_FOUND:
+      error = new MonoMethodNotFoundError(
+        fullMessage,
+        typeof details?.methodName === "string" ? details.methodName : undefined,
+        typeof details?.className === "string" ? details.className : undefined,
+        typeof details?.descriptor === "string" ? details.descriptor : undefined,
+        cause,
+      );
+      break;
+    case MonoErrorCodes.FIELD_NOT_FOUND:
+      error = new MonoFieldNotFoundError(
+        fullMessage,
+        typeof details?.fieldName === "string" ? details.fieldName : undefined,
+        typeof details?.className === "string" ? details.className : undefined,
+        cause,
+      );
+      break;
+    case MonoErrorCodes.PROPERTY_NOT_FOUND:
+      error = new MonoPropertyNotFoundError(
+        fullMessage,
+        typeof details?.propertyName === "string" ? details.propertyName : undefined,
+        typeof details?.className === "string" ? details.className : undefined,
+        cause,
+      );
+      break;
+    case MonoErrorCodes.IMAGE_NOT_FOUND:
+      error = new MonoImageNotFoundError(
+        fullMessage,
+        typeof details?.imageName === "string" ? details.imageName : undefined,
+        typeof details?.assemblyName === "string" ? details.assemblyName : undefined,
+        cause,
+      );
+      break;
+    case MonoErrorCodes.MEMORY_ERROR:
+      error = new MonoMemoryError(fullMessage, cause);
+      break;
+    case MonoErrorCodes.NOT_SUPPORTED:
+      error = new MonoNotSupportedError(fullMessage, cause);
+      break;
+    case MonoErrorCodes.DISPOSED:
+      error = new MonoDisposedError(fullMessage, cause);
+      break;
+    default:
+      error = new MonoError(fullMessage, code, details, cause);
+      break;
+  }
+
+  if (details) {
+    error.details = { ...(error.details ?? {}), ...details };
+  }
+
+  throw error;
+}
+
+const MONO_CODE_PREFIX_RE = /^\[Mono:[A-Z0-9_]+\]\s*/;
+
+function stripMonoCodePrefix(message: string): string {
+  return message.replace(MONO_CODE_PREFIX_RE, "");
+}
+
+/**
+ * Re-raise an unknown error as a MonoError, preserving the original as `cause`.
+ *
+ * Prefer this over `throw error` so the library consistently throws MonoError.
+ */
+export function raiseFrom(
+  error: unknown,
+  code: MonoErrorCode = MonoErrorCodes.UNKNOWN,
+  message?: string,
+  hint?: string,
+  details?: Record<string, unknown>,
+): never {
+  const monoError = handleMonoError(error);
+  const effectiveCode = code === MonoErrorCodes.UNKNOWN ? monoError.code : code;
+  const effectiveMessage = message ?? stripMonoCodePrefix(monoError.message);
+  const mergedDetails: Record<string, unknown> = {
+    ...(monoError.details ?? {}),
+    ...(details ?? {}),
+    causeName: monoError.name,
+    causeCode: monoError.code,
+  };
+
+  // Preserve the original error as a cause when possible.
+  raise(effectiveCode, effectiveMessage, hint, mergedDetails, monoError);
 }
 
 /**
@@ -104,7 +274,7 @@ export class MonoError extends Error {
   /**
    * Additional context/details
    */
-  public readonly details?: Record<string, unknown>;
+  public details?: Record<string, unknown>;
 
   constructor(
     message: string,
@@ -188,9 +358,12 @@ export class MonoValidationError extends MonoError {
     message: string,
     public readonly parameter?: string,
     public readonly value?: unknown,
+    detailsOrCause?: Record<string, unknown> | Error,
     cause?: Error,
   ) {
-    super(message, MonoErrorCodes.INVALID_ARGUMENT, { parameter, value }, cause);
+    const details = detailsOrCause instanceof Error ? undefined : detailsOrCause;
+    const effectiveCause = detailsOrCause instanceof Error ? detailsOrCause : cause;
+    super(message, MonoErrorCodes.INVALID_ARGUMENT, { ...(details ?? {}), parameter, value }, effectiveCause);
     this.name = "MonoValidationError";
   }
 
@@ -232,7 +405,14 @@ export class MonoMemoryError extends MonoError {
  */
 export function monoInvariant(condition: unknown, errorFactory: () => MonoError): asserts condition {
   if (!condition) {
-    throw errorFactory();
+    const error = errorFactory();
+    raiseFrom(
+      error,
+      error.code,
+      stripMonoCodePrefix(error.message),
+      undefined,
+      error.details,
+    );
   }
 }
 
@@ -525,7 +705,7 @@ export function withErrorHandling<T extends any[], R>(fn: (...args: T) => R): (.
     try {
       return fn(...args);
     } catch (error) {
-      throw handleMonoError(error);
+      raiseFrom(error);
     }
   };
 }
@@ -540,7 +720,7 @@ export async function withAsyncErrorHandling<T extends any[], R>(
   try {
     return await fn(...params);
   } catch (error) {
-    throw handleMonoError(error);
+    raiseFrom(error);
   }
 }
 
@@ -671,7 +851,12 @@ export class ValidationBuilder {
     const result = this.build();
     if (!result.isValid) {
       const message = result.errors.join("; ");
-      throw new MonoValidationError(message, context);
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        message,
+        context ? `Context: ${context}` : "Fix validation errors and retry",
+        { context, errors: result.errors, warnings: result.warnings },
+      );
     }
   }
 }

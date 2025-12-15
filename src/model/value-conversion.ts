@@ -79,7 +79,7 @@ const NUMERIC_RANGES: Readonly<Record<string, NumericRange>> = Object.freeze({
  * @param value The numeric value to validate
  * @param typeName The target type name
  * @returns The validated (and possibly truncated) value
- * @throws MonoValidationError if value is out of range
+ * @throws {MonoValidationError} if value is out of range
  */
 export function validateNumericValue(value: number, typeName: string): number {
   const range = NUMERIC_RANGES[typeName];

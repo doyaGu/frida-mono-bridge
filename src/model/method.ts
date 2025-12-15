@@ -1,13 +1,24 @@
+/**
+ * Method model (System.Reflection.MethodBase/MethodInfo).
+ *
+ * Provides metadata inspection (name/signature/flags), custom attribute access,
+ * compilation helpers, and invocation utilities (including optional unboxing).
+ *
+ * @module model/method
+ */
+
 import { MonoApi } from "../runtime/api";
 import { MethodAttribute, MethodImplAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
 import { lazy } from "../utils/cache";
-import { MonoErrorCodes, MonoManagedExceptionError, raise } from "../utils/errors";
+import { MonoErrorCodes, MonoManagedExceptionError, raise, raiseFrom } from "../utils/errors";
 import { Logger } from "../utils/log";
 import { pointerIsNull, unwrapInstance } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { CustomAttribute, MemberAccessibility, MethodArgument, MonoHandle } from "./base";
+import type { CustomAttribute } from "./attribute";
+import type { MemberAccessibility, MethodArgument } from "./handle";
+import { MonoHandle } from "./handle";
 import { MonoClass } from "./class";
-import { createMethodAttributeContext, getCustomAttributes } from "./custom-attributes";
+import { createMethodAttributeContext, getCustomAttributes } from "./attribute";
 import { MonoImage } from "./image";
 import { MonoMethodSignature, MonoParameterInfo } from "./method-signature";
 import { MonoObject } from "./object";
@@ -15,7 +26,9 @@ import { MonoType, MonoTypeKind, MonoTypeSummary, isPointerLikeKind, readPrimiti
 import { allocPrimitiveValue, resolveUnderlyingPrimitive } from "./value-conversion";
 
 export interface InvokeOptions {
+  /** Throw a `MonoManagedExceptionError` when the managed method throws. */
   throwOnManagedException?: boolean;
+  /** Auto-box JS primitives into managed boxed value types when possible. */
   autoBoxPrimitives?: boolean;
   /** Return Int64/UInt64 as bigint instead of number (prevents precision loss) */
   returnBigInt?: boolean;
@@ -62,6 +75,7 @@ export type UnboxedType<Kind extends MonoTypeKind> = Kind extends typeof MonoTyp
 
 export type MethodAccessibility = MemberAccessibility;
 
+/** Serializable summary of a method and its signature/flags. */
 export interface MonoMethodSummary {
   name: string;
   fullName: string;
@@ -127,6 +141,14 @@ const METHOD_IMPL_FLAGS: Record<string, number> = {
 
 const methodLogger = new Logger({ tag: "MonoMethod" });
 
+/**
+ * Represents a Mono method.
+ *
+ * Typical workflow:
+ * - locate a method (via domain/class helpers or {@link MonoMethod.find})
+ * - inspect metadata (name/fullName/flags/signature)
+ * - compile and hook (see tracing module) or invoke via `invoke()/call()` helpers
+ */
 export class MonoMethod extends MonoHandle {
   // ===== STATIC FACTORY METHODS =====
 
@@ -930,7 +952,7 @@ export class MonoMethod extends MonoHandle {
       if (error instanceof MonoManagedExceptionError && options.throwOnManagedException === false) {
         return NULL;
       }
-      throw error;
+      raiseFrom(error);
     }
   }
 

@@ -1,3 +1,13 @@
+/**
+ * Runtime enumerations (auto-generated from Mono C headers).
+ *
+ * Provides typed enum constants for:
+ * - MonoTypeEnum, MonoCallConvention, MonoGCHandleType, etc.
+ * - Generated from `data/include/*.h` by `scripts/generate-enums.ts`
+ *
+ * @module runtime/enums
+ */
+
 // Auto-generated from data/include/*.h by scripts/generate-enums.ts
 // DO NOT EDIT MANUALLY
 

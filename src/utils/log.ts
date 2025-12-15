@@ -1,7 +1,20 @@
+/**
+ * Lightweight logging system with configurable levels and tags.
+ *
+ * Supports debug/info/warn/error levels, optional tagging, and
+ * timestamp-prefixed console output.
+ *
+ * @module utils/log
+ */
+
+/** Logging severity levels (debug < info < warn < error). */
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
+/** Configuration options for creating a Logger instance. */
 export interface LoggerOptions {
+  /** Minimum severity level to log. */
   level?: LogLevel;
+  /** Tag to prefix log messages (e.g., "MonoClass"). */
   tag?: string;
 }
 
@@ -12,6 +25,16 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
   error: 3,
 };
 
+/**
+ * Logger with configurable level and tag.
+ *
+ * @example
+ * ```ts
+ * const logger = Logger.withTag("MyClass");
+ * logger.info("Operation completed");
+ * logger.warn("Potential issue", { detail: "value" });
+ * ```
+ */
 export class Logger {
   private readonly level: LogLevel;
   private readonly tag: string;

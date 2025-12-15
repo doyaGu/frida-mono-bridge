@@ -1,20 +1,35 @@
 /**
- * Caching utilities including LRU cache implementation and decorators
+ * Caching utilities: LRU cache implementation and lazy evaluation decorators.
+ *
+ * Provides:
+ * - `LruCache<K, V>`: Least-Recently-Used eviction cache
+ * - `@lazy`: Property decorator for cached getters
+ * - `@memoize()`: Method decorator for cached function calls
+ *
+ * @module utils/cache
  */
 
-import { MonoValidationError } from "./errors";
+import { MonoErrorCodes, raise } from "./errors";
 
 // ============================================================================
 // LRU CACHE IMPLEMENTATION
 // ============================================================================
 
+/** Configuration options for creating an LRU cache. */
 export interface LruCacheOptions<K, V> {
+  /** Maximum number of entries before eviction. */
   capacity: number;
+  /** Callback invoked when an entry is evicted. */
   onEvict?: (key: K, value: V) => void;
 }
 
 const DEFAULT_VALUE_SLOT = "__value__" as const;
 
+/**
+ * Least-Recently-Used (LRU) cache.
+ *
+ * Evicts oldest-accessed entries when capacity is exceeded.
+ */
 export class LruCache<K, V> {
   private readonly map = new Map<K, V>();
   private readonly capacity: number;
@@ -32,7 +47,12 @@ export class LruCache<K, V> {
     }
 
     if (this.capacity <= 0) {
-      throw new MonoValidationError("LRU capacity must be positive", "capacity", this.capacity);
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        "LRU capacity must be positive",
+        "Provide a capacity >= 1",
+        { parameter: "capacity", value: this.capacity },
+      );
     }
   }
 
@@ -187,7 +207,12 @@ export function cached(options: CacheOptions = {}) {
   return function (_: any, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalGet = descriptor.get;
     if (!originalGet) {
-      throw new MonoValidationError("@cached can only be applied to getters", "descriptor", descriptor);
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        "@cached can only be applied to getters",
+        "Apply @cached to a getter accessor",
+        { parameter: "descriptor", value: descriptor },
+      );
     }
 
     const cacheKey = options.key || `__cached_${propertyKey}__`;
@@ -312,7 +337,12 @@ export function lazy(
   const getter = descriptor?.get;
 
   if (!getter) {
-    throw new MonoValidationError("@lazy can only be applied to getter accessors", "descriptor", descriptor);
+    raise(
+      MonoErrorCodes.INVALID_ARGUMENT,
+      "@lazy can only be applied to getter accessors",
+      "Apply @lazy to a getter accessor",
+      { parameter: "descriptor", value: descriptor },
+    );
   }
 
   descriptor!.get = function () {

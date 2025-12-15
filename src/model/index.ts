@@ -16,7 +16,9 @@
 // BASE TYPES AND UTILITIES
 // ============================================================================
 
-export * from "./base";
+export * from "./handle";
+export * from "./reference";
+export * from "./attribute";
 export * from "./collections";
 
 // ============================================================================
@@ -107,7 +109,7 @@ export {
   getCustomAttributes,
   // Custom attributes
   type CustomAttributeContext,
-} from "./custom-attributes";
+} from "./attribute";
 
 export {
   allocPrimitiveValue,
@@ -123,7 +125,62 @@ export {
 } from "./value-conversion";
 
 // ============================================================================
-// RUNTIME INTEGRATION
+// INTERNAL CALLS
 // ============================================================================
 
-export { registerInternalCall } from "../runtime/icall";
+export {
+  createInternalCallRegistrar,
+  DuplicatePolicy,
+  InternalCallRegistrar,
+  type InternalCallCallback,
+  type InternalCallDefinition,
+  type InternalCallRegistrarSummary,
+  type InternalCallRegistrationInfo,
+  type InternalCallRegistrationOptions,
+} from "./internal-call";
+
+// ============================================================================
+// GARBAGE COLLECTION (Domain Objects)
+// ============================================================================
+
+export {
+  // Domain object
+  createGarbageCollector,
+  GarbageCollector,
+  // Types
+  CollectionReport,
+  DEFAULT_GC_CONFIG,
+  FinalizationInfo,
+  GarbageCollectorConfig,
+  GenerationStats,
+  HandleStats,
+  MemoryStats,
+  type CollectionEventCallback,
+  type HandleEventCallback,
+} from "./gc";
+
+// ============================================================================
+// TRACING (Domain Objects)
+// ============================================================================
+
+export {
+  // Domain objects
+  createPerformanceTracker,
+  createTracer,
+  PerformanceTracker,
+  Tracer,
+  // Types
+  AccessTraceInfo,
+  DEFAULT_TRACER_CONFIG,
+  HookInfo,
+  HookResult,
+  HookStats,
+  TracerConfig,
+  type FieldAccessCallbacks,
+  type MethodCallbacks,
+  type MethodCallbacksExtended,
+  type MethodCallbacksTimed,
+  type MethodStats,
+  type PropertyAccessCallbacks,
+  type ReturnValueReplacer,
+} from "./trace";

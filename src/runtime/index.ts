@@ -28,10 +28,6 @@ export * from "./module";
 // Garbage collection handle management
 export * from "./gchandle";
 
-// ===== INTERNAL CALLS =====
-// Native function registration for managed code
-export * from "./icall";
-
 // ===== RUNTIME INFO =====
 // Version detection and feature flags
 export * from "./version";

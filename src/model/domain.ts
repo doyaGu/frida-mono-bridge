@@ -3,8 +3,11 @@ import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
 import { MonoAssembly } from "./assembly";
-import { MonoHandle } from "./base";
+import { MonoHandle } from "./handle";
 import { MonoClass } from "./class";
+import { MonoField } from "./field";
+import { MonoMethod } from "./method";
+import { MonoProperty } from "./property";
 
 // ===== INTERFACES =====
 
@@ -49,6 +52,60 @@ export interface UnloadAssemblyResult {
   reason: string;
   /** Whether assembly unloading is supported by this runtime */
   supported: boolean;
+}
+
+// ===== FIND/SEARCH TYPES =====
+
+/**
+ * Options for pattern-based search helpers.
+ */
+export interface FindOptions {
+  /** Use regex pattern instead of wildcard */
+  regex?: boolean;
+  /** Case insensitive matching (default: true) */
+  caseInsensitive?: boolean;
+  /** Include namespace in class search (default: true) */
+  searchNamespace?: boolean;
+  /** Maximum number of results to return */
+  limit?: number;
+  /** Filter function to apply after pattern matching */
+  filter?: (item: any) => boolean;
+}
+
+function wildcardToRegex(pattern: string, caseInsensitive = true): RegExp {
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*")
+    .replace(/\?/g, ".");
+
+  return new RegExp(`^${escaped}$`, caseInsensitive ? "i" : "");
+}
+
+function createMatcher(pattern: string, options: FindOptions = {}): RegExp {
+  const caseInsensitive = options.caseInsensitive !== false;
+
+  if (options.regex) {
+    try {
+      return new RegExp(pattern, caseInsensitive ? "i" : "");
+    } catch {
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Invalid regex pattern: ${pattern}`,
+        "Check the regex syntax and try again",
+      );
+    }
+  }
+
+  return wildcardToRegex(pattern, caseInsensitive);
+}
+
+function matchesPattern(name: string, pattern: string, options: FindOptions = {}): boolean {
+  if (pattern === "*" || pattern === "") {
+    return true;
+  }
+
+  const regex = createMatcher(pattern, options);
+  return regex.test(name);
 }
 
 /**
@@ -131,6 +188,265 @@ export class MonoDomain extends MonoHandle {
     return new MonoDomain(api, pointer);
   }
 
+  // ===== STATIC FIND HELPERS =====
+
+  /**
+   * Find classes by pattern across all loaded assemblies.
+   */
+  static findClasses(api: MonoApi, pattern: string, options: FindOptions = {}): MonoClass[] {
+    const results: MonoClass[] = [];
+    const domain = MonoDomain.getRoot(api);
+    const seenClasses = new Set<string>();
+
+    const searchNamespace = options.searchNamespace !== false;
+    const limit = options.limit;
+    const customFilter = options.filter;
+
+    domain.enumerateAssemblies((assembly: MonoAssembly) => {
+      if (limit !== undefined && results.length >= limit) {
+        return;
+      }
+
+      const image = assembly.image;
+      const klassArray = image.classes;
+
+      for (const klass of klassArray) {
+        if (limit !== undefined && results.length >= limit) {
+          break;
+        }
+
+        const klassKey = klass.pointer.toString();
+        if (seenClasses.has(klassKey)) {
+          continue;
+        }
+        seenClasses.add(klassKey);
+
+        const name = klass.name;
+        const namespace = klass.namespace;
+        const fullName = namespace ? `${namespace}.${name}` : name;
+
+        const matches = searchNamespace
+          ? matchesPattern(fullName, pattern, options)
+          : matchesPattern(name, pattern, options);
+
+        if (!matches) {
+          continue;
+        }
+        if (customFilter && !customFilter(klass)) {
+          continue;
+        }
+        results.push(klass);
+      }
+    });
+
+    return results;
+  }
+
+  /**
+   * Find methods by pattern across all loaded assemblies.
+   * Supports ClassName.MethodName when options.regex is false.
+   */
+  static findMethods(api: MonoApi, pattern: string, options: FindOptions = {}): MonoMethod[] {
+    const results: MonoMethod[] = [];
+    let classPattern = "*";
+    let methodPattern = pattern;
+    const limit = options.limit;
+    const customFilter = options.filter;
+
+    if (pattern.includes(".") && !options.regex) {
+      const parts = pattern.split(".");
+      classPattern = parts.slice(0, -1).join(".");
+      methodPattern = parts[parts.length - 1];
+    }
+
+    const matchingClasses = MonoDomain.findClasses(api, classPattern, {
+      ...options,
+      searchNamespace: true,
+      limit: undefined,
+      filter: undefined,
+    });
+
+    for (const klass of matchingClasses) {
+      if (limit !== undefined && results.length >= limit) {
+        break;
+      }
+
+      const klassMethods = klass.methods;
+      for (const method of klassMethods) {
+        if (limit !== undefined && results.length >= limit) {
+          break;
+        }
+
+        if (!matchesPattern(method.name, methodPattern, options)) {
+          continue;
+        }
+        if (customFilter && !customFilter(method)) {
+          continue;
+        }
+        results.push(method);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Find fields by pattern across all loaded assemblies.
+   * Supports ClassName.FieldName when options.regex is false.
+   */
+  static findFields(api: MonoApi, pattern: string, options: FindOptions = {}): MonoField[] {
+    const results: MonoField[] = [];
+    let classPattern = "*";
+    let fieldPattern = pattern;
+    const limit = options.limit;
+    const customFilter = options.filter;
+
+    if (pattern.includes(".") && !options.regex) {
+      const parts = pattern.split(".");
+      classPattern = parts.slice(0, -1).join(".");
+      fieldPattern = parts[parts.length - 1];
+    }
+
+    const matchingClasses = MonoDomain.findClasses(api, classPattern, {
+      ...options,
+      searchNamespace: true,
+      limit: undefined,
+      filter: undefined,
+    });
+
+    for (const klass of matchingClasses) {
+      if (limit !== undefined && results.length >= limit) {
+        break;
+      }
+
+      const klassFields = klass.fields;
+      for (const field of klassFields) {
+        if (limit !== undefined && results.length >= limit) {
+          break;
+        }
+
+        if (!matchesPattern(field.name, fieldPattern, options)) {
+          continue;
+        }
+        if (customFilter && !customFilter(field)) {
+          continue;
+        }
+        results.push(field);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Find properties by pattern across all loaded assemblies.
+   * Supports ClassName.PropertyName when options.regex is false.
+   */
+  static findProperties(api: MonoApi, pattern: string, options: FindOptions = {}): MonoProperty[] {
+    const results: MonoProperty[] = [];
+    let classPattern = "*";
+    let propPattern = pattern;
+    const limit = options.limit;
+    const customFilter = options.filter;
+
+    if (pattern.includes(".") && !options.regex) {
+      const parts = pattern.split(".");
+      classPattern = parts.slice(0, -1).join(".");
+      propPattern = parts[parts.length - 1];
+    }
+
+    const matchingClasses = MonoDomain.findClasses(api, classPattern, {
+      ...options,
+      searchNamespace: true,
+      limit: undefined,
+      filter: undefined,
+    });
+
+    for (const klass of matchingClasses) {
+      if (limit !== undefined && results.length >= limit) {
+        break;
+      }
+
+      const klassProperties = klass.properties;
+      for (const prop of klassProperties) {
+        if (limit !== undefined && results.length >= limit) {
+          break;
+        }
+
+        if (!matchesPattern(prop.name, propPattern, options)) {
+          continue;
+        }
+        if (customFilter && !customFilter(prop)) {
+          continue;
+        }
+        results.push(prop);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Find a single class by full name (Namespace.ClassName).
+   * Returns null if not found.
+   */
+  static classExact(api: MonoApi, fullName: string): MonoClass | null {
+    const parts = fullName.split(".");
+    const className = parts.pop()!;
+    const namespace = parts.join(".");
+
+    // Fast path for System.* classes - try mscorlib first
+    if (namespace === "System" || namespace.startsWith("System.")) {
+      const mscorlibImage = api.native.mono_image_loaded(Memory.allocUtf8String("mscorlib"));
+      if (!pointerIsNull(mscorlibImage)) {
+        const nsPtr = Memory.allocUtf8String(namespace);
+        const namePtr = Memory.allocUtf8String(className);
+        const klassPtr = api.native.mono_class_from_name(mscorlibImage, nsPtr, namePtr);
+        if (!pointerIsNull(klassPtr)) {
+          return new MonoClass(api, klassPtr);
+        }
+      }
+    }
+
+    // Fast path for UnityEngine.* classes - try UnityEngine.CoreModule first
+    if (namespace === "UnityEngine" || namespace.startsWith("UnityEngine.")) {
+      const unityAssemblyNames = ["UnityEngine.CoreModule", "UnityEngine", "UnityEngine.dll"];
+
+      for (const assemblyName of unityAssemblyNames) {
+        const unityImage = api.native.mono_image_loaded(Memory.allocUtf8String(assemblyName));
+        if (!pointerIsNull(unityImage)) {
+          const nsPtr = Memory.allocUtf8String(namespace);
+          const namePtr = Memory.allocUtf8String(className);
+          const klassPtr = api.native.mono_class_from_name(unityImage, nsPtr, namePtr);
+          if (!pointerIsNull(klassPtr)) {
+            return new MonoClass(api, klassPtr);
+          }
+        }
+      }
+    }
+
+    // Fallback: enumerate all assemblies
+    const domain = MonoDomain.getRoot(api);
+    let result: MonoClass | null = null;
+
+    domain.enumerateAssemblies((assembly: MonoAssembly) => {
+      if (result !== null) {
+        return;
+      }
+
+      const image = assembly.image;
+      if (!image.isValid) {
+        return;
+      }
+      const klass = image.tryClassFromName(namespace, className);
+      if (klass !== null) {
+        result = klass;
+      }
+    });
+
+    return result;
+  }
+
   // ===== CORE PROPERTIES =====
 
   /**
@@ -176,7 +492,7 @@ export class MonoDomain extends MonoHandle {
    *
    * @param path Path to the assembly file (.dll)
    * @returns The loaded MonoAssembly
-   * @throws Error if the assembly cannot be loaded
+   * @throws {MonoAssemblyError} if the assembly cannot be loaded
    *
    * @example
    * ```typescript
@@ -298,7 +614,7 @@ export class MonoDomain extends MonoHandle {
    *
    * @param path Path to the assembly file (.dll)
    * @returns The loaded MonoAssembly
-   * @throws Error if the assembly cannot be loaded
+   * @throws {MonoAssemblyError} if the assembly cannot be loaded
    *
    * @remarks
    * This is an alias for `assemblyOpen()`.

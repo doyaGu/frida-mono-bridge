@@ -10,7 +10,7 @@
  * @module runtime/module
  */
 
-import { MonoModuleNotFoundError } from "../utils/errors";
+import { MonoErrorCodes, raise } from "../utils/errors";
 import { MONO_EXPORTS, MonoApiName, MonoExportSignature } from "./exports";
 
 // ============================================================================
@@ -228,10 +228,14 @@ export async function waitForMonoModule(options: MonoModuleWaitOptions): Promise
 
   const candidates = normalizeCandidates(options.moduleName);
   const loadedModules = Process.enumerateModules().map(m => m.name);
-  throw new MonoModuleNotFoundError(
-    `Timed out waiting for Mono module to load. Ensure Mono is loaded before the bridge attaches or set Mono.config.moduleName`,
-    candidates.length > 0 ? candidates : undefined,
-    loadedModules,
+  raise(
+    MonoErrorCodes.MODULE_NOT_FOUND,
+    "Timed out waiting for Mono module to load",
+    "Ensure Mono is loaded before the bridge attaches or set Mono.config.moduleName",
+    {
+      candidates: candidates.length > 0 ? candidates : undefined,
+      loadedModules,
+    },
   );
 }
 
@@ -256,10 +260,14 @@ export function findMonoModule(moduleName?: string | string[]): MonoModuleInfo {
 
   const candidates = normalizeCandidates(moduleName);
   const loadedModules = Process.enumerateModules().map(m => m.name);
-  throw new MonoModuleNotFoundError(
-    `Failed to discover Mono runtime module. Specify the module name manually or ensure Mono is loaded before the bridge attaches`,
-    candidates.length > 0 ? candidates : undefined,
-    loadedModules,
+  raise(
+    MonoErrorCodes.MODULE_NOT_FOUND,
+    "Failed to discover Mono runtime module",
+    "Specify the module name manually or ensure Mono is loaded before the bridge attaches",
+    {
+      candidates: candidates.length > 0 ? candidates : undefined,
+      loadedModules,
+    },
   );
 }
 

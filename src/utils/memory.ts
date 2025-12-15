@@ -1,8 +1,16 @@
 /**
- * Memory allocation, pointer validation, and manipulation utilities
+ * Memory allocation, pointer validation, and manipulation utilities.
+ *
+ * Provides:
+ * - Pointer type guards and resolution
+ * - Pointer array allocation
+ * - Instance unwrapping for Mono objects
+ * - Memory address validation
+ *
+ * @module utils/memory
  */
 
-import { MonoMemoryError, MonoValidationError } from "./errors";
+import { MonoErrorCodes, raise, raiseFrom } from "./errors";
 
 const POINTER_SIZE = Process.pointerSize;
 
@@ -11,7 +19,9 @@ const POINTER_SIZE = Process.pointerSize;
 // ============================================================================
 
 /**
- * Check if value is a valid NativePointer or NativePointer-like object
+ * Check if value is a valid NativePointer or NativePointer-like object.
+ *
+ * @returns `true` if the value can be used as a NativePointer.
  */
 export function isNativePointer(value: unknown): value is NativePointer {
   if (value instanceof NativePointer) {
@@ -136,7 +146,12 @@ export function pointerIsNull(
 export function ensurePointer(value: NativePointer | null | undefined, message: string): NativePointer {
   const pointer = resolveNativePointer(value);
   if (!pointer || pointer.isNull()) {
-    throw new MonoValidationError(message || "Invalid pointer", "pointer", value ?? null);
+    raise(
+      MonoErrorCodes.INVALID_ARGUMENT,
+      message || "Invalid pointer",
+      "Provide a non-null NativePointer",
+      { parameter: "pointer", value: value ?? null },
+    );
   }
   return pointer;
 }
@@ -192,7 +207,12 @@ export function unwrapInstanceRequired(
 
   if (!isValidPointer(pointer)) {
     const description = describeContext(context);
-    throw new MonoValidationError(`Invalid instance${description ? ` in ${description}` : ""}`, "instance", instance);
+    raise(
+      MonoErrorCodes.INVALID_ARGUMENT,
+      `Invalid instance${description ? ` in ${description}` : ""}`,
+      "Provide a managed object instance or a valid NativePointer",
+      { parameter: "instance", value: instance },
+    );
   }
 
   return pointer;
@@ -254,13 +274,24 @@ function describeContext(
  */
 export function safeAlloc(size: number): NativePointer {
   if (size <= 0) {
-    throw new MonoValidationError("Allocation size must be positive", "size", size);
+    raise(
+      MonoErrorCodes.INVALID_ARGUMENT,
+      "Allocation size must be positive",
+      "Provide a size > 0",
+      { parameter: "size", value: size },
+    );
   }
 
   try {
     return Memory.alloc(size);
   } catch (error) {
-    throw new MonoMemoryError(`Failed to allocate ${size} bytes`, error instanceof Error ? error : undefined);
+    raiseFrom(
+      error,
+      MonoErrorCodes.MEMORY_ERROR,
+      `Failed to allocate ${size} bytes`,
+      "Reduce allocation size or ensure the target process has enough memory",
+      { size },
+    );
   }
 }
 
@@ -269,13 +300,24 @@ export function safeAlloc(size: number): NativePointer {
  */
 export function safeWriteMemory(pointer: NativePointer, data: ArrayBuffer | number[]): void {
   if (!isValidPointer(pointer)) {
-    throw new MonoValidationError("Invalid pointer for memory write", "pointer", pointer);
+    raise(
+      MonoErrorCodes.INVALID_ARGUMENT,
+      "Invalid pointer for memory write",
+      "Provide a non-null NativePointer",
+      { parameter: "pointer", value: pointer },
+    );
   }
 
   try {
     pointer.writeByteArray(data);
   } catch (error) {
-    throw new MonoMemoryError(`Failed to write memory at ${pointer}`, error instanceof Error ? error : undefined);
+    raiseFrom(
+      error,
+      MonoErrorCodes.MEMORY_ERROR,
+      `Failed to write memory at ${pointer}`,
+      "Ensure the pointer is writable and the data size is valid",
+      { pointer: pointer.toString() },
+    );
   }
 }
 

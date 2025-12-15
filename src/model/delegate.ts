@@ -1,6 +1,17 @@
+/**
+ * Delegate model (System.Delegate / System.MulticastDelegate).
+ *
+ * Provides:
+ * - Managed invocation (via mono_runtime_delegate_invoke)
+ * - Native thunk compilation for high-performance callbacks
+ * - ABI validation and delegate target inspection
+ *
+ * @module model/delegate
+ */
+
 import { MonoApi, MonoArg } from "../runtime/api";
 import { lazy } from "../utils/cache";
-import { MonoErrorCodes, MonoManagedExceptionError, raise } from "../utils/errors";
+import { MonoErrorCodes, MonoManagedExceptionError, raise, raiseFrom } from "../utils/errors";
 import { Logger } from "../utils/log";
 import { pointerIsNull } from "../utils/memory";
 import { MonoArray } from "./array";
@@ -13,17 +24,13 @@ const delegateLogger = Logger.withTag("MonoDelegate");
 
 // ===== TYPE DEFINITIONS =====
 
-/**
- * Options for managed delegate invocation
- */
+/** Options for invoking managed delegates. */
 export interface DelegateInvokeOptions {
   /** Whether to throw on managed exceptions (default: true) */
   throwOnManagedException?: boolean;
 }
 
-/**
- * Options for compiling native delegate thunks
- */
+/** Options for compiling native delegate thunks. */
 export interface CompileNativeOptions {
   /** Whether to cache the compiled thunk (default: true) */
   cache?: boolean;
@@ -31,9 +38,7 @@ export interface CompileNativeOptions {
   validateAbi?: boolean;
 }
 
-/**
- * Result of ABI validation for native delegate compilation
- */
+/** Result of ABI validation for native delegate thunk compilation. */
 export interface AbiValidationResult {
   /** Whether the ABI is valid */
   valid: boolean;
@@ -168,9 +173,15 @@ export class MonoDelegate extends MonoObject {
         targetField.setValue(instance, targetPtr);
         methodField.setValue(instance.pointer, methodPtr);
       } else {
-        throw new Error(
-          "Cannot create delegate: mono_delegate_ctor is not exported and constructor/fields not found. " +
-            "Consider using the managed Delegate.CreateDelegate() method instead.",
+        raise(
+          MonoErrorCodes.NOT_SUPPORTED,
+          "Cannot create delegate: mono_delegate_ctor is not exported and constructor/fields not found",
+          "Consider using the managed Delegate.CreateDelegate() method instead",
+          {
+            delegateClass: delegateClass.fullName,
+            targetField: targetField?.name,
+            methodField: methodField?.name,
+          },
         );
       }
     }
@@ -378,7 +389,7 @@ export class MonoDelegate extends MonoObject {
       if (error instanceof MonoManagedExceptionError && options.throwOnManagedException === false) {
         return NULL;
       }
-      throw error;
+      raiseFrom(error);
     }
   }
 

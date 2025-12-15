@@ -1,16 +1,27 @@
+/**
+ * Method signature model.
+ *
+ * Wraps `MonoMethodSignature` accessors for parameter/return types and
+ * calling convention metadata.
+ *
+ * @module model/method-signature
+ */
+
 import { MonoEnums } from "../runtime/enums";
 import { lazy } from "../utils/cache";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { MonoHandle } from "./base";
+import { MonoHandle } from "./handle";
 import { MonoType } from "./type";
 
+/** Parameter metadata for a method signature. */
 export interface MonoParameterInfo {
   index: number;
   type: MonoType;
   isOut: boolean;
 }
 
+/** Calling convention enum values as exposed by Mono. */
 export const MonoCallConvention = MonoEnums.MonoCallConvention;
 
 export type MonoCallConvention = (typeof MonoEnums.MonoCallConvention)[keyof typeof MonoEnums.MonoCallConvention];
@@ -23,6 +34,7 @@ export const MonoCallConventionModifiers = Object.freeze({
 
 export type MonoCallConventionModifier = (typeof MonoCallConventionModifiers)[keyof typeof MonoCallConventionModifiers];
 
+/** Represents a parsed Mono method signature. */
 export class MonoMethodSignature extends MonoHandle {
   /** Gets the number of parameters. */
   @lazy

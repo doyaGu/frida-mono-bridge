@@ -3,7 +3,7 @@ import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { MonoHandle } from "./base";
+import { MonoHandle } from "./handle";
 import { MonoClass } from "./class";
 import { MonoDomain } from "./domain";
 
@@ -306,7 +306,7 @@ export class MonoImage extends MonoHandle {
    *
    * @param fullName Full class name with namespace (e.g., "Game.Player")
    * @returns The MonoClass instance
-   * @throws MonoClassNotFoundError if the class is not found or name is empty
+   * @throws {MonoClassNotFoundError} if the class is not found or name is empty
    *
    * @example
    * ```typescript

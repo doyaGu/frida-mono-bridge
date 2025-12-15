@@ -1,3 +1,12 @@
+/**
+ * Memory subsystem facade for Mono namespace.
+ *
+ * Provides typed memory read/write utilities integrated with MonoType.
+ * This module creates the `Mono.memory` facade object.
+ *
+ * @module runtime/memory
+ */
+
 import type { MonoNamespace } from "../mono";
 
 import { MonoArray } from "../model/array";
@@ -15,9 +24,18 @@ import {
   readPrimitiveValue,
   writePrimitiveValue,
 } from "../model/type";
+import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
 import type { MonoApi } from "./api";
 
+/**
+ * Create the memory subsystem facade.
+ *
+ * Provides simple type-aware read/write helpers for:
+ * - Primitives (int8, uint8, float, etc.)
+ * - Typed managed objects (strings, arrays, delegates)
+ * - Value type fields (inlined vs. boxed)
+ */
 export function createMemorySubsystem(api: MonoApi): MonoNamespace.Memory {
   // Map simple type names to MonoTypeKind for unified handling.
   const simpleTypeToKind: Record<MonoNamespace.MemoryType, MonoTypeKind> = {
@@ -36,11 +54,18 @@ export function createMemorySubsystem(api: MonoApi): MonoNamespace.Memory {
     char: MonoTypeKind.Char,
   };
 
+  const knownMemoryTypes = Object.keys(simpleTypeToKind).join(", ");
+
   return {
     read(ptr: NativePointer, type: MonoNamespace.MemoryType): any {
       const kind = simpleTypeToKind[type];
       if (kind === undefined) {
-        throw new Error(`Unknown memory type: ${type}`);
+        raise(
+          MonoErrorCodes.INVALID_ARGUMENT,
+          `Unknown memory type: ${type}`,
+          `Use one of: ${knownMemoryTypes}`,
+          { type },
+        );
       }
       return readPrimitiveValue(ptr, kind);
     },
@@ -48,7 +73,12 @@ export function createMemorySubsystem(api: MonoApi): MonoNamespace.Memory {
     write(ptr: NativePointer, value: any, type: MonoNamespace.MemoryType): void {
       const kind = simpleTypeToKind[type];
       if (kind === undefined) {
-        throw new Error(`Unknown memory type: ${type}`);
+        raise(
+          MonoErrorCodes.INVALID_ARGUMENT,
+          `Unknown memory type: ${type}`,
+          `Use one of: ${knownMemoryTypes}`,
+          { type },
+        );
       }
       writePrimitiveValue(ptr, kind, value);
     },
@@ -120,7 +150,12 @@ export function createMemorySubsystem(api: MonoApi): MonoNamespace.Memory {
 
       if (value === null || value === undefined) {
         if (isValueTypeKind(kind)) {
-          throw new Error(`Cannot write null to value type ${monoType.fullName}`);
+          raise(
+            MonoErrorCodes.INVALID_ARGUMENT,
+            `Cannot write null to value type ${monoType.fullName}`,
+            "Provide a non-null value (or write a pointer to a boxed value type)",
+            { typeName: monoType.fullName },
+          );
         }
         ptr.writePointer(NULL);
         return;

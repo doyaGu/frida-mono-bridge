@@ -1,5 +1,12 @@
 /**
- * String reading, writing, formatting, and conversion utilities for Mono
+ * String reading, writing, formatting, and conversion utilities for Mono.
+ *
+ * Provides:
+ * - Safe UTF-8/UTF-16 string reading from pointers
+ * - MonoString pointer resolution
+ * - JSON serialization with pointer/function handling
+ *
+ * @module utils/string
  */
 
 import { MonoError } from "./errors";
@@ -10,8 +17,9 @@ import { resolveNativePointer } from "./memory";
 // ============================================================================
 
 /**
- * Safely read UTF-8 string from pointer
- * Returns empty string if pointer is null or reading fails
+ * Safely read UTF-8 string from pointer.
+ *
+ * @returns Empty string if pointer is null or reading fails.
  */
 export function readUtf8String(pointer: NativePointer | null): string {
   const resolved = resolveNativePointer(pointer);

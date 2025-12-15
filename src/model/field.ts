@@ -1,11 +1,22 @@
+/**
+ * Field model (System.Reflection.FieldInfo).
+ *
+ * Provides metadata access (name/type/flags/offset), custom attribute reading,
+ * and value read/write helpers for both static and instance fields.
+ *
+ * @module model/field
+ */
+
 import { FieldAttribute, getMaskedValue, hasFlag } from "../runtime/metadata";
 import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull, unwrapInstance, unwrapInstanceRequired } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
-import { CustomAttribute, MemberAccessibility, MonoHandle } from "./base";
+import type { CustomAttribute } from "./attribute";
+import type { MemberAccessibility } from "./handle";
+import { MonoHandle } from "./handle";
 import { MonoClass } from "./class";
-import { createFieldAttributeContext, getCustomAttributes } from "./custom-attributes";
+import { createFieldAttributeContext, getCustomAttributes } from "./attribute";
 import { MonoDomain } from "./domain";
 import { MonoObject } from "./object";
 import { MonoString } from "./string";
@@ -23,14 +34,17 @@ import {
 
 export type FieldAccessibility = MemberAccessibility;
 
+/** Options shared by field read/write operations. */
 export interface FieldAccessOptions {
   domain?: MonoDomain | NativePointer;
 }
 
+/** Options for reading a field value into JavaScript types. */
 export interface FieldReadOptions extends FieldAccessOptions {
   coerce?: boolean;
 }
 
+/** Serializable summary of a field and its type metadata. */
 export interface MonoFieldSummary {
   name: string;
   fullName: string;
@@ -63,6 +77,14 @@ const FIELD_ACCESS_NAMES: Record<number, FieldAccessibility> = {
   [FieldAttribute.Public]: "public",
 };
 
+/**
+ * Represents a Mono field (System.Reflection.FieldInfo).
+ *
+ * `MonoField` supports:
+ * - Metadata inspection: name/fullName/type/flags/token
+ * - Custom attributes: `customAttributes`
+ * - Value access: raw pointer, object wrapper, and JS-coerced reads/writes
+ */
 export class MonoField<T = any> extends MonoHandle {
   // ===== CORE PROPERTIES =====
 

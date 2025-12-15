@@ -2,9 +2,10 @@ import { MonoApi } from "../runtime/api";
 import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { readUtf8String } from "../utils/string";
-import { CustomAttribute, MonoHandle } from "./base";
+import type { CustomAttribute } from "./attribute";
+import { MonoHandle } from "./handle";
 import { MonoClass } from "./class";
-import { createAssemblyAttributeContext, getCustomAttributes } from "./custom-attributes";
+import { createAssemblyAttributeContext, getCustomAttributes } from "./attribute";
 import { MonoImage } from "./image";
 
 /**

@@ -10,6 +10,7 @@
  */
 
 import { MonoApi } from "../runtime/api";
+import { MonoErrorCodes, raise } from "../utils/errors";
 import { MonoAssembly } from "./assembly";
 import { MonoClass } from "./class";
 import { MonoDomain } from "./domain";
@@ -128,13 +129,18 @@ export class LazyCollection<T> implements Iterable<T> {
    * Get item at index with bounds checking.
    * @param index The index (supports negative indices)
    * @returns The item at the index
-   * @throws {RangeError} If index is out of bounds
+   * @throws {MonoValidationError} If index is out of bounds
    */
   at(index: number): T {
     const items = this.items;
     const normalizedIndex = index < 0 ? items.length + index : index;
     if (normalizedIndex < 0 || normalizedIndex >= items.length) {
-      throw new RangeError(`Index ${index} out of bounds (0..${items.length - 1})`);
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `Index ${index} out of bounds (0..${items.length - 1})`,
+        "Use tryAt() to avoid throwing",
+        { index, length: items.length },
+      );
     }
     return items[normalizedIndex];
   }
