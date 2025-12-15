@@ -95,6 +95,9 @@ export class MonoImage extends MonoHandle {
    */
   @lazy
   get name(): string {
+    if (!this.isValid) {
+      return "<invalid>";
+    }
     const namePtr = this.native.mono_image_get_name(this.pointer);
     return readUtf8String(namePtr);
   }
@@ -198,6 +201,10 @@ export class MonoImage extends MonoHandle {
    * ```
    */
   tryClassFromName(namespace: string, name: string): MonoClass | null {
+    // Guard against invalid image
+    if (!this.isValid) {
+      return null;
+    }
     const trimmedName = name ? name.trim() : "";
     if (trimmedName.length === 0) {
       return null;
