@@ -1,6 +1,6 @@
 # Test Suite
 
-Comprehensive test suite for frida-mono-bridge with **1,089 tests** across **36 test files**.
+Comprehensive test suite for frida-mono-bridge with **1,103 tests** across **36 test files**.
 
 ## Quick Start
 
@@ -22,11 +22,11 @@ frida -p <PID> -l dist/test-internal-call.js --timeout 60
 
 | Metric                   | Value                  |
 | ------------------------ | ---------------------- |
-| **Total Tests**          | 1,089                  |
+| **Total Tests**          | 1,103                  |
 | **Test Files**           | 36                     |
 | **Test Categories**      | 7                      |
 | **Standalone Tests**     | ~80 (no Mono required) |
-| **Mono-dependent Tests** | ~1,013                 |
+| **Mono-dependent Tests** | ~1,027                 |
 
 ## Test Categories
 
@@ -34,7 +34,7 @@ frida -p <PID> -l dist/test-internal-call.js --timeout 60
 | ------------------------ | ---------- | ----- | --------------------------------------------------- |
 | **Core Infrastructure**  | 5          | ~115  | Module detection, API availability, data operations |
 | **Utility (Standalone)** | 3          | ~80   | Error handling, utilities (no Mono dependency)      |
-| **Type System**          | 6          | ~260  | Classes, methods, fields, properties, generics      |
+| **Type System**          | 6          | ~274  | Classes, methods, fields, properties, generics      |
 | **Runtime Objects**      | 6          | ~275  | Strings, arrays, delegates, objects, data           |
 | **Domain & Assembly**    | 5          | ~125  | Domain, image, assembly, threading, module          |
 | **Advanced Features**    | 4          | ~160  | Find tools, trace tools, GC tools, internal calls   |
@@ -53,7 +53,7 @@ frida -p <PID> -l dist/test-internal-call.js --timeout 60
 | [test-mono-method.ts](test-mono-method.ts)                   | 50    | Type System         |
 | [test-mono-image.ts](test-mono-image.ts)                     | 47    | Domain & Assembly   |
 | [test-trace-tools.ts](test-trace-tools.ts)                   | 46    | Advanced Features   |
-| [test-mono-types.ts](test-mono-types.ts)                     | 46    | Type System         |
+| [test-mono-types.ts](test-mono-types.ts)                     | 60    | Type System         |
 | [test-gc-tools.ts](test-gc-tools.ts)                         | 42    | Advanced Features   |
 | [test-runtime-api.ts](test-runtime-api.ts)                   | 42    | Runtime Objects     |
 | [test-mono-assembly.ts](test-mono-assembly.ts)               | 39    | Domain & Assembly   |
@@ -109,7 +109,7 @@ Tests that run **without Mono runtime**. Good for quick validation.
 
 ---
 
-## Category 3: Type System Tests (260 tests)
+## Category 3: Type System Tests (274 tests)
 
 Tests for Mono type system components.
 
@@ -119,7 +119,7 @@ Tests for Mono type system components.
 | [test-mono-method.ts](test-mono-method.ts)             | 50    | MonoMethod resolution, invocation, overloading |
 | [test-mono-field.ts](test-mono-field.ts)               | 75    | MonoField access, static/instance, value types |
 | [test-mono-property.ts](test-mono-property.ts)         | 59    | MonoProperty getter/setter, indexed properties |
-| [test-mono-types.ts](test-mono-types.ts)               | 46    | MonoType kinds, primitives, arrays, generics   |
+| [test-mono-types.ts](test-mono-types.ts)               | 60    | MonoType kinds, primitives, arrays, generics   |
 | [test-generic-types.ts](test-generic-types.ts)         | 30    | Generic type instantiation, type parameters    |
 | [test-custom-attributes.ts](test-custom-attributes.ts) | 10    | Custom attribute reflection                    |
 
