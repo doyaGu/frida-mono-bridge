@@ -3,11 +3,11 @@
  * Runs Mono Module tests independently
  */
 
-import { testMonoModule } from "../test-mono-module";
+import { createMonoModuleTests } from "../test-mono-module";
 import { runTestCategory } from "../test-runner-base";
 
 // Auto-run test category
-runTestCategory("Mono Module Tests", testMonoModule, {
+runTestCategory("Mono Module Tests", createMonoModuleTests, {
   verbose: true,
   stopOnFirstFailure: false,
 });

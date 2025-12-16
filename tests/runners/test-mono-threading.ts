@@ -3,11 +3,11 @@
  * Runs Mono Threading tests independently
  */
 
-import { testMonoThreading } from "../test-mono-threading";
+import { createMonoThreadingTests } from "../test-mono-threading";
 import { runTestCategory } from "../test-runner-base";
 
 // Auto-run test category
-runTestCategory("Mono Threading Tests", testMonoThreading, {
+runTestCategory("Mono Threading Tests", createMonoThreadingTests, {
   verbose: true,
   stopOnFirstFailure: false,
 });

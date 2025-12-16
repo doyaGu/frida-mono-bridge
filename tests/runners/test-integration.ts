@@ -3,11 +3,11 @@
  * Runs Integration tests independently
  */
 
-import { testIntegration } from "../test-integration";
+import { createIntegrationTests } from "../test-integration";
 import { runTestCategory } from "../test-runner-base";
 
 // Auto-run test category
-runTestCategory("Integration Tests", testIntegration, {
+runTestCategory("Integration Tests", createIntegrationTests, {
   verbose: true,
   stopOnFirstFailure: false,
 });

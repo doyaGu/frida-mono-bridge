@@ -3,11 +3,11 @@
  * Runs Mono Utils tests independently
  */
 
-import { testMonoUtils } from "../test-mono-utils";
+import { createMonoUtilsTests } from "../test-mono-utils";
 import { runTestCategory } from "../test-runner-base";
 
 // Auto-run test category
-runTestCategory("Mono Utils Tests", testMonoUtils, {
+runTestCategory("Mono Utils Tests", createMonoUtilsTests, {
   verbose: true,
   stopOnFirstFailure: false,
 });

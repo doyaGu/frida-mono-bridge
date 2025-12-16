@@ -3,11 +3,11 @@
  * Runs Mono Domain tests independently
  */
 
-import { testMonoDomain } from "../test-mono-domain";
+import { createMonoDomainTests } from "../test-mono-domain";
 import { runTestCategory } from "../test-runner-base";
 
 // Auto-run test category
-runTestCategory("Mono Domain Tests", testMonoDomain, {
+runTestCategory("Mono Domain Tests", createMonoDomainTests, {
   verbose: true,
   stopOnFirstFailure: false,
 });
