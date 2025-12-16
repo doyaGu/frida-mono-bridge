@@ -14,6 +14,7 @@
  */
 
 import { MonoApi } from "./api";
+import { pointerIsNull } from "../utils/memory";
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -80,6 +81,8 @@ export interface ThreadStats {
  */
 export class ThreadManager {
   private readonly attachedThreads = new Map<number, NativePointer>();
+  /** Threads detected as already-attached (not attached by the bridge) */
+  private readonly externallyAttachedThreads = new Map<number, NativePointer>();
   private readonly activeAttachments = new Set<number>();
   /** Threads that were attached by the bridge (not externally) */
   private readonly bridgeOwnedThreads = new Set<number>();
@@ -150,12 +153,52 @@ export class ThreadManager {
    */
   ensureAttached(threadId = getCurrentThreadId()): NativePointer {
     const handle = this.attachedThreads.get(threadId);
-    if (handle && !isNull(handle)) {
+    if (handle && !pointerIsNull(handle)) {
       return handle;
     }
+
+    const externalHandle = this.externallyAttachedThreads.get(threadId);
+    if (externalHandle && !pointerIsNull(externalHandle)) {
+      return externalHandle;
+    }
+
+    // Best-effort: detect if the thread is already attached externally.
+    // We must NOT call api.native.* here because that would auto-attach via this manager.
+    // mono_domain_get() is a cheap TLS read and returns NULL for unattached threads.
+    try {
+      const domainGet = this.api.tryGetNativeFunction("mono_domain_get");
+      if (domainGet) {
+        const currentDomain = domainGet() as NativePointer;
+        if (currentDomain && !pointerIsNull(currentDomain)) {
+          // Thread appears attached (domain TLS is set). Try to get the thread object.
+          const threadCurrent = this.api.tryGetNativeFunction("mono_thread_current");
+          const threadObj = threadCurrent ? (threadCurrent() as NativePointer) : NULL;
+
+          // If mono_thread_current is unavailable or returns NULL, fall back to mono_thread_attach
+          // with the current domain (idempotent when already attached).
+          const threadAttach = this.api.tryGetNativeFunction("mono_thread_attach");
+          const resolvedThread = !pointerIsNull(threadObj)
+            ? threadObj
+            : threadAttach
+              ? (threadAttach(currentDomain) as NativePointer)
+              : NULL;
+
+          if (resolvedThread && !pointerIsNull(resolvedThread)) {
+            this.externallyAttachedThreads.set(threadId, resolvedThread);
+            return resolvedThread;
+          }
+        }
+      }
+    } catch {
+      // Ignore detection failures and proceed with normal attachment.
+    }
+
     const attached = this.api.attachThread();
     this.attachedThreads.set(threadId, attached);
     this.totalAttachmentCount++;
+
+    // If we got here, the bridge performed the attachment.
+    this.bridgeOwnedThreads.add(threadId);
     return attached;
   }
 
@@ -178,7 +221,27 @@ export class ThreadManager {
    */
   isAttached(threadId = getCurrentThreadId()): boolean {
     const handle = this.attachedThreads.get(threadId);
-    return handle !== undefined && !isNull(handle);
+    if (handle !== undefined && !pointerIsNull(handle)) {
+      return true;
+    }
+
+    const externalHandle = this.externallyAttachedThreads.get(threadId);
+    if (externalHandle !== undefined && !pointerIsNull(externalHandle)) {
+      return true;
+    }
+
+    // Last-resort check: domain TLS implies attachment.
+    try {
+      const domainGet = this.api.tryGetNativeFunction("mono_domain_get");
+      if (domainGet) {
+        const currentDomain = domainGet() as NativePointer;
+        return currentDomain !== undefined && !pointerIsNull(currentDomain);
+      }
+    } catch {
+      // ignore
+    }
+
+    return false;
   }
 
   /**
@@ -227,7 +290,11 @@ export class ThreadManager {
    */
   detach(threadId = getCurrentThreadId()): boolean {
     const handle = this.attachedThreads.get(threadId);
-    if (!handle || isNull(handle)) {
+    if (!handle || pointerIsNull(handle)) {
+      // Might be externally attached; never detach it.
+      if (this.externallyAttachedThreads.has(threadId)) {
+        return false;
+      }
       return false;
     }
 
@@ -236,6 +303,7 @@ export class ThreadManager {
       this.attachedThreads.delete(threadId);
       this.activeAttachments.delete(threadId);
       this.bridgeOwnedThreads.delete(threadId);
+      this.externallyAttachedThreads.delete(threadId);
       return true;
     } catch {
       return false;
@@ -263,6 +331,7 @@ export class ThreadManager {
         this.attachedThreads.delete(threadId);
         this.activeAttachments.delete(threadId);
         this.bridgeOwnedThreads.delete(threadId);
+        this.externallyAttachedThreads.delete(threadId);
       }
       return !!result;
     } catch {
@@ -294,6 +363,7 @@ export class ThreadManager {
       this.attachedThreads.delete(threadId);
       this.activeAttachments.delete(threadId);
       this.bridgeOwnedThreads.delete(threadId);
+      this.externallyAttachedThreads.delete(threadId);
     }
   }
 
@@ -341,22 +411,5 @@ export class ThreadManager {
 }
 
 function getCurrentThreadId(): number {
-  if (typeof Process.getCurrentThreadId === "function") {
-    return Process.getCurrentThreadId();
-  }
-  // As a fallback, use the JavaScript thread id (Frida currently runs agents on a single thread).
-  return 0;
-}
-
-function isNull(pointer: NativePointer | null): boolean {
-  if (pointer === null || pointer === undefined) {
-    return true;
-  }
-  if (typeof pointer === "object" && typeof (pointer as any).isNull === "function") {
-    return (pointer as any).isNull();
-  }
-  if (typeof pointer === "number") {
-    return pointer === 0;
-  }
-  return false;
+  return Process.getCurrentThreadId();
 }
