@@ -306,53 +306,17 @@ function ensureCacheStore(instance: any): Map<string, LruCache<string, unknown>>
 export function lazy<This, Return>(
   target: (this: This) => Return,
   context: ClassGetterDecoratorContext<This, Return>,
-): (this: This) => Return;
-export function lazy(_target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor): PropertyDescriptor;
-export function lazy(
-  targetOrGetter: any,
-  contextOrKey: ClassGetterDecoratorContext<any, any> | string | symbol,
-  descriptor?: PropertyDescriptor,
-): any {
-  // TypeScript 5+ stage 3 decorators
-  if (typeof contextOrKey === "object" && contextOrKey !== null && "kind" in contextOrKey) {
-    const getter = targetOrGetter as (this: any) => any;
-    const context = contextOrKey as ClassGetterDecoratorContext<any, any>;
+): (this: This) => Return {
+  const getter = target;
 
-    return function (this: any) {
-      const value = getter.call(this);
-      Object.defineProperty(this, context.name, {
-        value,
-        configurable: true,
-        enumerable: false,
-        writable: false,
-      });
-      return value;
-    };
-  }
-
-  // Legacy TypeScript decorators (experimentalDecorators)
-  const propertyKey = contextOrKey as string | symbol;
-  const getter = descriptor?.get;
-
-  if (!getter) {
-    raise(
-      MonoErrorCodes.INVALID_ARGUMENT,
-      "@lazy can only be applied to getter accessors",
-      "Apply @lazy to a getter accessor",
-      { parameter: "descriptor", value: descriptor },
-    );
-  }
-
-  descriptor!.get = function () {
+  return function (this: This) {
     const value = getter.call(this);
-    Object.defineProperty(this, propertyKey, {
+    Object.defineProperty(this, context.name, {
       value,
-      configurable: descriptor!.configurable,
-      enumerable: descriptor!.enumerable,
+      configurable: true,
+      enumerable: false,
       writable: false,
     });
     return value;
   };
-
-  return descriptor;
 }

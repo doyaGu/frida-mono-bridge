@@ -6,10 +6,6 @@
     "lib": ["ES2020"],
     "types": ["frida-gum", "node"],
 
-    // Decorator support
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": false,
-
     // Enhanced type checking
     "strict": true,
     "noImplicitAny": true,
