@@ -782,7 +782,7 @@ export class MonoApi {
       return;
     }
 
-    // Try g_free (older Mono builds)
+    // Fallback to g_free
     if (this.hasExport("g_free")) {
       this.native.g_free(ptr);
       return;

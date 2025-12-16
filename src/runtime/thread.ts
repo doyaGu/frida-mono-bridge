@@ -13,8 +13,8 @@
  * @module runtime/thread
  */
 
-import { MonoApi } from "./api";
 import { pointerIsNull } from "../utils/memory";
+import { MonoApi } from "./api";
 
 // ============================================================================
 // TYPE DEFINITIONS
