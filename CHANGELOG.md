@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-12-13
+
+### Added
+- **IL2CPP-style Facade API**: Root entry now focuses on a single `Mono` facade with explicit lifecycle
+  - `Mono.initialize()` waits for Mono module + root domain readiness
+  - `Mono.perform()` is the recommended execution entry (thread attach/detach managed by `perform`)
+  - `globalThis.Mono` installed by default on first `initialize/perform` (disable via `Mono.config.installGlobal = false` before first use)
+- **Configuration surface**: `Mono.config` now supports module discovery + export aliasing + lifecycle tuning
+  - `moduleName`, `exports`, `initializeTimeoutMs`, `warnAfterMs`, `logLevel`, `performMode`
+- **Facade helpers for common tasks** (to avoid importing internal model statics)
+  - `Mono.array.new`, `Mono.string.new`, `Mono.method.find`, `Mono.image.fromAssemblyPath`
+- **Mono signature pipeline modernization**
+  - **Export filtering by default**: signatures now default to DLL-exported APIs only
+  - `scripts/generate-mono-signatures.ts` now supports CLI args: `--root`, `--include`, `--exclude`, `--out`
+  - Manual signature additions moved to `data/include/mono-manual.h`
+  - Uses minimatch for glob-based include/exclude patterns
+- **Enhanced ThreadManager capabilities**
+  - Detection of externally attached threads for improved attachment management
+  - Better integration with Mono's native thread attachment mechanisms
+- **GC handle management improvements**
+  - Added v2 ABI support for garbage collector handles
+  - Improved error handling and validation for GC operations
+- **Lazy global installation**
+  - Mono API now installs globally on first use for convenient console access
+  - Configurable via `Mono.config.installGlobal` flag
+
+### Changed
+- **BREAKING**: Root entry no longer re-exports `runtime/`, `model/`, `utils/` runtime values
+  - Consumers should use the `Mono` facade (types remain available as type-only exports)
+- **BREAKING**: `Mono.perform()` is now async and returns a `Promise<T>`
+  - Update call sites to `await Mono.perform(() => { ... })` (or otherwise handle the returned Promise)
+- **BREAKING**: Many model APIs migrated from `getX()` methods to `@lazy` properties
+  - Example: `klass.getFullName()` -> `klass.fullName`, `method.isStatic()` -> `method.isStatic`
+- **BREAKING**: Search API consolidated into domain-centric approach
+  - Removed `Mono.find` facade subsystem to reduce API surface complexity
+  - All search operations now live on `MonoDomain` instances: `domain.findClasses()`, `domain.findMethods()`, `domain.findFields()`, `domain.findProperties()`
+  - Replaced `domain.classExact()` with optimized `domain.tryClass()` for fast exact lookups
+  - Assembly-specific fast-path optimizations for `System.*` and `UnityEngine.*` namespaces
+- **Default signature generation** now filters by Unity Mono DLL exports
+  - `npm run generate:signatures` -> exported-only (~559)
+- Signature files consolidated into a single generated `src/runtime/signatures.ts`
+- Lazy decorator implementation refactored for improved clarity and functionality
+- Memory subsystem consolidated into `src/subsystems.ts` with unified facade builders
+- MonoMethod now uses `api.runtimeInvoke` for `MakeGenericMethod` invocation with better exception handling
+- Test suite size adjusted to 1,089 tests (from 1,104) after consolidating find-tools tests into mono-domain
+
+### Removed
+- **BREAKING**: `Mono.find` facade subsystem
+  - Use `Mono.domain.findClasses()`, `Mono.domain.findMethods()`, etc. instead
+- **BREAKING**: `domain.classExact()` method
+  - Use `domain.tryClass()` for fast exact class lookups (same optimizations, cleaner API)
+- Standalone `test-find-tools.ts` test file (consolidated into `test-mono-domain.ts`)
+  - A compatibility shim remains for existing test runners
+
+### Fixed
+- Robust initialization and diagnostics
+  - Wait-for-module + wait-for-root-domain readiness with timeout and warning thresholds
+  - Standardized errors via `MonoErrorCodes` + `raise()` for clearer hints and typed handling
+- API migration fixes in tests (method-call -> property-access) to restore compilation
+- Improved validity checks in MonoImage for name retrieval and class lookup
+- Enhanced test reliability with better null checks and error handling
+- Memory management and resource cleanup improvements
+
 ## [0.2.2] - 2025-12-05
 
 ### Changed
@@ -89,7 +152,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Custom attributes reading and parsing
 
 - **Utility Functions**
-  - `Mono.find` - Search classes, methods, and fields by pattern
+  - `Mono.domain` - Search classes, methods, and fields by pattern (e.g. `domain.findClasses`, `domain.findMethods`)
   - `Mono.trace` - Method hooking and call tracing
   - `Mono.gc` - Garbage collector interaction and pinning
 
@@ -121,9 +184,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **0.3.0** - facade, async lifecycle, signature pipeline modernization
+- **0.2.2** - Bundled declarations, improved package structure
+- **0.2.1** - esbuild-based bundling
 - **0.2.0** - ES module support, resilient method interception, utility consolidation
 - **0.1.0** - Initial public release
 
-[Unreleased]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/doyaGu/frida-mono-bridge/compare/3fc9567...v0.3.0
+[0.2.2]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.2.1...3fc9567
+[0.2.1]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/doyaGu/frida-mono-bridge/releases/tag/v0.1.0
