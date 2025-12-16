@@ -33,6 +33,7 @@ import { createMonoUtilsTests } from "./test-mono-utils";
 // ============================================================================
 // CATEGORY 3: Type System Tests (MONO_DEPENDENT)
 // ============================================================================
+import { createCustomAttributeTests } from "./test-custom-attributes";
 import { createGenericTypeTests } from "./test-generic-types";
 import { createMonoClassTests } from "./test-mono-class";
 import { createMonoFieldTests } from "./test-mono-field";
@@ -51,6 +52,8 @@ import { createMonoStringTests } from "./test-mono-string";
 // ============================================================================
 // CATEGORY 5: Domain & Assembly Tests (MONO_DEPENDENT)
 // ============================================================================
+// WARNING: test-mono-assembly should be run LAST as it may cause crashes
+// It performs assembly lifecycle operations that can destabilize the runtime
 import { createMonoApiTests } from "./test-mono-api";
 import { createMonoAssemblyTests } from "./test-mono-assembly";
 import { createMonoDomainTests } from "./test-mono-domain";
@@ -62,6 +65,8 @@ import { createRuntimeApiTests } from "./test-runtime-api";
 // ============================================================================
 // CATEGORY 6: Advanced Feature Tests (MONO_DEPENDENT)
 // ============================================================================
+// IMPORTANT: test-trace-tools should be run early in test sequence
+// Running it late may cause the test to hang or fail to hook methods
 import { createGCToolsTests } from "./test-gc-tools";
 import { createInternalCallTests } from "./test-internal-call";
 import { createTraceToolsTests } from "./test-trace-tools";
@@ -77,10 +82,11 @@ import { createUnityGameObjectTests } from "./test-unity-gameobject";
 export {
   // Core Infrastructure Tests
   createCoreInfrastructureTests,
+  // Type System Tests
+  createCustomAttributeTests,
   createDataOperationsTests,
   // Advanced Feature Tests
   createGCToolsTests,
-  // Type System Tests
   createGenericTypeTests,
   createIntegrationTests,
   createInternalCallTests,
