@@ -1049,3 +1049,206 @@ export async function createMonoDomainTests(): Promise<TestResult> {
     requiresMono: true,
   };
 }
+
+/**
+ * Find Tools Module Tests
+ *
+ * Tests for search and discovery helpers.
+ *
+ * NOTE: The `Mono.find` facade has been removed. The redundant `classExact()`
+ * helper was also removed; these tests validate `Mono.domain.tryClass()` and
+ * `Mono.domain.find*()`.
+ */
+export async function createFindToolTests(): Promise<TestResult[]> {
+  const results: TestResult[] = [];
+
+  // =====================================================
+  // Section 1: API Availability Tests (Fast)
+  // =====================================================
+  results.push(
+    await createMonoDependentTest("Find - Mono.domain helpers exist", () => {
+      assert(typeof Mono.domain.tryClass === "function", "Mono.domain.tryClass should be a function");
+      assert(typeof Mono.domain.findClasses === "function", "Mono.domain.findClasses should be a function");
+      assert(typeof Mono.domain.findMethods === "function", "Mono.domain.findMethods should be a function");
+      assert(typeof Mono.domain.findFields === "function", "Mono.domain.findFields should be a function");
+      assert(typeof Mono.domain.findProperties === "function", "Mono.domain.findProperties should be a function");
+    }),
+  );
+
+  // =====================================================
+  // Section 2: tryClass - Exact Lookup
+  // =====================================================
+  results.push(
+    await createMonoDependentTest("Find.tryClass - System.String", () => {
+      const klass = Mono.domain.tryClass("System.String");
+      assertNotNull(klass, "Should find System.String");
+      assert(klass!.name === "String", "Name should be String");
+      assert(klass!.namespace === "System", "Namespace should be System");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - System.Int32", () => {
+      const klass = Mono.domain.tryClass("System.Int32");
+      assertNotNull(klass, "Should find System.Int32");
+      assert(klass!.name === "Int32", "Name should be Int32");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - System.Object", () => {
+      const klass = Mono.domain.tryClass("System.Object");
+      assertNotNull(klass, "Should find System.Object");
+      assert(klass!.name === "Object", "Name should be Object");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - System.Boolean", () => {
+      const klass = Mono.domain.tryClass("System.Boolean");
+      assertNotNull(klass, "Should find System.Boolean");
+      assert(klass!.name === "Boolean", "Name should be Boolean");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - System.Double", () => {
+      const klass = Mono.domain.tryClass("System.Double");
+      assertNotNull(klass, "Should find System.Double");
+      assert(klass!.name === "Double", "Name should be Double");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - System.Array", () => {
+      const klass = Mono.domain.tryClass("System.Array");
+      assertNotNull(klass, "Should find System.Array");
+      assert(klass!.name === "Array", "Name should be Array");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - System.Type", () => {
+      const klass = Mono.domain.tryClass("System.Type");
+      assertNotNull(klass, "Should find System.Type");
+      assert(klass!.name === "Type", "Name should be Type");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - System.Exception", () => {
+      const klass = Mono.domain.tryClass("System.Exception");
+      assertNotNull(klass, "Should find System.Exception");
+      assert(klass!.name === "Exception", "Name should be Exception");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - System.Collections.Generic.List`1", () => {
+      const klass = Mono.domain.tryClass("System.Collections.Generic.List`1");
+      assertNotNull(klass, "Should find List<T>");
+      assert(klass!.name === "List`1", "Name should be List`1");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - System.Collections.Generic.Dictionary`2", () => {
+      const klass = Mono.domain.tryClass("System.Collections.Generic.Dictionary`2");
+      assertNotNull(klass, "Should find Dictionary<K,V>");
+      assert(klass!.name === "Dictionary`2", "Name should be Dictionary`2");
+    }),
+  );
+
+  // =====================================================
+  // Section 3: Result Validation
+  // =====================================================
+  results.push(
+    await createMonoDependentTest("Find.tryClass - result has valid methods", () => {
+      const klass = Mono.domain.tryClass("System.String");
+      assertNotNull(klass, "Should find System.String");
+
+      const methods = klass!.methods;
+      assert(Array.isArray(methods), "methods should be array");
+      assert(methods.length > 0, "String should have methods");
+
+      const methodNames = methods.map(m => m.name);
+      assert(methodNames.includes("ToString"), "Should have ToString method");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - result has valid fields", () => {
+      const klass = Mono.domain.tryClass("System.String");
+      assertNotNull(klass, "Should find System.String");
+
+      const fields = klass!.fields;
+      assert(Array.isArray(fields), "fields should be array");
+
+      const hasEmpty = fields.some(f => f.name === "Empty");
+      console.log(`[INFO] String has ${fields.length} fields, Empty: ${hasEmpty}`);
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - result has valid properties", () => {
+      const klass = Mono.domain.tryClass("System.String");
+      assertNotNull(klass, "Should find System.String");
+
+      const props = klass!.properties;
+      assert(Array.isArray(props), "properties should be array");
+
+      const propNames = props.map(p => p.name);
+      assert(propNames.includes("Length"), "Should have Length property");
+    }),
+  );
+
+  // =====================================================
+  // Section 4: Unity Classes (if Unity Project)
+  // =====================================================
+  results.push(
+    await createMonoDependentTest("Find.tryClass - UnityEngine.Object (Unity)", () => {
+      const klass = Mono.domain.tryClass("UnityEngine.Object");
+      if (klass === null) {
+        console.log("[SKIP] Not a Unity project");
+        return;
+      }
+      assert(klass.name === "Object", "Name should be Object");
+      assert(klass.namespace === "UnityEngine", "Namespace should be UnityEngine");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - UnityEngine.GameObject (Unity)", () => {
+      const klass = Mono.domain.tryClass("UnityEngine.GameObject");
+      if (klass === null) {
+        console.log("[SKIP] Not a Unity project");
+        return;
+      }
+      assert(klass.name === "GameObject", "Name should be GameObject");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - UnityEngine.Transform (Unity)", () => {
+      const klass = Mono.domain.tryClass("UnityEngine.Transform");
+      if (klass === null) {
+        console.log("[SKIP] Not a Unity project");
+        return;
+      }
+      assert(klass.name === "Transform", "Name should be Transform");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Find.tryClass - UnityEngine.MonoBehaviour (Unity)", () => {
+      const klass = Mono.domain.tryClass("UnityEngine.MonoBehaviour");
+      if (klass === null) {
+        console.log("[SKIP] Not a Unity project");
+        return;
+      }
+      assert(klass.name === "MonoBehaviour", "Name should be MonoBehaviour");
+    }),
+  );
+
+  return results;
+}

@@ -446,12 +446,12 @@ export async function createIntegrationTests(): Promise<TestResult> {
 
   // Test fluent API utilities
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.find utilities should work", () => {
-      const find = Mono.find;
-      assert(find !== null, "Find utilities should be accessible");
-      assert(typeof find.methods === "function", "Find should have methods method");
-      assert(typeof find.classes === "function", "Find should have classes method");
-      assert(typeof find.fields === "function", "Find should have fields method");
+    createMonoDependentTest("MonoDomain search helpers should work", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
+      assert(stringClass !== null, "Should find System.String via Mono.domain.tryClass");
+
+      const methods = Mono.domain.findMethods("System.String.*", { limit: 5 });
+      assert(Array.isArray(methods), "findMethods should return an array");
     }),
   );
 

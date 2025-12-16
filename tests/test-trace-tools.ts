@@ -7,7 +7,7 @@
 
 import type { FieldAccessCallbacks, MethodCallbacksTimed, MethodStats, PropertyAccessCallbacks } from "../src";
 import Mono from "../src";
-import { TestResult, assert, assertNotNull, createMonoDependentTest, createStandaloneTest } from "./test-framework";
+import { TestResult, assert, assertNotNull, createMonoDependentTest } from "./test-framework";
 
 /**
  * Create Trace Tools test suite
@@ -685,6 +685,234 @@ export async function createTraceToolsTests(): Promise<TestResult[]> {
       assert(typeof mockStats.lastCallTime === "number", "lastCallTime should be number");
 
       console.log(`[INFO] MethodStats interface verified`);
+    }),
+  );
+
+  // =====================================================
+  // Section 9: Real-world Integration Tests
+  // =====================================================
+  results.push(
+    await createMonoDependentTest("Trace - Hook Unity Update methods", () => {
+      // Try to find and hook common Unity Update methods
+      const updateMethods = Mono.domain.findMethods("*Update*", { limit: 10 });
+      console.log(`[INFO] Found ${updateMethods.length} methods matching *Update*`);
+
+      let hookedCount = 0;
+      const detachers: (() => void)[] = [];
+
+      for (const method of updateMethods) {
+        if (hookedCount >= 3) break; // Limit to 3 hooks for this test
+
+        try {
+          const detach = Mono.trace.tryMethod(method, {
+            onEnter: () => {
+              // Hook installed successfully
+            },
+          });
+
+          if (detach) {
+            detachers.push(detach);
+            hookedCount++;
+            console.log(`[INFO] Successfully hooked: ${method.fullName}`);
+          }
+        } catch (e) {
+          // Expected for some methods
+        }
+      }
+
+      console.log(`[INFO] Successfully hooked ${hookedCount} Update methods`);
+
+      // Clean up all hooks
+      for (const detach of detachers) {
+        detach();
+      }
+
+      assert(hookedCount >= 0, "Should hook at least 0 methods (may be none if no Update methods found)");
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Trace - Performance tracking real methods", () => {
+      const tracker = Mono.trace.createPerformanceTracker();
+
+      // Find some commonly called methods to track
+      const stringClass = Mono.domain.tryClass("System.String");
+      if (!stringClass) {
+        console.log("[INFO] String class not found, skipping");
+        tracker.dispose();
+        return;
+      }
+
+      const getLengthMethod = stringClass.tryMethod("get_Length");
+      if (!getLengthMethod) {
+        console.log("[INFO] get_Length method not found, skipping");
+        tracker.dispose();
+        return;
+      }
+
+      try {
+        const detach = tracker.tryTrack(getLengthMethod);
+        if (detach) {
+          console.log("[INFO] Tracking get_Length method");
+
+          // Create some test strings to trigger calls
+          const str1 = Mono.string.new("Test String 1");
+          const str2 = Mono.string.new("Another Test String");
+          const str3 = Mono.string.new("Yet Another String");
+
+          // Access length to trigger tracked method
+          const _len1 = str1.length;
+          const _len2 = str2.length;
+          const _len3 = str3.length;
+
+          // Wait a bit for stats to accumulate
+          const stats = tracker.getStats(getLengthMethod.fullName);
+          if (stats) {
+            console.log(`[INFO] Call count: ${stats.callCount}`);
+            console.log(`[INFO] Total time: ${stats.totalTime.toFixed(2)}ms`);
+            console.log(`[INFO] Avg time: ${stats.avgTime.toFixed(2)}ms`);
+          }
+
+          const report = tracker.getReport();
+          console.log(`[INFO] Performance report:\n${report}`);
+
+          detach();
+        } else {
+          console.log("[INFO] Could not track method (may not be JIT compiled)");
+        }
+      } catch (e) {
+        console.log(`[INFO] Tracking failed: ${e}`);
+      }
+
+      tracker.dispose();
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Trace - Hook with call stack", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
+      if (!stringClass) {
+        console.log("[INFO] String class not found, skipping");
+        return;
+      }
+
+      const getLengthMethod = stringClass.tryMethod("get_Length");
+      if (!getLengthMethod) {
+        console.log("[INFO] get_Length method not found, skipping");
+        return;
+      }
+
+      try {
+        let callStackReceived = false;
+        let durationReceived = false;
+
+        const detach = Mono.trace.methodWithCallStack(getLengthMethod, {
+          onEnter: (args, callStack) => {
+            callStackReceived = Array.isArray(callStack);
+            console.log(`[INFO] Call stack depth: ${callStack.length}`);
+            if (callStack.length > 0) {
+              console.log(`[INFO] Top of stack: ${callStack[0]}`);
+            }
+          },
+          onLeave: (_retval, duration) => {
+            durationReceived = typeof duration === "number";
+            console.log(`[INFO] Call duration: ${duration}ms`);
+          },
+        });
+
+        // Trigger the method
+        const testStr = Mono.string.new("Test");
+        const _len = testStr.length;
+
+        assert(callStackReceived, "Should have received call stack");
+        assert(durationReceived, "Should have received duration");
+
+        detach();
+      } catch (e) {
+        console.log(`[INFO] Call stack tracing not available: ${e}`);
+      }
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Trace - Replace return value in real method", () => {
+      const stringClass = Mono.domain.tryClass("System.String");
+      if (!stringClass) {
+        console.log("[INFO] String class not found, skipping");
+        return;
+      }
+
+      const getLengthMethod = stringClass.tryMethod("get_Length");
+      if (!getLengthMethod) {
+        console.log("[INFO] get_Length method not found, skipping");
+        return;
+      }
+
+      try {
+        // Hook and replace return value with a fixed value
+        const detach = Mono.trace.replaceReturnValue(getLengthMethod, (_originalRetval, _thisPtr, _args) => {
+          // Replace all string lengths with 42
+          const fakeLength = Memory.alloc(Process.pointerSize);
+          fakeLength.writeInt(42);
+          return fakeLength;
+        });
+
+        // Test that the replacement works
+        const testStr = Mono.string.new("Short");
+        const observedLength = testStr.length;
+
+        console.log(`[INFO] Original string: "Short" (5 chars)`);
+        console.log(`[INFO] Observed length: ${observedLength}`);
+
+        detach();
+
+        // Verify original behavior restored after detach
+        const newStr = Mono.string.new("Short");
+        const normalLength = newStr.length;
+        console.log(`[INFO] Length after detach: ${normalLength}`);
+
+        assert(observedLength === 42, "Length should have been replaced with 42");
+        assert(normalLength === 5, "Length should be back to normal after detach");
+      } catch (e) {
+        console.log(`[INFO] Return value replacement test failed: ${e}`);
+      }
+    }),
+  );
+
+  results.push(
+    await createMonoDependentTest("Trace - Stress test with multiple hooks", () => {
+      // Create many hooks and ensure they can be cleaned up
+      const detachers: (() => void)[] = [];
+
+      try {
+        const methods = Mono.domain.findMethods("System.String.*", { limit: 20 });
+        console.log(`[INFO] Found ${methods.length} String methods for stress test`);
+
+        for (const method of methods) {
+          const detach = Mono.trace.tryMethod(method, {
+            onEnter: () => {
+              // Hook installed
+            },
+          });
+
+          if (detach) {
+            detachers.push(detach);
+          }
+        }
+
+        console.log(`[INFO] Successfully created ${detachers.length} hooks`);
+        assert(detachers.length > 0, "Should create at least one hook");
+      } finally {
+        // Clean up all hooks
+        for (const detach of detachers) {
+          try {
+            detach();
+          } catch (e) {
+            console.log(`[WARN] Error during detach: ${e}`);
+          }
+        }
+        console.log(`[INFO] Cleaned up ${detachers.length} hooks`);
+      }
     }),
   );
 

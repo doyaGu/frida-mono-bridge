@@ -3,7 +3,7 @@
  * Runs Mono API tests independently
  */
 
-import { testMonoApi } from "../test-mono-api";
+import { createMonoApiTests } from "../test-mono-api";
 import { runTestCategory } from "../test-runner-base";
 
 // Auto-run the test category with proper delay
@@ -18,7 +18,7 @@ if (shouldAutoRun) {
       console.log("== FRIDA MONO BRIDGE - MONO API TESTS ==");
       console.log("=".repeat(48));
 
-      runTestCategory("Mono API Tests", testMonoApi, {
+      runTestCategory("Mono API Tests", createMonoApiTests, {
         verbose: true,
         stopOnFirstFailure: false,
         ...autoRunConfig,

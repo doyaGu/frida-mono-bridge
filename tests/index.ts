@@ -62,7 +62,6 @@ import { createRuntimeApiTests } from "./test-runtime-api";
 // ============================================================================
 // CATEGORY 6: Advanced Feature Tests (MONO_DEPENDENT)
 // ============================================================================
-import { createFindToolTests } from "./test-find-tools";
 import { createGCToolsTests } from "./test-gc-tools";
 import { createInternalCallTests } from "./test-internal-call";
 import { createTraceToolsTests } from "./test-trace-tools";
@@ -79,36 +78,35 @@ export {
   // Core Infrastructure Tests
   createCoreInfrastructureTests,
   createDataOperationsTests,
-  createIntegrationTests,
-  createMonoTypesTests,
-  createSupportingTests,
-  // Utility Tests (STANDALONE)
-  createMonoErrorHandlingTests,
-  createMonoUtilsTests,
+  // Advanced Feature Tests
+  createGCToolsTests,
   // Type System Tests
   createGenericTypeTests,
-  createMonoClassTests,
-  createMonoFieldTests,
-  createMonoMethodTests,
-  createMonoPropertyTests,
-  // Runtime Object Tests
-  createMonoArrayTests,
-  createMonoDataTests,
-  createMonoDelegateTests,
-  createMonoObjectTests,
-  createMonoStringTests,
-  createRuntimeApiTests,
+  createIntegrationTests,
+  createInternalCallTests,
   // Domain & Assembly Tests
   createMonoApiTests,
+  // Runtime Object Tests
+  createMonoArrayTests,
   createMonoAssemblyTests,
+  createMonoClassTests,
+  createMonoDataTests,
+  createMonoDelegateTests,
   createMonoDomainTests,
+  // Utility Tests (STANDALONE)
+  createMonoErrorHandlingTests,
+  createMonoFieldTests,
   createMonoImageTests,
+  createMonoMethodTests,
   createMonoModuleTests,
+  createMonoObjectTests,
+  createMonoPropertyTests,
+  createMonoStringTests,
   createMonoThreadingTests,
-  // Advanced Feature Tests
-  createFindToolTests,
-  createGCToolsTests,
-  createInternalCallTests,
+  createMonoTypesTests,
+  createMonoUtilsTests,
+  createRuntimeApiTests,
+  createSupportingTests,
   createTraceToolsTests,
   // Unity Integration Tests
   createUnityComponentsTests,

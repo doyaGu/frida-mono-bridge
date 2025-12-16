@@ -147,7 +147,6 @@ export async function createCoreInfrastructureTests(): Promise<TestResult> {
       assertNotNull(Mono.version, "Mono.version should be available");
       assertNotNull(Mono.module, "Mono.module should be available");
       assertNotNull(Mono.gc, "Mono.gc utilities should be available");
-      assertNotNull(Mono.find, "Mono.find utilities should be available");
       assertNotNull(Mono.trace, "Mono.trace utilities should be available");
       console.log("    All modern API features available");
     }),

@@ -436,7 +436,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
 
   results.push(
     await createMonoDependentTest("MonoDelegate - Find all delegate types in UnityEngine", () => {
-      const unityClasses = Mono.find.classes("UnityEngine.*", { searchNamespace: true });
+      const unityClasses = Mono.domain.findClasses("UnityEngine.*", { searchNamespace: true });
 
       if (unityClasses.length === 0) {
         console.log("[SKIP] No UnityEngine classes found");
@@ -552,7 +552,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
       const startTime = Date.now();
 
       // Find all delegate types in mscorlib
-      const allClasses = Mono.find.classes("*", { limit: 500 });
+      const allClasses = Mono.domain.findClasses("*", { limit: 500 });
       const delegateTypes = allClasses.filter(c => c.isDelegate);
 
       const elapsed = Date.now() - startTime;
