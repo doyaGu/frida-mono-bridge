@@ -978,7 +978,7 @@ export namespace MonoNamespace {
 export const Mono = new MonoNamespace();
 
 /**
- * Type namespace merged with the `Mono` value (IL2CPP-style).
+ * Type namespace for easier access to Mono types.
  *
  * This enables patterns like:
  * - `Mono.Config` (type)
