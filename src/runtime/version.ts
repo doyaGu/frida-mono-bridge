@@ -61,6 +61,14 @@ const REQUIRED_FOR_DELEGATE_THUNK: MonoApiName[] = ["mono_get_delegate_invoke", 
 /** Exports required for GC handles */
 const REQUIRED_FOR_GC_HANDLES: MonoApiName[] = ["mono_gchandle_new", "mono_gchandle_free"];
 
+/** Exports required for GC handles (v2 ABI) */
+const REQUIRED_FOR_GC_HANDLES_V2: MonoApiName[] = [
+  "mono_gchandle_new_v2",
+  "mono_gchandle_free_v2",
+  "mono_gchandle_get_target_v2",
+  "mono_gchandle_new_weakref_v2",
+];
+
 /** Export required for internal calls */
 const REQUIRED_FOR_INTERNAL_CALLS: MonoApiName[] = ["mono_add_internal_call"];
 
@@ -107,7 +115,9 @@ export class MonoRuntimeVersion {
   static fromApi(api: MonoApi): MonoRuntimeVersion {
     const hasDelegateThunk = REQUIRED_FOR_DELEGATE_THUNK.every(name => api.hasExport(name));
     const metadataTables = REQUIRED_FOR_METADATA.every(name => api.hasExport(name));
-    const gcHandles = REQUIRED_FOR_GC_HANDLES.every(name => api.hasExport(name));
+    const gcHandles =
+      REQUIRED_FOR_GC_HANDLES.every(name => api.hasExport(name)) ||
+      REQUIRED_FOR_GC_HANDLES_V2.every(name => api.hasExport(name));
     const internalCalls = REQUIRED_FOR_INTERNAL_CALLS.every(name => api.hasExport(name));
 
     return new MonoRuntimeVersion({

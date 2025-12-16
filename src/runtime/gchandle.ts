@@ -11,8 +11,104 @@
  */
 
 import { MonoErrorCodes, raise } from "../utils/errors";
+import { Logger } from "../utils/log";
 import { pointerIsNull } from "../utils/memory";
 import { MonoApi } from "./api";
+
+// Logger for GC handle operations
+const gcHandleLogger = Logger.withTag("GCHandle");
+
+type GCHandleToken = number | bigint;
+
+type GCHandleAbiKind = "v1" | "v2";
+
+interface GCHandleAbi {
+  kind: GCHandleAbiKind;
+  create(object: NativePointer, pinned: boolean): GCHandleToken;
+  createWeak(object: NativePointer, trackResurrection: boolean): GCHandleToken;
+  getTarget(handle: GCHandleToken): NativePointer;
+  free(handle: GCHandleToken): void;
+}
+
+function pointerToToken(value: NativePointer): bigint {
+  // NativePointer.toString() is stable and returns e.g. "0x7ff....".
+  // Using bigint avoids precision loss on 64-bit runtimes.
+  return BigInt(value.toString());
+}
+
+function tokenToPointer(token: GCHandleToken): NativePointer {
+  if (typeof token === "bigint") {
+    return ptr(`0x${token.toString(16)}`);
+  }
+  return ptr(token);
+}
+
+function isZeroToken(token: GCHandleToken): boolean {
+  return token === 0 || token === 0n;
+}
+
+function zeroToken(kind: GCHandleAbiKind): GCHandleToken {
+  return kind === "v2" ? 0n : 0;
+}
+
+function selectGCHandleAbi(api: MonoApi): GCHandleAbi {
+  const hasV2 =
+    api.hasExport("mono_gchandle_new_v2") &&
+    api.hasExport("mono_gchandle_new_weakref_v2") &&
+    api.hasExport("mono_gchandle_get_target_v2") &&
+    api.hasExport("mono_gchandle_free_v2");
+
+  if (hasV2) {
+    return {
+      kind: "v2",
+      create(object, pinned) {
+        const handlePtr = api.native.mono_gchandle_new_v2(object, pinned ? 1 : 0) as NativePointer;
+        return pointerToToken(handlePtr);
+      },
+      createWeak(object, trackResurrection) {
+        const handlePtr = api.native.mono_gchandle_new_weakref_v2(object, trackResurrection ? 1 : 0) as NativePointer;
+        return pointerToToken(handlePtr);
+      },
+      getTarget(handle) {
+        return api.native.mono_gchandle_get_target_v2(tokenToPointer(handle));
+      },
+      free(handle) {
+        api.native.mono_gchandle_free_v2(tokenToPointer(handle));
+      },
+    };
+  }
+
+  // Fall back to classic v1 ABI (guint32 handle id)
+  return {
+    kind: "v1",
+    create(object, pinned) {
+      return api.native.mono_gchandle_new(object, pinned ? 1 : 0) as number;
+    },
+    createWeak(object, trackResurrection) {
+      return api.native.mono_gchandle_new_weakref(object, trackResurrection ? 1 : 0) as number;
+    },
+    getTarget(handle) {
+      if (typeof handle === "bigint") {
+        raise(
+          MonoErrorCodes.INVALID_ARGUMENT,
+          "GCHandle token type mismatch (expected number for v1 ABI)",
+          "This indicates a bug in GCHandle ABI selection",
+        );
+      }
+      return api.native.mono_gchandle_get_target(handle);
+    },
+    free(handle) {
+      if (typeof handle === "bigint") {
+        raise(
+          MonoErrorCodes.INVALID_ARGUMENT,
+          "GCHandle token type mismatch (expected number for v1 ABI)",
+          "This indicates a bug in GCHandle ABI selection",
+        );
+      }
+      api.native.mono_gchandle_free(handle);
+    },
+  };
+}
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -74,12 +170,13 @@ export interface GCHandlePoolStats {
  * ```
  */
 export class GCHandle {
-  #handle: number;
+  #handle: GCHandleToken;
   #freed = false;
 
   constructor(
     private readonly api: MonoApi,
-    handle: number,
+    private readonly abi: GCHandleAbi,
+    handle: GCHandleToken,
     private readonly weak: boolean,
   ) {
     this.#handle = handle;
@@ -91,7 +188,7 @@ export class GCHandle {
    * The underlying handle ID.
    * Returns 0 if the handle has been freed.
    */
-  get handle(): number {
+  get handle(): GCHandleToken {
     return this.#handle;
   }
 
@@ -114,7 +211,7 @@ export class GCHandle {
    * Whether this handle is still valid (not freed and has a non-zero ID).
    */
   get isValid(): boolean {
-    return !this.#freed && this.#handle !== 0;
+    return !this.#freed && !isZeroToken(this.#handle);
   }
 
   // ===== TARGET ACCESS =====
@@ -135,10 +232,16 @@ export class GCHandle {
    * ```
    */
   getTarget(): NativePointer {
-    if (this.#freed || this.#handle === 0) {
+    if (this.#freed || isZeroToken(this.#handle)) {
       return NULL;
     }
-    return this.api.native.mono_gchandle_get_target(this.#handle);
+    try {
+      return this.abi.getTarget(this.#handle);
+    } catch (error) {
+      // Some Unity/Mono versions may have issues with getTarget
+      gcHandleLogger.debug(`Error getting target for handle ${this.#handle}: ${error}`);
+      return NULL;
+    }
   }
 
   /**
@@ -167,11 +270,17 @@ export class GCHandle {
    * After freeing, getTarget() will return NULL.
    */
   free(): void {
-    if (this.#freed || this.#handle === 0) {
+    if (this.#freed || isZeroToken(this.#handle)) {
       return;
     }
-    this.api.native.mono_gchandle_free(this.#handle);
-    this.#handle = 0;
+    try {
+      this.abi.free(this.#handle);
+    } catch (error) {
+      // Some Unity/Mono versions may not support freeing handles properly
+      // Continue anyway to mark the handle as freed
+      gcHandleLogger.debug(`Error freeing handle ${this.#handle}: ${error}`);
+    }
+    this.#handle = zeroToken(this.abi.kind);
     this.#freed = true;
   }
 
@@ -231,7 +340,12 @@ export class GCHandlePool {
   private totalReleased = 0;
   private disposed = false;
 
-  constructor(private readonly api: MonoApi) {}
+  private readonly abi: GCHandleAbi;
+
+  constructor(private readonly api: MonoApi) {
+    this.abi = selectGCHandleAbi(api);
+    gcHandleLogger.debug(`Using GCHandle ABI: ${this.abi.kind}`);
+  }
 
   // ===== PROPERTIES =====
 
@@ -279,8 +393,8 @@ export class GCHandlePool {
     this.ensureNotDisposed();
     this.validateObject(object, "create");
 
-    const handleId = this.api.native.mono_gchandle_new(object, pinned) as number;
-    const handle = new GCHandle(this.api, handleId, false);
+    const handleId = this.abi.create(object, pinned);
+    const handle = new GCHandle(this.api, this.abi, handleId, false);
     this.handles.add(handle);
     this.totalCreated++;
     return handle;
@@ -325,8 +439,8 @@ export class GCHandlePool {
     this.ensureNotDisposed();
     this.validateObject(object, "createWeak");
 
-    const handleId = this.api.native.mono_gchandle_new_weakref(object, trackResurrection) as number;
-    const handle = new GCHandle(this.api, handleId, true);
+    const handleId = this.abi.createWeak(object, trackResurrection);
+    const handle = new GCHandle(this.api, this.abi, handleId, true);
     this.handles.add(handle);
     this.totalCreated++;
     return handle;
@@ -361,7 +475,13 @@ export class GCHandlePool {
     if (!this.handles.has(handle)) {
       return;
     }
-    handle.free();
+    try {
+      handle.free();
+    } catch (error) {
+      // Silently handle errors during handle release
+      // This can happen with Unity's Mono when handles point to invalid memory
+      gcHandleLogger.debug(`Error releasing handle ${handle.handle}: ${error}`);
+    }
     this.handles.delete(handle);
     this.totalReleased++;
   }
@@ -374,7 +494,12 @@ export class GCHandlePool {
    */
   releaseAll(): void {
     for (const handle of this.handles) {
-      handle.free();
+      try {
+        handle.free();
+      } catch (error) {
+        // Silently handle errors during handle release
+        gcHandleLogger.debug(`Error releasing handle ${handle.handle}: ${error}`);
+      }
       this.totalReleased++;
     }
     this.handles.clear();
