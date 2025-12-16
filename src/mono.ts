@@ -15,7 +15,7 @@
  *   const assemblies = Mono.domain.assemblies;
  *
  *   // Find classes
- *   const Player = Mono.find.classExact("Game.Player");
+ *   const Player = Mono.domain.tryClass("Game.Player");
  *
  *   // Hook methods
  *   Mono.trace.method(Player.method("Update"), {
@@ -38,27 +38,19 @@ import { MonoProperty } from "./model/property";
 import { MonoString } from "./model/string";
 import { MonoType } from "./model/type";
 import { createMonoApi, MonoApi } from "./runtime/api";
-import { GCHandle } from "./runtime/gchandle";
 import { MonoModuleInfo, waitForMonoModule } from "./runtime/module";
 import { ThreadManager } from "./runtime/thread";
 import { MonoRuntimeVersion } from "./runtime/version";
 import { handleMonoError, MonoErrorCodes, raise, raiseFrom } from "./utils/errors";
 
-import { createMemorySubsystem } from "./runtime/memory";
+import { buildGCSubsystem, buildICallSubsystem, buildMemorySubsystem, buildTraceSubsystem } from "./subsystems";
 
 // Import domain objects from model
 import { GarbageCollector } from "./model/gc";
-import { FieldAccessCallbacks, MethodCallbacks, PropertyAccessCallbacks, Tracer } from "./model/trace";
+import { Tracer } from "./model/trace";
 
 // Import internal call registrar
-import {
-  createInternalCallRegistrar,
-  DuplicatePolicy,
-  InternalCallRegistrar,
-  type InternalCallDefinition,
-  type InternalCallRegistrationInfo,
-  type InternalCallRegistrationOptions,
-} from "./model/internal-call";
+import { createInternalCallRegistrar, type InternalCallRegistrar } from "./model/internal-call";
 
 /**
  * Primary entry point for all Mono runtime interactions.
@@ -82,7 +74,7 @@ import {
  * import { Mono } from "frida-mono-bridge";
  *
  * await Mono.perform(() => {
- *   const klass = Mono.find.classExact("Game.Player");
+ *   const klass = Mono.domain.tryClass("Game.Player");
  *   if (!klass) return;
  *
  *   Mono.trace.classAll(klass, {
@@ -113,7 +105,6 @@ export class MonoNamespace {
   private _tracer: Tracer | null = null;
   private _icallRegistrar: InternalCallRegistrar | null = null;
   private _memory: MonoNamespace.Memory | null = null;
-  private _find: MonoNamespace.Find | null = null;
   private _traceSubsystem: MonoNamespace.Trace | null = null;
   private _gcSubsystem: MonoNamespace.GC | null = null;
   private _icall: MonoNamespace.ICall | null = null;
@@ -663,7 +654,7 @@ export class MonoNamespace {
     this.ensureInitializedSync();
 
     if (!this._memory) {
-      this._memory = this.buildMemorySubsystem();
+      this._memory = buildMemorySubsystem(this._api!);
     }
     return this._memory;
   }
@@ -691,23 +682,10 @@ export class MonoNamespace {
       if (!this._gc) {
         this._gc = new GarbageCollector(this._api!);
       }
-      this._gcSubsystem = this.buildGCSubsystem(this._gc);
+      this._gcSubsystem = buildGCSubsystem(this._gc);
     }
 
     return this._gcSubsystem;
-  }
-
-  /**
-   * Search utilities for finding classes, methods, fields
-   */
-  get find(): MonoNamespace.Find {
-    this.ensureInitializedSync();
-
-    if (!this._find) {
-      this._find = this.buildFindSubsystem(this._api!);
-    }
-
-    return this._find;
   }
 
   /**
@@ -720,7 +698,7 @@ export class MonoNamespace {
       if (!this._tracer) {
         this._tracer = new Tracer(this._api!);
       }
-      this._traceSubsystem = this.buildTraceSubsystem(this._tracer);
+      this._traceSubsystem = buildTraceSubsystem(this._tracer);
     }
 
     return this._traceSubsystem;
@@ -737,7 +715,7 @@ export class MonoNamespace {
       if (!this._icallRegistrar) {
         this._icallRegistrar = createInternalCallRegistrar(this._api!);
       }
-      this._icall = this.buildICallSubsystem(this._icallRegistrar);
+      this._icall = buildICallSubsystem(this._icallRegistrar);
     }
 
     return this._icall;
@@ -790,9 +768,6 @@ export class MonoNamespace {
    * All memory operations delegate to type.ts for consistency.
    * @internal
    */
-  private buildMemorySubsystem(): MonoNamespace.Memory {
-    return createMemorySubsystem(this._api!);
-  }
 
   /**
    * Installs best-effort cleanup on script unload.
@@ -878,7 +853,6 @@ export class MonoNamespace {
     this._tracer = null;
     this._icallRegistrar = null;
     this._memory = null;
-    this._find = null;
     this._traceSubsystem = null;
     this._gcSubsystem = null;
     this._icall = null;
@@ -924,7 +898,6 @@ export class MonoNamespace {
 
     // Clear all subsystem caches (will be rebuilt on next access)
     this._memory = null;
-    this._find = null;
     this._traceSubsystem = null;
     this._gcSubsystem = null;
     this._icall = null;
@@ -973,112 +946,6 @@ export class MonoNamespace {
   // ============================================================================
   // SUBSYSTEM BUILDERS (Private)
   // ============================================================================
-
-  /**
-   * Build GC subsystem interface
-   * @internal
-   */
-  private buildGCSubsystem(gc: GarbageCollector): MonoNamespace.GC {
-    return {
-      collect: (generation = -1) => gc.collect(generation),
-      get maxGeneration() {
-        return gc.maxGeneration;
-      },
-      handle: (obj: NativePointer, pinned = false) => gc.createHandle(obj, pinned),
-      weakHandle: (obj: NativePointer, trackResurrection = false) => gc.createWeakHandle(obj, trackResurrection),
-      releaseHandle: (handle: GCHandle) => gc.releaseHandle(handle),
-      releaseAll: () => gc.releaseAllHandles(),
-      get stats() {
-        return gc.getMemoryStats();
-      },
-      getMemoryStats: () => gc.getMemoryStats(),
-      getActiveHandleCount: () => gc.activeHandleCount,
-      getGenerationStats: () => gc.getGenerationStats(),
-      getMemorySummary: () => gc.getMemorySummary(),
-      isCollected: (handle: GCHandle) => gc.isCollected(handle),
-      collectAndReport: () => gc.collectAndReport(),
-      getFinalizationQueueInfo: () => gc.getFinalizationInfo(),
-      requestFinalization: () => gc.requestFinalization(),
-      waitForPendingFinalizers: (timeout = 0) => gc.waitForPendingFinalizers(timeout),
-      suppressFinalize: (objectPtr: NativePointer) => gc.suppressFinalize(objectPtr),
-    };
-  }
-
-  /**
-   * Build Find subsystem interface
-   * @internal
-   */
-  private buildFindSubsystem(api: MonoApi): MonoNamespace.Find {
-    return {
-      classes: (pattern: string, options?: import("./model/domain").FindOptions) =>
-        MonoDomain.findClasses(api, pattern, options),
-      methods: (pattern: string, options?: import("./model/domain").FindOptions) =>
-        MonoDomain.findMethods(api, pattern, options),
-      fields: (pattern: string, options?: import("./model/domain").FindOptions) =>
-        MonoDomain.findFields(api, pattern, options),
-      properties: (pattern: string, options?: import("./model/domain").FindOptions) =>
-        MonoDomain.findProperties(api, pattern, options),
-      classExact: (fullName: string) => MonoDomain.classExact(api, fullName),
-    };
-  }
-
-  /**
-   * Build Trace subsystem interface
-   * @internal
-   */
-  private buildTraceSubsystem(tracer: Tracer): MonoNamespace.Trace {
-    return {
-      method: (m, cb) => tracer.method(m, cb),
-      tryMethod: (m, cb) => tracer.tryMethod(m, cb),
-      methodExtended: (m, cb) => tracer.methodExtended(m, cb),
-      tryMethodExtended: (m, cb) => tracer.tryMethodExtended(m, cb),
-      classAll: (k, cb) => tracer.classAll(k, cb),
-      methodsByPattern: (pattern: string, callbacks: MethodCallbacks) => tracer.methodsByPattern(pattern, callbacks),
-      classesByPattern: (pattern: string, callbacks: MethodCallbacks) => tracer.classesByPattern(pattern, callbacks),
-      replaceReturnValue: (m, r) => tracer.replaceReturnValue(m, r),
-      tryReplaceReturnValue: (m, r) => tracer.tryReplaceReturnValue(m, r),
-      field: (f, cb) => tracer.field(f, cb),
-      fieldsByPattern: (pattern: string, callbacks: FieldAccessCallbacks) => tracer.fieldsByPattern(pattern, callbacks),
-      property: (p, cb) => tracer.property(p, cb),
-      propertiesByPattern: (pattern: string, callbacks: PropertyAccessCallbacks) =>
-        tracer.propertiesByPattern(pattern, callbacks),
-      createPerformanceTracker: () => tracer.createPerformanceTracker(),
-      methodWithCallStack: (m, cb) => tracer.methodWithCallStack(m, cb),
-    };
-  }
-
-  /**
-   * Build ICall subsystem interface
-   * @internal
-   */
-  private buildICallSubsystem(registrar: InternalCallRegistrar): MonoNamespace.ICall {
-    return {
-      get isSupported(): boolean {
-        return registrar.isSupported();
-      },
-      requireSupported: () => registrar.ensureSupported(),
-      register: (definition: InternalCallDefinition, options?: InternalCallRegistrationOptions) =>
-        registrar.register(definition, options),
-      tryRegister: (definition: InternalCallDefinition, options?: InternalCallRegistrationOptions): boolean =>
-        registrar.tryRegister(definition, options),
-      registerAll: (definitions: InternalCallDefinition[], options?: InternalCallRegistrationOptions) =>
-        registrar.registerAll(definitions, options),
-      tryRegisterAll: (definitions: InternalCallDefinition[], options?: InternalCallRegistrationOptions): number =>
-        registrar.tryRegisterAll(definitions, options),
-      has: (name: string): boolean => registrar.has(name),
-      get: (name: string): InternalCallRegistrationInfo | undefined => registrar.get(name),
-      getAll: (): InternalCallRegistrationInfo[] => registrar.getAll(),
-      get count(): number {
-        return registrar.count;
-      },
-      get names(): string[] {
-        return registrar.names;
-      },
-      getSummary: () => registrar.getSummary(),
-      clear: () => registrar.clear(),
-      DuplicatePolicy,
-    };
-  }
 }
 
 // ============================================================================
@@ -1086,344 +953,14 @@ export class MonoNamespace {
 // ============================================================================
 
 export namespace MonoNamespace {
-  /**
-   * Thread detachment behavior used by `Mono.perform()`.
-   * - `bind`: keep thread attached and clean up on script unload (default)
-   * - `free`: detach if this `perform()` call attached the thread
-   * - `leak`: never detach (caller takes responsibility)
-   */
-  export type PerformMode = "bind" | "free" | "leak";
-
-  export interface Config {
-    /** Mono module name(s) to wait for. Leave undefined to auto-detect. */
-    moduleName?: string | string[];
-
-    /** Maximum time to wait for initialization. */
-    initializeTimeoutMs: number;
-
-    /** Warn after this many milliseconds while initializing. */
-    warnAfterMs: number;
-
-    /** Whether to install `Mono` on `globalThis` during initialization. */
-    installGlobal: boolean;
-
-    /** Default log verbosity used by internal components. */
-    logLevel: "silent" | "error" | "warn" | "info" | "debug";
-
-    /** Default perform mode used by `perform()` when not specified. */
-    performMode: PerformMode;
-  }
-
-  /**
-   * GC subsystem interface
-   */
-  export interface GC {
-    collect(generation?: number): void;
-    readonly maxGeneration: number;
-    handle(obj: NativePointer, pinned?: boolean): import("./runtime/gchandle").GCHandle;
-    weakHandle(obj: NativePointer, trackResurrection?: boolean): import("./runtime/gchandle").GCHandle;
-    releaseHandle(handle: import("./runtime/gchandle").GCHandle): void;
-    releaseAll(): void;
-    readonly stats: import("./model/gc").MemoryStats;
-    getMemoryStats(): import("./model/gc").MemoryStats;
-    getActiveHandleCount(): number;
-    getGenerationStats(): import("./model/gc").GenerationStats[];
-    getMemorySummary(): string;
-    isCollected(handle: import("./runtime/gchandle").GCHandle): boolean;
-    collectAndReport(): {
-      before: import("./model/gc").MemoryStats;
-      after: import("./model/gc").MemoryStats;
-      delta: number | null;
-      durationMs: number;
-    };
-    getFinalizationQueueInfo(): { available: boolean; pendingCount: number | null; message: string };
-    requestFinalization(): boolean;
-    waitForPendingFinalizers(timeout?: number): boolean;
-    suppressFinalize(objectPtr: NativePointer): boolean;
-  }
-
-  /**
-   * Memory type identifiers for simple read/write operations
-   */
-  export type MemoryType =
-    | "int8"
-    | "uint8"
-    | "int16"
-    | "uint16"
-    | "int32"
-    | "uint32"
-    | "int64"
-    | "uint64"
-    | "float"
-    | "double"
-    | "pointer"
-    | "bool"
-    | "char";
-
-  /**
-   * Options for typed read operations
-   */
-  export interface TypedReadOptions {
-    /** Return Int64/UInt64 as bigint instead of number */
-    returnBigInt?: boolean;
-    /** Return raw wrapper objects (MonoString, MonoArray) instead of coerced JS values */
-    returnRaw?: boolean;
-  }
-
-  /**
-   * Memory subsystem interface for managed object manipulation.
-   * Provides unified read/write for primitives, value types, strings, arrays, delegates, etc.
-   */
-  export interface Memory {
-    /**
-     * Read a value from memory using simple type name.
-     * @param ptr Memory address
-     * @param type Simple type name (int8, uint8, etc.)
-     */
-    read(ptr: NativePointer, type: MemoryType): any;
-
-    /**
-     * Write a value to memory using simple type name.
-     * @param ptr Memory address
-     * @param value Value to write
-     * @param type Simple type name (int8, uint8, etc.)
-     */
-    write(ptr: NativePointer, value: any, type: MemoryType): void;
-
-    /**
-     * Read a value from memory using MonoType for full type information.
-     * Handles primitives, pointers, value types, strings, arrays, delegates, etc.
-     * @param ptr Memory address
-     * @param monoType MonoType describing the value
-     * @param options Read options
-     */
-    readTyped(ptr: NativePointer, monoType: import("./model/type").MonoType, options?: TypedReadOptions): any;
-
-    /**
-     * Write a value to memory using MonoType for full type information.
-     * Handles primitives, pointers, value types, strings, arrays, delegates, etc.
-     * @param ptr Memory address
-     * @param value Value to write
-     * @param monoType MonoType describing the value
-     */
-    writeTyped(ptr: NativePointer, value: any, monoType: import("./model/type").MonoType): void;
-
-    /**
-     * Box a primitive value into a managed object.
-     * @param value Primitive value
-     * @param klass Value type class
-     */
-    box(
-      value: number | boolean | bigint,
-      klass: import("./model/class").MonoClass,
-    ): import("./model/object").MonoObject;
-
-    /**
-     * Box a value type into a managed object.
-     * @param valuePtr Pointer to the value type data
-     * @param klass The value type class
-     */
-    boxValueType(
-      valuePtr: NativePointer,
-      klass: import("./model/class").MonoClass,
-    ): import("./model/object").MonoObject;
-
-    /**
-     * Unbox a managed object to get the value pointer.
-     * @param obj Boxed object
-     */
-    unbox(obj: import("./model/object").MonoObject): NativePointer;
-
-    /**
-     * Unbox a managed object and read the value.
-     * @param obj Boxed object
-     * @param monoType Expected type (optional, inferred from object if not provided)
-     * @param options Read options
-     */
-    unboxValue(
-      obj: import("./model/object").MonoObject,
-      monoType?: import("./model/type").MonoType,
-      options?: TypedReadOptions,
-    ): any;
-
-    /**
-     * Create a managed string from a JavaScript string.
-     * @param value JavaScript string
-     */
-    string(value: string): import("./model/string").MonoString;
-
-    /**
-     * Read a managed string to JavaScript string.
-     * @param ptr Pointer to MonoString
-     */
-    readString(ptr: NativePointer): string | null;
-
-    /**
-     * Create a managed array.
-     * @param elementClass Element type
-     * @param length Array length
-     */
-    array<T = any>(
-      elementClass: import("./model/class").MonoClass,
-      length: number,
-    ): import("./model/array").MonoArray<T>;
-
-    /**
-     * Create a delegate from a method.
-     * @param delegateClass The delegate class
-     * @param target Target object (null for static methods)
-     * @param method The method to bind
-     */
-    delegate(
-      delegateClass: import("./model/class").MonoClass,
-      target: import("./model/object").MonoObject | null,
-      method: import("./model/method").MonoMethod,
-    ): import("./model/delegate").MonoDelegate;
-
-    /**
-     * Copy value type data between memory locations.
-     * @param dest Destination pointer
-     * @param src Source pointer
-     * @param size Size in bytes
-     */
-    copyValueType(dest: NativePointer, src: NativePointer, size: number): void;
-
-    /**
-     * Allocate memory for a value type.
-     * @param klass The value type class
-     */
-    allocValueType(klass: import("./model/class").MonoClass): NativePointer;
-  }
-
-  /**
-   * Find/search subsystem interface
-   */
-  export interface Find {
-    classes(pattern: string, options?: import("./model/domain").FindOptions): import("./model/class").MonoClass[];
-    methods(pattern: string, options?: import("./model/domain").FindOptions): import("./model/method").MonoMethod[];
-    fields(pattern: string, options?: import("./model/domain").FindOptions): import("./model/field").MonoField[];
-    properties(
-      pattern: string,
-      options?: import("./model/domain").FindOptions,
-    ): import("./model/property").MonoProperty[];
-    classExact(fullName: string): import("./model/class").MonoClass | null;
-  }
-
-  /**
-   * Trace/hook subsystem interface
-   */
-  export interface Trace {
-    method(
-      monoMethod: import("./model/method").MonoMethod,
-      callbacks: import("./model/trace").MethodCallbacks,
-    ): () => void;
-    tryMethod(
-      monoMethod: import("./model/method").MonoMethod,
-      callbacks: import("./model/trace").MethodCallbacks,
-    ): (() => void) | null;
-    methodExtended(
-      monoMethod: import("./model/method").MonoMethod,
-      callbacks: import("./model/trace").MethodCallbacksExtended,
-    ): () => void;
-    tryMethodExtended(
-      monoMethod: import("./model/method").MonoMethod,
-      callbacks: import("./model/trace").MethodCallbacksExtended,
-    ): (() => void) | null;
-    classAll(klass: import("./model/class").MonoClass, callbacks: import("./model/trace").MethodCallbacks): () => void;
-    methodsByPattern(pattern: string, callbacks: import("./model/trace").MethodCallbacks): () => void;
-    classesByPattern(pattern: string, callbacks: import("./model/trace").MethodCallbacks): () => void;
-    replaceReturnValue(
-      monoMethod: import("./model/method").MonoMethod,
-      replacement: (
-        originalRetval: NativePointer,
-        thisPtr: NativePointer,
-        args: NativePointer[],
-      ) => NativePointer | void,
-    ): () => void;
-    tryReplaceReturnValue(
-      monoMethod: import("./model/method").MonoMethod,
-      replacement: (
-        originalRetval: NativePointer,
-        thisPtr: NativePointer,
-        args: NativePointer[],
-      ) => NativePointer | void,
-    ): (() => void) | null;
-    field(
-      monoField: import("./model/field").MonoField,
-      callbacks: import("./model/trace").FieldAccessCallbacks,
-    ): (() => void) | null;
-    fieldsByPattern(pattern: string, callbacks: import("./model/trace").FieldAccessCallbacks): () => void;
-    property(
-      monoProperty: import("./model/property").MonoProperty,
-      callbacks: import("./model/trace").PropertyAccessCallbacks,
-    ): () => void;
-    propertiesByPattern(pattern: string, callbacks: import("./model/trace").PropertyAccessCallbacks): () => void;
-    createPerformanceTracker(): import("./model/trace").PerformanceTracker;
-    methodWithCallStack(
-      monoMethod: import("./model/method").MonoMethod,
-      callbacks: import("./model/trace").MethodCallbacksTimed,
-    ): () => void;
-  }
-
-  /**
-   * Internal call registration subsystem interface.
-   * Following IL2CPP-style try/require semantics.
-   */
-  export interface ICall {
-    /** Whether internal call registration is supported by this runtime */
-    readonly isSupported: boolean;
-
-    /** Require internal call support, throwing if unavailable */
-    requireSupported(): void;
-
-    /** Register an internal call (throws on failure) */
-    register(
-      definition: import("./model/internal-call").InternalCallDefinition,
-      options?: import("./model/internal-call").InternalCallRegistrationOptions,
-    ): void;
-
-    /** Try to register an internal call (returns false on failure) */
-    tryRegister(
-      definition: import("./model/internal-call").InternalCallDefinition,
-      options?: import("./model/internal-call").InternalCallRegistrationOptions,
-    ): boolean;
-
-    /** Register multiple internal calls (throws on failure) */
-    registerAll(
-      definitions: import("./model/internal-call").InternalCallDefinition[],
-      options?: import("./model/internal-call").InternalCallRegistrationOptions,
-    ): void;
-
-    /** Try to register multiple internal calls (returns success count) */
-    tryRegisterAll(
-      definitions: import("./model/internal-call").InternalCallDefinition[],
-      options?: import("./model/internal-call").InternalCallRegistrationOptions,
-    ): number;
-
-    /** Check if an internal call is registered */
-    has(name: string): boolean;
-
-    /** Get registration info for an internal call */
-    get(name: string): import("./model/internal-call").InternalCallRegistrationInfo | undefined;
-
-    /** Get all registered internal calls */
-    getAll(): import("./model/internal-call").InternalCallRegistrationInfo[];
-
-    /** Number of registered internal calls */
-    readonly count: number;
-
-    /** All registered method names */
-    readonly names: string[];
-
-    /** Get registrar summary */
-    getSummary(): import("./model/internal-call").InternalCallRegistrarSummary;
-
-    /** Clear local tracking (does NOT unregister from Mono) */
-    clear(): void;
-
-    /** Duplicate handling policy constants */
-    DuplicatePolicy: typeof import("./model/internal-call").DuplicatePolicy;
-  }
+  export type PerformMode = import("./types").PerformMode;
+  export type Config = import("./types").Config;
+  export type GC = import("./types").GC;
+  export type MemoryType = import("./types").MemoryType;
+  export type TypedReadOptions = import("./types").TypedReadOptions;
+  export type Memory = import("./types").MemorySubsystem;
+  export type Trace = import("./types").Trace;
+  export type ICall = import("./types").ICall;
 }
 
 /**
@@ -1466,9 +1003,6 @@ export namespace Mono {
 
   /** See `MonoNamespace.Memory`. */
   export type Memory = MonoNamespace.Memory;
-
-  /** See `MonoNamespace.Find`. */
-  export type Find = MonoNamespace.Find;
 
   /** See `MonoNamespace.Trace`. */
   export type Trace = MonoNamespace.Trace;

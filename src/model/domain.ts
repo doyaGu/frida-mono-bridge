@@ -188,21 +188,20 @@ export class MonoDomain extends MonoHandle {
     return new MonoDomain(api, pointer);
   }
 
-  // ===== STATIC FIND HELPERS =====
+  // ===== FIND HELPERS =====
 
   /**
    * Find classes by pattern across all loaded assemblies.
    */
-  static findClasses(api: MonoApi, pattern: string, options: FindOptions = {}): MonoClass[] {
+  findClasses(pattern: string, options: FindOptions = {}): MonoClass[] {
     const results: MonoClass[] = [];
-    const domain = MonoDomain.getRoot(api);
     const seenClasses = new Set<string>();
 
     const searchNamespace = options.searchNamespace !== false;
     const limit = options.limit;
     const customFilter = options.filter;
 
-    domain.enumerateAssemblies((assembly: MonoAssembly) => {
+    this.enumerateAssemblies((assembly: MonoAssembly) => {
       if (limit !== undefined && results.length >= limit) {
         return;
       }
@@ -246,7 +245,7 @@ export class MonoDomain extends MonoHandle {
    * Find methods by pattern across all loaded assemblies.
    * Supports ClassName.MethodName when options.regex is false.
    */
-  static findMethods(api: MonoApi, pattern: string, options: FindOptions = {}): MonoMethod[] {
+  findMethods(pattern: string, options: FindOptions = {}): MonoMethod[] {
     const results: MonoMethod[] = [];
     let classPattern = "*";
     let methodPattern = pattern;
@@ -259,7 +258,7 @@ export class MonoDomain extends MonoHandle {
       methodPattern = parts[parts.length - 1];
     }
 
-    const matchingClasses = MonoDomain.findClasses(api, classPattern, {
+    const matchingClasses = this.findClasses(classPattern, {
       ...options,
       searchNamespace: true,
       limit: undefined,
@@ -294,7 +293,7 @@ export class MonoDomain extends MonoHandle {
    * Find fields by pattern across all loaded assemblies.
    * Supports ClassName.FieldName when options.regex is false.
    */
-  static findFields(api: MonoApi, pattern: string, options: FindOptions = {}): MonoField[] {
+  findFields(pattern: string, options: FindOptions = {}): MonoField[] {
     const results: MonoField[] = [];
     let classPattern = "*";
     let fieldPattern = pattern;
@@ -307,7 +306,7 @@ export class MonoDomain extends MonoHandle {
       fieldPattern = parts[parts.length - 1];
     }
 
-    const matchingClasses = MonoDomain.findClasses(api, classPattern, {
+    const matchingClasses = this.findClasses(classPattern, {
       ...options,
       searchNamespace: true,
       limit: undefined,
@@ -342,7 +341,7 @@ export class MonoDomain extends MonoHandle {
    * Find properties by pattern across all loaded assemblies.
    * Supports ClassName.PropertyName when options.regex is false.
    */
-  static findProperties(api: MonoApi, pattern: string, options: FindOptions = {}): MonoProperty[] {
+  findProperties(pattern: string, options: FindOptions = {}): MonoProperty[] {
     const results: MonoProperty[] = [];
     let classPattern = "*";
     let propPattern = pattern;
@@ -355,7 +354,7 @@ export class MonoDomain extends MonoHandle {
       propPattern = parts[parts.length - 1];
     }
 
-    const matchingClasses = MonoDomain.findClasses(api, classPattern, {
+    const matchingClasses = this.findClasses(classPattern, {
       ...options,
       searchNamespace: true,
       limit: undefined,
@@ -384,67 +383,6 @@ export class MonoDomain extends MonoHandle {
     }
 
     return results;
-  }
-
-  /**
-   * Find a single class by full name (Namespace.ClassName).
-   * Returns null if not found.
-   */
-  static classExact(api: MonoApi, fullName: string): MonoClass | null {
-    const parts = fullName.split(".");
-    const className = parts.pop()!;
-    const namespace = parts.join(".");
-
-    // Fast path for System.* classes - try mscorlib first
-    if (namespace === "System" || namespace.startsWith("System.")) {
-      const mscorlibImage = api.native.mono_image_loaded(Memory.allocUtf8String("mscorlib"));
-      if (!pointerIsNull(mscorlibImage)) {
-        const nsPtr = Memory.allocUtf8String(namespace);
-        const namePtr = Memory.allocUtf8String(className);
-        const klassPtr = api.native.mono_class_from_name(mscorlibImage, nsPtr, namePtr);
-        if (!pointerIsNull(klassPtr)) {
-          return new MonoClass(api, klassPtr);
-        }
-      }
-    }
-
-    // Fast path for UnityEngine.* classes - try UnityEngine.CoreModule first
-    if (namespace === "UnityEngine" || namespace.startsWith("UnityEngine.")) {
-      const unityAssemblyNames = ["UnityEngine.CoreModule", "UnityEngine", "UnityEngine.dll"];
-
-      for (const assemblyName of unityAssemblyNames) {
-        const unityImage = api.native.mono_image_loaded(Memory.allocUtf8String(assemblyName));
-        if (!pointerIsNull(unityImage)) {
-          const nsPtr = Memory.allocUtf8String(namespace);
-          const namePtr = Memory.allocUtf8String(className);
-          const klassPtr = api.native.mono_class_from_name(unityImage, nsPtr, namePtr);
-          if (!pointerIsNull(klassPtr)) {
-            return new MonoClass(api, klassPtr);
-          }
-        }
-      }
-    }
-
-    // Fallback: enumerate all assemblies
-    const domain = MonoDomain.getRoot(api);
-    let result: MonoClass | null = null;
-
-    domain.enumerateAssemblies((assembly: MonoAssembly) => {
-      if (result !== null) {
-        return;
-      }
-
-      const image = assembly.image;
-      if (!image.isValid) {
-        return;
-      }
-      const klass = image.tryClassFromName(namespace, className);
-      if (klass !== null) {
-        result = klass;
-      }
-    });
-
-    return result;
   }
 
   // ===== CORE PROPERTIES =====
@@ -654,6 +592,42 @@ export class MonoDomain extends MonoHandle {
     if (trimmed.length === 0) {
       return null;
     }
+
+    // Fast path for common namespaces
+    const lastDot = trimmed.lastIndexOf(".");
+    const namespace = lastDot >= 0 ? trimmed.slice(0, lastDot) : "";
+    const className = lastDot >= 0 ? trimmed.slice(lastDot + 1) : trimmed;
+
+    // Fast path for System.* classes - try mscorlib first
+    if (namespace === "System" || namespace.startsWith("System.")) {
+      const mscorlibImage = this.api.native.mono_image_loaded(Memory.allocUtf8String("mscorlib"));
+      if (!pointerIsNull(mscorlibImage)) {
+        const nsPtr = Memory.allocUtf8String(namespace);
+        const namePtr = Memory.allocUtf8String(className);
+        const klassPtr = this.api.native.mono_class_from_name(mscorlibImage, nsPtr, namePtr);
+        if (!pointerIsNull(klassPtr)) {
+          return new MonoClass(this.api, klassPtr);
+        }
+      }
+    }
+
+    // Fast path for UnityEngine.* classes - try UnityEngine.CoreModule first
+    if (namespace === "UnityEngine" || namespace.startsWith("UnityEngine.")) {
+      const unityAssemblyNames = ["UnityEngine.CoreModule", "UnityEngine", "UnityEngine.dll"];
+
+      for (const assemblyName of unityAssemblyNames) {
+        const unityImage = this.api.native.mono_image_loaded(Memory.allocUtf8String(assemblyName));
+        if (!pointerIsNull(unityImage)) {
+          const nsPtr = Memory.allocUtf8String(namespace);
+          const namePtr = Memory.allocUtf8String(className);
+          const klassPtr = this.api.native.mono_class_from_name(unityImage, nsPtr, namePtr);
+          if (!pointerIsNull(klassPtr)) {
+            return new MonoClass(this.api, klassPtr);
+          }
+        }
+      }
+    }
+
     for (const assembly of this.assemblies) {
       const klass = assembly.image.tryClass(trimmed);
       if (klass) {

@@ -7,7 +7,6 @@
  * All runtime access goes through the Mono facade:
  * - `Mono.domain` - domain/assembly/class navigation
  * - `Mono.gc` - garbage collection utilities
- * - `Mono.find` - search utilities
  * - `Mono.trace` - method hooking
  *
  * @example

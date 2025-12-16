@@ -1,20 +1,28 @@
-/**
- * Memory subsystem facade for Mono namespace.
- *
- * Provides typed memory read/write utilities integrated with MonoType.
- * This module creates the `Mono.memory` facade object.
- *
- * @module runtime/memory
- */
-
-import type { MonoNamespace } from "../mono";
-
-import { MonoArray } from "../model/array";
-import type { MonoClass } from "../model/class";
-import { MonoDelegate } from "../model/delegate";
-import { MonoMethod } from "../model/method";
-import { MonoObject } from "../model/object";
-import { MonoString } from "../model/string";
+import { MonoArray } from "./model/array";
+import type { MonoClass } from "./model/class";
+import { MonoDelegate } from "./model/delegate";
+import type { MonoField } from "./model/field";
+import type { GarbageCollector } from "./model/gc";
+import {
+  DuplicatePolicy,
+  type InternalCallDefinition,
+  type InternalCallRegistrar,
+  type InternalCallRegistrationInfo,
+  type InternalCallRegistrationOptions,
+} from "./model/internal-call";
+import type { MonoMethod } from "./model/method";
+import { MonoObject } from "./model/object";
+import type { MonoProperty } from "./model/property";
+import { MonoString } from "./model/string";
+import type {
+  FieldAccessCallbacks,
+  MethodCallbacks,
+  MethodCallbacksExtended,
+  MethodCallbacksTimed,
+  PropertyAccessCallbacks,
+  ReturnValueReplacer,
+  Tracer,
+} from "./model/trace";
 import {
   MonoType,
   MonoTypeKind,
@@ -23,22 +31,42 @@ import {
   isValueTypeKind,
   readPrimitiveValue,
   writePrimitiveValue,
-} from "../model/type";
-import { MonoErrorCodes, raise } from "../utils/errors";
-import { pointerIsNull } from "../utils/memory";
-import type { MonoApi } from "./api";
+} from "./model/type";
+import type { MonoApi } from "./runtime/api";
+import type { GCHandle } from "./runtime/gchandle";
+import type { GC, ICall, MemorySubsystem, MemoryType, Trace, TypedReadOptions } from "./types";
+import { MonoErrorCodes, raise } from "./utils/errors";
+import { pointerIsNull } from "./utils/memory";
 
-/**
- * Create the memory subsystem facade.
- *
- * Provides simple type-aware read/write helpers for:
- * - Primitives (int8, uint8, float, etc.)
- * - Typed managed objects (strings, arrays, delegates)
- * - Value type fields (inlined vs. boxed)
- */
-export function createMemorySubsystem(api: MonoApi): MonoNamespace.Memory {
+export function buildGCSubsystem(gc: GarbageCollector): GC {
+  return {
+    collect: (generation = -1) => gc.collect(generation),
+    get maxGeneration() {
+      return gc.maxGeneration;
+    },
+    handle: (obj: NativePointer, pinned = false) => gc.createHandle(obj, pinned),
+    weakHandle: (obj: NativePointer, trackResurrection = false) => gc.createWeakHandle(obj, trackResurrection),
+    releaseHandle: (handle: GCHandle) => gc.releaseHandle(handle),
+    releaseAll: () => gc.releaseAllHandles(),
+    get stats() {
+      return gc.getMemoryStats();
+    },
+    getMemoryStats: () => gc.getMemoryStats(),
+    getActiveHandleCount: () => gc.activeHandleCount,
+    getGenerationStats: () => gc.getGenerationStats(),
+    getMemorySummary: () => gc.getMemorySummary(),
+    isCollected: (handle: GCHandle) => gc.isCollected(handle),
+    collectAndReport: () => gc.collectAndReport(),
+    getFinalizationQueueInfo: () => gc.getFinalizationInfo(),
+    requestFinalization: () => gc.requestFinalization(),
+    waitForPendingFinalizers: (timeout = 0) => gc.waitForPendingFinalizers(timeout),
+    suppressFinalize: (objectPtr: NativePointer) => gc.suppressFinalize(objectPtr),
+  };
+}
+
+export function buildMemorySubsystem(api: MonoApi): MemorySubsystem {
   // Map simple type names to MonoTypeKind for unified handling.
-  const simpleTypeToKind: Record<MonoNamespace.MemoryType, MonoTypeKind> = {
+  const simpleTypeToKind: Record<MemoryType, MonoTypeKind> = {
     int8: MonoTypeKind.I1,
     uint8: MonoTypeKind.U1,
     int16: MonoTypeKind.I2,
@@ -57,7 +85,7 @@ export function createMemorySubsystem(api: MonoApi): MonoNamespace.Memory {
   const knownMemoryTypes = Object.keys(simpleTypeToKind).join(", ");
 
   return {
-    read(ptr: NativePointer, type: MonoNamespace.MemoryType): any {
+    read(ptr: NativePointer, type: MemoryType): any {
       const kind = simpleTypeToKind[type];
       if (kind === undefined) {
         raise(MonoErrorCodes.INVALID_ARGUMENT, `Unknown memory type: ${type}`, `Use one of: ${knownMemoryTypes}`, {
@@ -67,7 +95,7 @@ export function createMemorySubsystem(api: MonoApi): MonoNamespace.Memory {
       return readPrimitiveValue(ptr, kind);
     },
 
-    write(ptr: NativePointer, value: any, type: MonoNamespace.MemoryType): void {
+    write(ptr: NativePointer, value: any, type: MemoryType): void {
       const kind = simpleTypeToKind[type];
       if (kind === undefined) {
         raise(MonoErrorCodes.INVALID_ARGUMENT, `Unknown memory type: ${type}`, `Use one of: ${knownMemoryTypes}`, {
@@ -77,7 +105,7 @@ export function createMemorySubsystem(api: MonoApi): MonoNamespace.Memory {
       writePrimitiveValue(ptr, kind, value);
     },
 
-    readTyped(ptr: NativePointer, monoType: MonoType, options: MonoNamespace.TypedReadOptions = {}): any {
+    readTyped(ptr: NativePointer, monoType: MonoType, options: TypedReadOptions = {}): any {
       const kind = monoType.kind;
 
       // String: field storage holds a managed object reference.
@@ -265,7 +293,7 @@ export function createMemorySubsystem(api: MonoApi): MonoNamespace.Memory {
       return api.native.mono_object_unbox(obj.pointer);
     },
 
-    unboxValue(obj: MonoObject, monoType?: MonoType, options: MonoNamespace.TypedReadOptions = {}): any {
+    unboxValue(obj: MonoObject, monoType?: MonoType, options: TypedReadOptions = {}): any {
       if (pointerIsNull(obj.pointer)) {
         return null;
       }
@@ -300,5 +328,55 @@ export function createMemorySubsystem(api: MonoApi): MonoNamespace.Memory {
       const alignedSize = Math.max(size, alignment);
       return Memory.alloc(alignedSize);
     },
+  };
+}
+
+export function buildTraceSubsystem(tracer: Tracer): Trace {
+  return {
+    method: (m: MonoMethod, cb: MethodCallbacks) => tracer.method(m, cb),
+    tryMethod: (m: MonoMethod, cb: MethodCallbacks) => tracer.tryMethod(m, cb),
+    methodExtended: (m: MonoMethod, cb: MethodCallbacksExtended) => tracer.methodExtended(m, cb),
+    tryMethodExtended: (m: MonoMethod, cb: MethodCallbacksExtended) => tracer.tryMethodExtended(m, cb),
+    classAll: (k: MonoClass, cb: MethodCallbacks) => tracer.classAll(k, cb),
+    methodsByPattern: (pattern: string, callbacks: MethodCallbacks) => tracer.methodsByPattern(pattern, callbacks),
+    classesByPattern: (pattern: string, callbacks: MethodCallbacks) => tracer.classesByPattern(pattern, callbacks),
+    replaceReturnValue: (m: MonoMethod, r: ReturnValueReplacer) => tracer.replaceReturnValue(m, r),
+    tryReplaceReturnValue: (m: MonoMethod, r: ReturnValueReplacer) => tracer.tryReplaceReturnValue(m, r),
+    field: (f: MonoField, cb: FieldAccessCallbacks) => tracer.field(f, cb),
+    fieldsByPattern: (pattern: string, callbacks: FieldAccessCallbacks) => tracer.fieldsByPattern(pattern, callbacks),
+    property: (p: MonoProperty, cb: PropertyAccessCallbacks) => tracer.property(p, cb),
+    propertiesByPattern: (pattern: string, callbacks: PropertyAccessCallbacks) =>
+      tracer.propertiesByPattern(pattern, callbacks),
+    createPerformanceTracker: () => tracer.createPerformanceTracker(),
+    methodWithCallStack: (m: MonoMethod, cb: MethodCallbacksTimed) => tracer.methodWithCallStack(m, cb),
+  };
+}
+
+export function buildICallSubsystem(registrar: InternalCallRegistrar): ICall {
+  return {
+    get isSupported(): boolean {
+      return registrar.isSupported();
+    },
+    requireSupported: () => registrar.ensureSupported(),
+    register: (definition: InternalCallDefinition, options?: InternalCallRegistrationOptions) =>
+      registrar.register(definition, options),
+    tryRegister: (definition: InternalCallDefinition, options?: InternalCallRegistrationOptions): boolean =>
+      registrar.tryRegister(definition, options),
+    registerAll: (definitions: InternalCallDefinition[], options?: InternalCallRegistrationOptions) =>
+      registrar.registerAll(definitions, options),
+    tryRegisterAll: (definitions: InternalCallDefinition[], options?: InternalCallRegistrationOptions): number =>
+      registrar.tryRegisterAll(definitions, options),
+    has: (name: string): boolean => registrar.has(name),
+    get: (name: string): InternalCallRegistrationInfo | undefined => registrar.get(name),
+    getAll: (): InternalCallRegistrationInfo[] => registrar.getAll(),
+    get count(): number {
+      return registrar.count;
+    },
+    get names(): string[] {
+      return registrar.names;
+    },
+    getSummary: () => registrar.getSummary(),
+    clear: () => registrar.clear(),
+    DuplicatePolicy,
   };
 }

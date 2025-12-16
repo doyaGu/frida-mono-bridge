@@ -875,7 +875,8 @@ export class Tracer {
     this.ensureNotDisposed();
 
     const { MonoDomain } = require("./domain") as typeof import("./domain");
-    const methods = MonoDomain.findMethods(this.api, pattern);
+    const domain = _domain ?? MonoDomain.getRoot(this.api);
+    const methods = domain.findMethods(pattern);
     const detachers: Array<() => void> = [];
     let hookedCount = 0;
 
@@ -917,7 +918,8 @@ export class Tracer {
     this.ensureNotDisposed();
 
     const { MonoDomain } = require("./domain") as typeof import("./domain");
-    const classes = MonoDomain.findClasses(this.api, pattern);
+    const domain = MonoDomain.getRoot(this.api);
+    const classes = domain.findClasses(pattern);
     const detachers: Array<() => void> = [];
 
     traceLogger.info(`Tracing ${classes.length} classes matching "${pattern}"`);
@@ -969,7 +971,8 @@ export class Tracer {
     this.ensureNotDisposed();
 
     const { MonoDomain } = require("./domain") as typeof import("./domain");
-    const fields = MonoDomain.findFields(this.api, pattern);
+    const domain = MonoDomain.getRoot(this.api);
+    const fields = domain.findFields(pattern);
     const detachers: Array<() => void> = [];
     let tracedCount = 0;
 
@@ -1059,7 +1062,8 @@ export class Tracer {
     this.ensureNotDisposed();
 
     const { MonoDomain } = require("./domain") as typeof import("./domain");
-    const properties = MonoDomain.findProperties(this.api, pattern);
+    const domain = MonoDomain.getRoot(this.api);
+    const properties = domain.findProperties(pattern);
     const detachers: Array<() => void> = [];
 
     traceLogger.info(`Tracing ${properties.length} properties matching "${pattern}"`);
