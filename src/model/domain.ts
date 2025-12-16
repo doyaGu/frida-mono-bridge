@@ -535,6 +535,10 @@ export class MonoDomain extends MonoHandle {
    * ```
    */
   getAssembly(name: string): MonoAssembly | null {
+    if (!name) {
+      return null;
+    }
+
     const normalizedName = name.endsWith(".dll") ? name.slice(0, -4) : name;
 
     for (const assembly of this.assemblies) {
