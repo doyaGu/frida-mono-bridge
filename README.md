@@ -14,7 +14,7 @@ A TypeScript bridge that exposes the Mono runtime (Unity/Xamarin/embedded Mono) 
 - **Performance**: LRU caching, native delegate thunks, optimized invocation paths
 - **Thread-Safe**: Automatic thread attachment with proper lifecycle management
 - **Resilient**: Graceful fallbacks for unhookable methods and lazy JIT compilation
-- **Well-Tested**: Comprehensive test suite with 1,104 tests across 36 test files
+- **Well-Tested**: Comprehensive test suite with 1,089 tests across 36 test files
 
 ## Quick Start
 
@@ -35,7 +35,7 @@ await Mono.perform(async () => {
   // Get root domain
   const domain = Mono.domain;
 
-  // Load assembly and find class
+  // Load assembly and find class (throws if class not found)
   const assembly = domain.assembly("Assembly-CSharp");
   const playerClass = assembly.image.class("Game", "Player");
 
@@ -45,8 +45,9 @@ await Mono.perform(async () => {
 
   // Use facade helpers for object creation
   const str = Mono.string.new("Hello, World!");
-  const intClass = domain.class("System.Int32");
-  const intArray = Mono.array.new(intClass, 10);
+  // Use tryClass() for optional lookups (returns null if not found)
+  const intClass = Mono.domain.tryClass("System.Int32");
+  const intArray = Mono.array.new(intClass!, 10);
 });
 ```
 
@@ -131,7 +132,7 @@ frida-mono-bridge/
 │   │   └── string.ts       # String utilities
 │   ├── mono.ts             # MonoNamespace - main fluent API facade
 │   └── index.ts            # Package entry point and exports
-├── tests/                  # Test suite (36 test files, 1,104 tests)
+├── tests/                  # Test suite (36 test files, 1,089 tests)
 │   ├── test-*.ts           # 36 test modules covering all APIs
 │   ├── runners/            # Individual test runners for selective execution
 │   ├── test-framework.ts   # Test framework and utilities
@@ -193,8 +194,8 @@ await Mono.perform(() => {
   const maybeObj = Mono.object.tryWrap(nullablePtr);
 
   // Delegate helpers
-  const delegateClass = Mono.domain.class("System.Action");
-  const del = Mono.delegate.new(delegateClass, targetObj, method);
+  const delegateClass = Mono.domain.tryClass("System.Action");
+  const del = Mono.delegate.new(delegateClass!, targetObj, method);
 
   // Method helpers
   const method = Mono.method.find(image, "MyClass:MyMethod(int)");
@@ -225,7 +226,6 @@ await Mono.perform(() => {
 | `version`  | Runtime version and feature detection                                                     |
 | `memory`   | Memory utilities (boxing/unboxing, string/array helpers, typed read/write)                |
 | `gc`       | Garbage collection utilities                                                              |
-| `find`     | Search utilities (facade submodule)                                                       |
 | `trace`    | Tracing utilities (facade submodule)                                                      |
 | `icall`    | Internal call registration and management                                                 |
 | `array`    | Array creation and wrapping helpers                                                       |
@@ -319,13 +319,14 @@ import type { MonoDomain, MonoClass, MonoMethod, MonoApi } from "frida-mono-brid
 
 Notes:
 
-- v0.3.0+ no longer re-exports `runtime/`, `model/`, `utils/` as runtime values. Use facade submodules instead: `Mono.find`, `Mono.trace`, `Mono.gc`, `Mono.memory`, `Mono.icall`.
+- v0.3.0+ no longer re-exports `runtime/`, `model/`, `utils/` as runtime values. Use facade helpers and domain methods directly.
 - Use facade helpers for object creation: `Mono.array`, `Mono.string`, `Mono.object`, `Mono.delegate`, `Mono.method`, `Mono.image`, `Mono.assembly`, `Mono.class`, `Mono.field`, `Mono.property`, `Mono.type`.
+- Subsystem facades: `Mono.memory` (memory utilities), `Mono.gc` (garbage collection), `Mono.trace` (method tracing), `Mono.icall` (internal calls).
 - `globalThis.Mono` is installed by default on first `Mono.initialize()` / `Mono.perform()`. Disable by setting `Mono.config.installGlobal = false` before first use.
 
 ## Testing
 
-The test suite contains **1,104 individual test cases** organized into **7 categories** across **36 test files**.
+The test suite contains **1,089 individual test cases** organized into **7 categories** across **36 test files**.
 See [tests/README.md](tests/README.md) for complete documentation and [docs/API_QUALITY_REPORT.md](docs/API_QUALITY_REPORT.md) for quality metrics.
 
 ### Test Categories
@@ -339,7 +340,7 @@ See [tests/README.md](tests/README.md) for complete documentation and [docs/API_
 | Domain & Assembly   | ~125      | 5      | MonoDomain, MonoAssembly, MonoImage, threading  |
 | Advanced Features   | ~160      | 4      | Find, Trace, GC, Internal Calls                 |
 | Unity Integration   | ~30       | 3      | GameObject, Components, Engine Modules          |
-| **TOTAL**           | **1,104** | **36** | Complete test coverage                          |
+| **TOTAL**           | **1,089** | **36** | Complete test coverage                          |
 
 ### Running Tests
 
@@ -421,33 +422,37 @@ npm run test:unity-engine-modules   # Engine modules (19 tests)
 
 ### Search Utilities
 
-The `Mono.find` facade submodule provides wildcard and regex search across the loaded assemblies:
+The `Mono.domain` object provides search methods for classes, methods, fields, and properties:
 
 ```typescript
 import Mono from "frida-mono-bridge";
 
 await Mono.perform(() => {
-  // Find classes by pattern (wildcard: * and ?)
-  const playerClasses = Mono.find.classes("*Player*");
-  const controllers = Mono.find.classes("Game.?Controller");
+  // Fast exact class lookup (optimized for System.* and UnityEngine.* namespaces)
+  const stringClass = Mono.domain.tryClass("System.String");
+  const gameObjectClass = Mono.domain.tryClass("UnityEngine.GameObject");
+
+  // Find classes by wildcard pattern (* and ?)
+  const playerClasses = Mono.domain.findClasses("*Player*");
+  const controllers = Mono.domain.findClasses("Game.?Controller");
 
   // Find with regex
-  const managers = Mono.find.classes(".*Manager$", { regex: true });
+  const managers = Mono.domain.findClasses(".*Manager$", { regex: true });
 
-  // Find with options
-  const limited = Mono.find.classes("*", {
+  // Find with options (limit, filter, etc.)
+  const limited = Mono.domain.findClasses("*", {
     limit: 10,
     filter: c => !c.isInterface(),
   });
 
   // Find methods across all classes
-  const attackMethods = Mono.find.methods("*Attack*");
+  const attackMethods = Mono.domain.findMethods("*Attack*");
 
   // Find fields
-  const healthFields = Mono.find.fields("*health*", { caseInsensitive: true });
+  const healthFields = Mono.domain.findFields("*health*", { caseInsensitive: true });
 
   // Find properties
-  const positionProps = Mono.find.properties("*Position*");
+  const positionProps = Mono.domain.findProperties("*Position*");
 });
 ```
 
@@ -514,11 +519,19 @@ await Mono.perform(() => {
 import Mono, { MonoError, MonoErrorCodes, MonoMethodNotFoundError } from "frida-mono-bridge";
 
 await Mono.perform(() => {
-  const playerClass = Mono.domain.assembly("Assembly-CSharp").image.class("Game", "Player");
+  // Option 1: Use try* methods for optional lookups (returns null if not found)
+  const playerClass = Mono.domain.tryClass("Game.Player");
+  if (!playerClass) {
+    console.log("Player class not found");
+    return;
+  }
 
+  // Option 2: Catch exceptions from throwing methods
   try {
     // This will throw if method is missing / incompatible / runtime not ready
-    const method = playerClass.method("TakeDamage", 1);
+    const assembly = Mono.domain.assembly("Assembly-CSharp");
+    const klass = assembly.image.class("Game", "Player"); // throws if not found
+    const method = klass.method("TakeDamage", 1);
     method.invoke(null, []);
   } catch (e) {
     if (e instanceof MonoMethodNotFoundError) {
@@ -562,13 +575,13 @@ await Mono.perform(() => {
 ```typescript
 await Mono.perform(() => {
   // Create generic type instances
-  const listDef = Mono.domain.class("System.Collections.Generic.List`1");
-  const stringClass = Mono.domain.class("System.String");
+  const listDef = Mono.domain.tryClass("System.Collections.Generic.List`1");
+  const stringClass = Mono.domain.tryClass("System.String");
   const listOfString = listDef?.makeGenericType([stringClass!]);
   // listOfString is now List<string>
 
-  const dictDef = Mono.domain.class("System.Collections.Generic.Dictionary`2");
-  const intClass = Mono.domain.class("System.Int32");
+  const dictDef = Mono.domain.tryClass("System.Collections.Generic.Dictionary`2");
+  const intClass = Mono.domain.tryClass("System.Int32");
   const dictOfStringInt = dictDef?.makeGenericType([stringClass!, intClass!]);
   // dictOfStringInt is now Dictionary<string, int>
 });
