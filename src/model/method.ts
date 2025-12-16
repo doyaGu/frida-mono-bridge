@@ -714,16 +714,15 @@ export class MonoMethod extends MonoHandle {
         return null;
       }
 
-      // Invoke MakeGenericMethod(Type[] typeArguments)
-      const argsArray = Memory.alloc(Process.pointerSize);
-      argsArray.writePointer(typeArray);
+      // Invoke MakeGenericMethod(Type[] typeArguments) via api.runtimeInvoke (shared exc handling)
+      let resultMethodInfo: NativePointer;
+      try {
+        resultMethodInfo = this.api.runtimeInvoke(makeGenericMethod, methodInfo, [typeArray]);
+      } catch {
+        return null;
+      }
 
-      const excSlot = Memory.alloc(Process.pointerSize);
-      excSlot.writePointer(NULL);
-
-      const resultMethodInfo = this.native.mono_runtime_invoke(makeGenericMethod, methodInfo, argsArray, excSlot);
-
-      if (pointerIsNull(resultMethodInfo) || !pointerIsNull(excSlot.readPointer())) {
+      if (pointerIsNull(resultMethodInfo)) {
         return null;
       }
 
