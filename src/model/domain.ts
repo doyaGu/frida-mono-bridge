@@ -2,6 +2,7 @@ import type { MonoApi } from "../runtime/api";
 import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
+import { matchesPattern } from "../utils/pattern";
 import { MonoAssembly } from "./assembly";
 import { MonoClass } from "./class";
 import { MonoField } from "./field";
@@ -70,42 +71,6 @@ export interface FindOptions {
   limit?: number;
   /** Filter function to apply after pattern matching */
   filter?: (item: any) => boolean;
-}
-
-function wildcardToRegex(pattern: string, caseInsensitive = true): RegExp {
-  const escaped = pattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*")
-    .replace(/\?/g, ".");
-
-  return new RegExp(`^${escaped}$`, caseInsensitive ? "i" : "");
-}
-
-function createMatcher(pattern: string, options: FindOptions = {}): RegExp {
-  const caseInsensitive = options.caseInsensitive !== false;
-
-  if (options.regex) {
-    try {
-      return new RegExp(pattern, caseInsensitive ? "i" : "");
-    } catch {
-      raise(
-        MonoErrorCodes.INVALID_ARGUMENT,
-        `Invalid regex pattern: ${pattern}`,
-        "Check the regex syntax and try again",
-      );
-    }
-  }
-
-  return wildcardToRegex(pattern, caseInsensitive);
-}
-
-function matchesPattern(name: string, pattern: string, options: FindOptions = {}): boolean {
-  if (pattern === "*" || pattern === "") {
-    return true;
-  }
-
-  const regex = createMatcher(pattern, options);
-  return regex.test(name);
 }
 
 /**
