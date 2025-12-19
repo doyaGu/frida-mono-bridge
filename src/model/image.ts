@@ -1,4 +1,4 @@
-import { MonoApi } from "../runtime/api";
+import type { MonoApi } from "../runtime/api";
 import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";

@@ -7,7 +7,7 @@
  * - CustomAttribute / AttributeValue types
  */
 
-import { MonoApi } from "../runtime/api";
+import type { MonoApi } from "../runtime/api";
 import { MonoEnums } from "../runtime/enums";
 import { pointerIsNull } from "../utils/memory";
 
@@ -604,15 +604,21 @@ export function getCustomAttributes(
     const resolveName =
       getClassName ??
       ((ptr: NativePointer) => {
-        const { MonoClass: MonoClassCtor } = require("./class");
-        return new MonoClassCtor(api, ptr).name;
+        const namePtr = api.native.mono_class_get_name(ptr);
+        if (pointerIsNull(namePtr)) {
+          return "<unknown>";
+        }
+        return namePtr.readUtf8String();
       });
 
     const resolveFullName =
       getClassFullName ??
       ((ptr: NativePointer) => {
-        const { MonoClass: MonoClassCtor } = require("./class");
-        return new MonoClassCtor(api, ptr).fullName;
+        const namePtr = api.native.mono_class_get_name(ptr);
+        const namespacePtr = api.native.mono_class_get_namespace(ptr);
+        const name = pointerIsNull(namePtr) ? "<unknown>" : namePtr.readUtf8String();
+        const ns = pointerIsNull(namespacePtr) ? "" : namespacePtr.readUtf8String();
+        return ns ? `${ns}.${name}` : name;
       });
 
     return parseCustomAttributes(api, customAttrInfoPtr, resolveName, resolveFullName);

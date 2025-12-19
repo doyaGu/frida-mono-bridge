@@ -9,7 +9,7 @@
  * @module collections
  */
 
-import { MonoApi } from "../runtime/api";
+import type { MonoApi } from "../runtime/api";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { MonoAssembly } from "./assembly";
 import { MonoClass } from "./class";

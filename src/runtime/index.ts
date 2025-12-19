@@ -47,3 +47,7 @@ export * from "./signatures";
 // ===== ENUMS =====
 // Mono runtime enumeration values
 export * from "./enums";
+
+// ===== VALUE CONVERSION =====
+// Shared JS<->Mono conversion helpers used by model and facade layers
+export * from "./value-conversion";

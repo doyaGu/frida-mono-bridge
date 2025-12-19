@@ -7,8 +7,14 @@
  * @module model/method
  */
 
-import { MonoApi } from "../runtime/api";
+import type { MonoApi } from "../runtime/api";
 import { MethodAttribute, MethodImplAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
+import {
+  allocPrimitiveValue,
+  boxPrimitiveValue,
+  resolveUnderlyingPrimitive,
+  unboxValue,
+} from "../runtime/value-conversion";
 import { lazy } from "../utils/cache";
 import { MonoErrorCodes, MonoManagedExceptionError, raise, raiseFrom } from "../utils/errors";
 import { Logger } from "../utils/log";
@@ -22,8 +28,7 @@ import { MonoHandle } from "./handle";
 import { MonoImage } from "./image";
 import { MonoMethodSignature, MonoParameterInfo } from "./method-signature";
 import { MonoObject } from "./object";
-import { MonoType, MonoTypeKind, MonoTypeSummary, isPointerLikeKind, readPrimitiveValue } from "./type";
-import { allocPrimitiveValue, resolveUnderlyingPrimitive } from "./value-conversion";
+import { MonoType, MonoTypeKind, MonoTypeSummary, isPointerLikeKind } from "./type";
 
 export interface InvokeOptions {
   /** Throw a `MonoManagedExceptionError` when the managed method throws. */
@@ -1039,46 +1044,14 @@ export class MonoMethod extends MonoHandle {
 
     // Handle value types (need to unbox)
     if (retType.valueType) {
-      return this.unboxValue(rawResult, kind, options) as unknown as T;
+      return unboxValue(this.api, rawResult, retType, {
+        returnBigInt: options.returnBigInt,
+        structAsObject: true,
+      }) as unknown as T;
     }
 
     // Handle reference types - return wrapped MonoObject
     return new MonoObject(this.api, rawResult) as unknown as T;
-  }
-
-  /**
-   * Unbox a value type from a boxed MonoObject pointer.
-   * @param boxedPtr Pointer to boxed MonoObject
-   * @param kind MonoTypeKind of the value
-   * @param options Include returnBigInt to preserve Int64/UInt64 as bigint
-   * @returns Unboxed primitive value
-   */
-  private unboxValue(boxedPtr: NativePointer, kind: MonoTypeKind, options: InvokeOptions = {}): any {
-    const unboxed = this.api.native.mono_object_unbox(boxedPtr);
-
-    // Try to read as primitive value first
-    const primitiveResult = readPrimitiveValue(unboxed, kind, { returnBigInt: options.returnBigInt });
-    if (primitiveResult !== null) {
-      return primitiveResult;
-    }
-
-    // Handle special cases
-    switch (kind) {
-      case MonoTypeKind.Enum:
-        // For enums, get underlying type and unbox recursively
-        const underlying = this.returnType.underlyingType;
-        if (underlying) {
-          return this.unboxValue(boxedPtr, underlying.kind, options);
-        }
-        // Default to int32 for unknown enums
-        return unboxed.readS32();
-      case MonoTypeKind.ValueType:
-        // For structs, return the boxed object for further processing
-        return new MonoObject(this.api, boxedPtr);
-      default:
-        // Unknown value type, return boxed pointer
-        return new MonoObject(this.api, boxedPtr);
-    }
   }
 
   /**
@@ -1150,7 +1123,6 @@ export class MonoMethod extends MonoHandle {
    */
   boxPrimitive(type: MonoType, value: number | boolean | bigint): NativePointer {
     const effectiveType = resolveUnderlyingPrimitive(type);
-    const storage = allocPrimitiveValue(type, value);
 
     let klass = effectiveType.class;
     if (!klass) {
@@ -1168,7 +1140,7 @@ export class MonoMethod extends MonoHandle {
     }
     klass.ensureInitialized();
     const domain = this.api.getRootDomain();
-    return this.api.native.mono_value_box(domain, klass.pointer, storage);
+    return boxPrimitiveValue(this.api, klass.pointer, effectiveType, value, domain);
   }
 
   // ===== VALIDATION AND INSPECTION =====

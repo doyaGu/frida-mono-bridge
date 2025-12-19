@@ -1,4 +1,9 @@
 import { hasFlag, pickFlags } from "../runtime/metadata";
+import {
+  convertJsToMono,
+  convertMonoToJs,
+  resolveInstance as resolveInstanceHelper,
+} from "../runtime/value-conversion";
 import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
@@ -12,7 +17,6 @@ import { MonoHandle } from "./handle";
 import { MonoMethod } from "./method";
 import { MonoObject } from "./object";
 import { MonoType, MonoTypeSummary } from "./type";
-import { convertJsToMono, convertMonoToJs, resolveInstance as resolveInstanceHelper } from "./value-conversion";
 
 // ===== PROPERTY ATTRIBUTES =====
 

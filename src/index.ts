@@ -19,7 +19,7 @@
  */
 
 // Import the main Mono facade
-import { Mono, MonoNamespace } from "./mono";
+import { Mono } from "./mono";
 
 // ============================================================================
 // PRIMARY EXPORTS
@@ -70,23 +70,61 @@ export {
 } from "./utils/errors";
 
 // ============================================================================
+// POWER-USER EXPORTS (runtime/model/utils)
+// ============================================================================
+
+// Runtime layer (low-level API + module/thread helpers)
+export { createMonoApi, MonoApi } from "./runtime/api";
+export { tryWaitForMonoModule, waitForMonoModule } from "./runtime/module";
+export { ThreadManager } from "./runtime/thread";
+export { MonoRuntimeVersion } from "./runtime/version";
+
+// Model layer (high-level object model)
+export { MonoArray } from "./model/array";
+export { MonoAssembly } from "./model/assembly";
+export { MonoClass } from "./model/class";
+export { MonoDelegate } from "./model/delegate";
+export { MonoDomain } from "./model/domain";
+export { MonoField } from "./model/field";
+export { GarbageCollector } from "./model/gc";
+export { MonoImage } from "./model/image";
+export { MonoMethod } from "./model/method";
+export { MonoObject } from "./model/object";
+export { MonoProperty } from "./model/property";
+export { MonoString } from "./model/string";
+export { Tracer } from "./model/trace";
+export { MonoType } from "./model/type";
+
+// Utils (logging + caching are commonly used standalone)
+export { lazy, LruCache, memoize } from "./utils/cache";
+export { Logger } from "./utils/log";
+
+// Value conversion helpers (used by properties/methods; handy standalone)
+export {
+  allocPrimitiveValue,
+  convertJsToMono,
+  convertMonoToJs,
+  resolveInstance,
+  resolveUnderlyingPrimitive,
+  unboxValue,
+  validateNumericValue,
+} from "./runtime/value-conversion";
+export type { ConversionOptions, MonoValueWrappers } from "./runtime/value-conversion";
+
+// ============================================================================
 // TRACE TYPES (for method hooking callbacks)
 // ============================================================================
 
-export type { FindOptions } from "./model/domain";
-export type {
-  FieldAccessCallbacks,
-  MethodCallbacks,
-  MethodCallbacksExtended,
-  MethodCallbacksTimed,
-  MethodStats,
-  PerformanceTracker,
-  PropertyAccessCallbacks,
-} from "./model/trace";
+// NOTE: Consumers often need access to the full type surface area of the
+// runtime/model layers for typings (without pulling in runtime modules).
+// These are type-only re-exports and do not change runtime behavior.
+export type * from "./model";
+export type * from "./runtime";
+export type * from "./types";
 
 // ============================================================================
 // FACADE TYPES
 // ============================================================================
 
-// Re-export namespace types for IDE discoverability
-export type { MonoNamespace };
+// Allow creating additional namespaces (advanced use-cases / multi-runtime workflows)
+export { MonoNamespace } from "./mono";

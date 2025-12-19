@@ -4,7 +4,7 @@
  * Provides:
  * - `LruCache<K, V>`: Least-Recently-Used eviction cache
  * - `@lazy`: Property decorator for cached getters
- * - `@memoize()`: Method decorator for cached function calls
+ * - `@memoize()`: Method decorator for cached function calls (LRU)
  *
  * @module utils/cache
  */
@@ -104,16 +104,14 @@ export class LruCache<K, V> {
     }
     const value = this.map.get(key)!;
     this.map.delete(key);
-    if (this.onEvict) {
-      this.onEvict(key, value);
-    }
+    this.notifyEvict(key, value);
     return true;
   }
 
   clear(): void {
     if (this.onEvict) {
       for (const [key, value] of this.map.entries()) {
-        this.onEvict(key, value);
+        this.notifyEvict(key, value);
       }
     }
     this.map.clear();
@@ -165,9 +163,13 @@ export class LruCache<K, V> {
       }
       const value = this.map.get(firstKey)!;
       this.map.delete(firstKey);
-      if (this.onEvict) {
-        this.onEvict(firstKey, value);
-      }
+      this.notifyEvict(firstKey, value);
+    }
+  }
+
+  private notifyEvict(key: K, value: V): void {
+    if (this.onEvict) {
+      this.onEvict(key, value);
     }
   }
 }
@@ -177,68 +179,9 @@ export class LruCache<K, V> {
 // ============================================================================
 
 const CACHE_STORE = Symbol("__mono_cache_store__");
-const VALUE_SLOT = "__value__";
-
-export interface CacheOptions {
-  /**
-   * Key to use for caching (defaults to property name)
-   */
-  key?: string;
-  /**
-   * Maximum number of cached entries for this getter (defaults to 1)
-   */
-  capacity?: number;
-}
 
 /**
- * Decorator to cache getter results
- *
- * @example
- * class MyClass {
- *   @cached
- *   get expensiveValue() {
- *     return performExpensiveOperation();
- *   }
- * }
- */
-export function cached(options: CacheOptions = {}) {
-  return function (_: any, propertyKey: string, descriptor: PropertyDescriptor) {
-    const originalGet = descriptor.get;
-    if (!originalGet) {
-      raise(
-        MonoErrorCodes.INVALID_ARGUMENT,
-        "@cached can only be applied to getters",
-        "Apply @cached to a getter accessor",
-        { parameter: "descriptor", value: descriptor },
-      );
-    }
-
-    const cacheKey = options.key || `__cached_${propertyKey}__`;
-    const capacity = options.capacity ?? 1;
-
-    descriptor.get = function (this: any) {
-      const store = ensureCacheStore(this);
-      let cache = store.get(cacheKey);
-      if (!cache) {
-        cache = new LruCache<string, unknown>(capacity);
-        store.set(cacheKey, cache);
-      }
-
-      if (cache.has(VALUE_SLOT)) {
-        return cache.getSingleValue();
-      }
-
-      const value = originalGet.call(this);
-      cache.setSingleValue(value);
-      return value;
-    };
-
-    return descriptor;
-  };
-}
-
-/**
- * Clear all cached values on an instance
+ * Clear all cached values on an instance.
  */
 export function clearCache(instance: any): void {
   const store = instance[CACHE_STORE];
@@ -249,24 +192,6 @@ export function clearCache(instance: any): void {
     store.clear();
   } else if (store) {
     instance[CACHE_STORE] = new Map<string, LruCache<string, unknown>>();
-  }
-}
-
-/**
- * Clear a specific cached value
- */
-export function clearCachedValue(instance: any, propertyKey: string): void {
-  const store = instance[CACHE_STORE];
-  if (store instanceof Map) {
-    const cacheKey = `__cached_${propertyKey}__`;
-    const cache = store.get(cacheKey);
-    if (cache) {
-      cache.clear();
-      store.delete(cacheKey);
-    }
-  } else if (store) {
-    const cacheKey = `__cached_${propertyKey}__`;
-    delete store[cacheKey];
   }
 }
 
@@ -285,6 +210,150 @@ function ensureCacheStore(instance: any): Map<string, LruCache<string, unknown>>
 }
 
 // ============================================================================
+// MEMOIZE DECORATOR
+// ============================================================================
+
+export interface MemoizeOptions<Args extends any[]> {
+  /** Maximum number of cached argument combinations per instance (default: 128). */
+  capacity?: number;
+  /** Custom cache key generator (default: identity-aware args). */
+  key?: (...args: Args) => string;
+}
+
+type MemoizeIdMap<T> = { get(value: T): number | undefined; set(value: T, id: number): unknown };
+
+const memoizeObjectIds = new WeakMap<object, number>();
+const memoizeSymbolIds = new Map<symbol, number>();
+let memoizeNextId = 1;
+
+function getMemoizeId<T>(map: MemoizeIdMap<T>, value: T): number {
+  const existing = map.get(value);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const id = memoizeNextId++;
+  map.set(value, id);
+  return id;
+}
+
+function formatNumberKey(value: number): string {
+  if (Number.isNaN(value)) {
+    return "NaN";
+  }
+  if (Object.is(value, -0)) {
+    return "-0";
+  }
+  if (value === Infinity) {
+    return "Infinity";
+  }
+  if (value === -Infinity) {
+    return "-Infinity";
+  }
+  return String(value);
+}
+
+function memoizeKeyPart(value: unknown): string {
+  if (value === null) {
+    return "null";
+  }
+  if (value === undefined) {
+    return "u";
+  }
+  if (typeof value === "string") {
+    return `s:${value.length}:${value}`;
+  }
+  if (typeof value === "number") {
+    return `n:${formatNumberKey(value)}`;
+  }
+  if (typeof value === "bigint") {
+    return `bi:${value.toString()}n`;
+  }
+  if (typeof value === "boolean") {
+    return value ? "b:1" : "b:0";
+  }
+  if (typeof value === "symbol") {
+    return `sym:${getMemoizeId(memoizeSymbolIds, value)}`;
+  }
+  if (typeof value === "function") {
+    return `fn:${getMemoizeId(memoizeObjectIds, value as object)}`;
+  }
+  return `o:${getMemoizeId(memoizeObjectIds, value as object)}`;
+}
+
+function defaultMemoizeKey(args: unknown[]): string {
+  if (args.length === 0) {
+    return DEFAULT_VALUE_SLOT;
+  }
+  return args.map(arg => memoizeKeyPart(arg)).join("|");
+}
+
+/**
+ * Decorator factory to memoize method results per instance.
+ *
+ * Uses an LRU cache per method per instance to avoid unbounded growth.
+ *
+ * @example
+ * class Foo {
+ *   @memoize()
+ *   compute(x: number): number {
+ *     return expensive(x);
+ *   }
+ * }
+ */
+export function memoize<Args extends any[], Return>(options: MemoizeOptions<Args> = {}) {
+  return createMemoizedMethodDecorator<Args, Return>(options, "@memoize", "__memoize_");
+}
+
+type MemoizeMethodContext<This> = {
+  kind: "method";
+  name: string | symbol;
+  addInitializer?: (initializer: (this: This) => void) => void;
+};
+
+function createMemoizedMethodDecorator<Args extends any[], Return>(
+  options: MemoizeOptions<Args> = {},
+  decoratorName: string,
+  cachePrefix: string,
+) {
+  const capacity = options.capacity ?? 128;
+  const keyFn = options.key ?? ((...args: Args) => defaultMemoizeKey(args));
+
+  return function <This>(
+    method: (this: This, ...args: Args) => Return,
+    context: MemoizeMethodContext<This>,
+  ): ((this: This, ...args: Args) => Return) | void {
+    if (context.kind !== "method") {
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        `${decoratorName} can only be applied to methods`,
+        `Apply ${decoratorName} to a class method`,
+        { parameter: "context", value: context },
+      );
+    }
+
+    const name = String(context.name);
+    return function (this: This, ...args: Args): Return {
+      const store = ensureCacheStore(this);
+      const cacheKey = `${cachePrefix}${name}__`;
+      let cache = store.get(cacheKey) as LruCache<string, Return> | undefined;
+      if (!cache) {
+        cache = new LruCache<string, Return>(capacity);
+        store.set(cacheKey, cache as unknown as LruCache<string, unknown>);
+      }
+
+      const k = keyFn(...args);
+      if (cache.has(k)) {
+        return cache.get(k) as Return;
+      }
+
+      const value = method.call(this, ...args);
+      cache.set(k, value);
+      return value;
+    };
+  };
+}
+
+// ============================================================================
 // LAZY DECORATOR
 // ============================================================================
 
@@ -292,7 +361,8 @@ function ensureCacheStore(instance: any): Map<string, LruCache<string, unknown>>
  * Decorator to lazily evaluate and cache a getter's result.
  * After the first access, the getter is replaced with a simple value property.
  *
- * This is a lightweight alternative to @cached that doesn't use LRU cache,
+ * This is a lightweight alternative to @memoize when you want a value
+ * computed once and cached without an LRU cache,
  * suitable for values that are computed once and never change.
  *
  * @example
@@ -303,15 +373,30 @@ function ensureCacheStore(instance: any): Map<string, LruCache<string, unknown>>
  *   }
  * }
  */
-export function lazy<This, Return>(
-  target: (this: This) => Return,
-  context: ClassGetterDecoratorContext<This, Return>,
-): (this: This) => Return {
-  const getter = target;
+type LazyGetterContext<This> = {
+  kind: "getter";
+  name: string | symbol;
+  addInitializer?: (initializer: (this: This) => void) => void;
+};
 
+export function lazy<This, Value>(
+  getter: (this: This) => Value,
+  context: LazyGetterContext<This>,
+): ((this: This) => Value) | void {
+  if (context.kind !== "getter") {
+    raise(MonoErrorCodes.INVALID_ARGUMENT, "@lazy can only be applied to getters", "Apply @lazy to a getter accessor", {
+      parameter: "context",
+      value: context,
+    });
+  }
+
+  const name = context.name;
   return function (this: This) {
+    if (Object.prototype.hasOwnProperty.call(this, name)) {
+      return (this as any)[name];
+    }
     const value = getter.call(this);
-    Object.defineProperty(this, context.name, {
+    Object.defineProperty(this as any, name, {
       value,
       configurable: true,
       enumerable: false,

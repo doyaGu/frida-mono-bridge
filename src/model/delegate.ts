@@ -9,7 +9,7 @@
  * @module model/delegate
  */
 
-import { MonoApi, MonoArg } from "../runtime/api";
+import type { MonoApi, MonoArg } from "../runtime/api";
 import { lazy } from "../utils/cache";
 import { MonoErrorCodes, MonoManagedExceptionError, raise, raiseFrom } from "../utils/errors";
 import { Logger } from "../utils/log";

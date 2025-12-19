@@ -8,6 +8,7 @@
  */
 
 import { FieldAttribute, getMaskedValue, hasFlag } from "../runtime/metadata";
+import { boxPrimitiveValue } from "../runtime/value-conversion";
 import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull, unwrapInstance, unwrapInstanceRequired } from "../utils/memory";
@@ -24,12 +25,10 @@ import {
   isArrayKind,
   isPointerLikeKind,
   isPrimitiveKind,
-  isValueTypeKind,
   MonoType,
   MonoTypeKind,
   MonoTypeSummary,
   readPrimitiveValue,
-  writePrimitiveValue,
 } from "./type";
 
 export type FieldAccessibility = MemberAccessibility;
@@ -621,39 +620,18 @@ export class MonoField<T = any> extends MonoHandle {
       return null;
     }
 
-    // Handle value types that need boxing
-    if (isValueTypeKind(kind) || isPrimitiveKind(kind)) {
+    // Handle primitives/enums that need boxing (struct/value types require a pointer or boxed object)
+    if (kind === MonoTypeKind.Enum || isPrimitiveKind(kind)) {
       const klass = type.class;
       if (!klass) {
         return null;
       }
 
-      // Allocate storage and write the primitive value
-      const { size } = type.valueSize;
-      const valuePtr = Memory.alloc(Math.max(size, 8));
-
-      if (typeof value === "boolean") {
-        valuePtr.writeU8(value ? 1 : 0);
-      } else if (typeof value === "bigint") {
-        valuePtr.writeS64(new Int64(value.toString()));
-      } else if (typeof value === "number") {
-        // Use unified primitive write based on kind
-        if (kind === MonoTypeKind.Enum) {
-          const underlying = type.underlyingType;
-          if (underlying) {
-            writePrimitiveValue(valuePtr, underlying.kind, value);
-          } else {
-            valuePtr.writeS32(value);
-          }
-        } else {
-          writePrimitiveValue(valuePtr, kind, value);
-        }
-      } else {
+      if (typeof value !== "boolean" && typeof value !== "bigint" && typeof value !== "number") {
         return null;
       }
 
-      // Box the value
-      const boxed = this.native.mono_value_box(this.api.getRootDomain(), klass.pointer, valuePtr);
+      const boxed = boxPrimitiveValue(this.api, klass.pointer, type, value);
       return pointerIsNull(boxed) ? null : new MonoObject(this.api, boxed);
     }
 

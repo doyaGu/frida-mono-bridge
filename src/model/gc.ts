@@ -8,7 +8,7 @@
  * @module model/gc
  */
 
-import { MonoApi } from "../runtime/api";
+import type { MonoApi } from "../runtime/api";
 import type { GCHandle } from "../runtime/gchandle";
 import { GCHandlePool } from "../runtime/gchandle";
 import { MonoErrorCodes, raise } from "../utils/errors";

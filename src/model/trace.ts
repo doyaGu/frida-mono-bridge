@@ -25,7 +25,7 @@ import type { MonoApi } from "../runtime/api";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { Logger } from "../utils/log";
 import type { MonoClass } from "./class";
-import type { MonoDomain } from "./domain";
+import { MonoDomain } from "./domain";
 import type { MonoField } from "./field";
 import type { MonoMethod } from "./method";
 import type { MonoProperty } from "./property";
@@ -873,8 +873,6 @@ export class Tracer {
    */
   methodsByPattern(pattern: string, callbacks: MethodCallbacks, _domain?: MonoDomain): () => void {
     this.ensureNotDisposed();
-
-    const { MonoDomain } = require("./domain") as typeof import("./domain");
     const domain = _domain ?? MonoDomain.getRoot(this.api);
     const methods = domain.findMethods(pattern);
     const detachers: Array<() => void> = [];
@@ -916,8 +914,6 @@ export class Tracer {
    */
   classesByPattern(pattern: string, callbacks: MethodCallbacks): () => void {
     this.ensureNotDisposed();
-
-    const { MonoDomain } = require("./domain") as typeof import("./domain");
     const domain = MonoDomain.getRoot(this.api);
     const classes = domain.findClasses(pattern);
     const detachers: Array<() => void> = [];
@@ -969,8 +965,6 @@ export class Tracer {
   /** Find fields by pattern and attempt to trace access. */
   fieldsByPattern(pattern: string, callbacks: FieldAccessCallbacks): () => void {
     this.ensureNotDisposed();
-
-    const { MonoDomain } = require("./domain") as typeof import("./domain");
     const domain = MonoDomain.getRoot(this.api);
     const fields = domain.findFields(pattern);
     const detachers: Array<() => void> = [];
@@ -1060,8 +1054,6 @@ export class Tracer {
   /** Find properties by pattern and hook accessors. */
   propertiesByPattern(pattern: string, callbacks: PropertyAccessCallbacks): () => void {
     this.ensureNotDisposed();
-
-    const { MonoDomain } = require("./domain") as typeof import("./domain");
     const domain = MonoDomain.getRoot(this.api);
     const properties = domain.findProperties(pattern);
     const detachers: Array<() => void> = [];

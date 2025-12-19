@@ -43,8 +43,8 @@ export { MonoDomain as Domain, MonoDomain, MonoDomainSummary } from "./domain";
 // Field
 export {
   MonoField as Field,
-  FieldAccessibility,
   FieldAccessOptions,
+  FieldAccessibility,
   FieldReadOptions,
   MonoField,
   MonoFieldSummary,
@@ -77,6 +77,12 @@ export { MonoString, MonoStringSummary } from "./string";
 
 // Type System
 export {
+  MonoType,
+  MonoTypeKind,
+  MonoTypeNameFormat,
+  MonoTypeSummary,
+  MonoType as Type,
+  ValueReadOptions,
   // Type utilities
   getPrimitiveSize,
   isArrayKind,
@@ -85,14 +91,8 @@ export {
   isPointerLikeKind,
   isPrimitiveKind,
   isValueTypeKind,
-  MonoType,
-  MonoTypeKind,
   monoTypeKindToNative,
-  MonoTypeNameFormat,
-  MonoTypeSummary,
   readPrimitiveValue,
-  MonoType as Type,
-  ValueReadOptions,
   writePrimitiveValue,
 } from "./type";
 
@@ -120,18 +120,16 @@ export {
   unboxValue,
   validateNumericValue,
   type ConversionOptions,
-  // Value conversion
-  type TypedReadOptions,
-} from "./value-conversion";
+} from "../runtime/value-conversion";
 
 // ============================================================================
 // INTERNAL CALLS
 // ============================================================================
 
 export {
-  createInternalCallRegistrar,
   DuplicatePolicy,
   InternalCallRegistrar,
+  createInternalCallRegistrar,
   type InternalCallCallback,
   type InternalCallDefinition,
   type InternalCallRegistrarSummary,
@@ -146,8 +144,6 @@ export {
 export {
   // Types
   CollectionReport,
-  // Domain object
-  createGarbageCollector,
   DEFAULT_GC_CONFIG,
   FinalizationInfo,
   GarbageCollector,
@@ -155,6 +151,8 @@ export {
   GenerationStats,
   HandleStats,
   MemoryStats,
+  // Domain object
+  createGarbageCollector,
   type CollectionEventCallback,
   type HandleEventCallback,
 } from "./gc";
@@ -166,9 +164,6 @@ export {
 export {
   // Types
   AccessTraceInfo,
-  // Domain objects
-  createPerformanceTracker,
-  createTracer,
   DEFAULT_TRACER_CONFIG,
   HookInfo,
   HookResult,
@@ -176,6 +171,9 @@ export {
   PerformanceTracker,
   Tracer,
   TracerConfig,
+  // Domain objects
+  createPerformanceTracker,
+  createTracer,
   type FieldAccessCallbacks,
   type MethodCallbacks,
   type MethodCallbacksExtended,

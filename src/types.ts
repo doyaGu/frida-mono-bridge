@@ -1,3 +1,5 @@
+import type { ValueReadOptions } from "./model/type";
+
 export type PerformMode = "bind" | "free" | "leak";
 
 export interface Config {
@@ -35,9 +37,7 @@ export type MemoryType =
   | "bool"
   | "char";
 
-export interface TypedReadOptions {
-  /** Return Int64/UInt64 as bigint instead of number */
-  returnBigInt?: boolean;
+export interface TypedReadOptions extends ValueReadOptions {
   /** Return raw wrapper objects (MonoString, MonoArray) instead of coerced JS values */
   returnRaw?: boolean;
 }

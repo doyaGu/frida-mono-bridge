@@ -69,7 +69,7 @@ export interface DelegateThunkInfo {
 /**
  * Details extracted from a managed exception.
  */
-export interface ExceptionDetails {
+export interface MonoExceptionDetails {
   /** Full type name of the exception */
   type?: string;
   /** Exception message */
@@ -432,7 +432,7 @@ export class MonoApi {
    * @param exception Pointer to managed exception object
    * @returns Object with optional type and message strings
    */
-  private extractExceptionDetails(exception: NativePointer): ExceptionDetails {
+  private extractExceptionDetails(exception: NativePointer): MonoExceptionDetails {
     try {
       const klass = this.native.mono_object_get_class(exception);
       if (pointerIsNull(klass)) {

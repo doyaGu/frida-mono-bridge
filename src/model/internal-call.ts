@@ -9,7 +9,7 @@
  * @module model/internal-call
  */
 
-import { MonoApi } from "../runtime/api";
+import type { MonoApi } from "../runtime/api";
 import { MonoRuntimeVersion } from "../runtime/version";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { isNativePointer, pointerIsNull, resolveNativePointer } from "../utils/memory";
