@@ -7,7 +7,7 @@
  */
 
 import { MonoError } from "../src";
-import { LruCache } from "../src/utils/cache";
+import { LruCache, memoize } from "../src/utils/cache";
 import { Logger } from "../src/utils/log";
 import {
   allocPointerArray,
@@ -659,6 +659,67 @@ export async function createMonoUtilsTests(): Promise<TestResult> {
 
       assert(evicted.length === 1, "Should trigger onEvict from options");
       assert(evicted[0] === "a", "Should evict correct key");
+    }),
+  );
+
+  await suite.addResultAsync(
+    createStandaloneTest("Cache utility - memoize distinguishes argument types", () => {
+      class MemoizeFixture {
+        calls = 0;
+
+        @memoize()
+        compute(...args: any[]): string {
+          this.calls++;
+          return `${args.length}:${args.map(arg => `${typeof arg}:${String(arg)}`).join(",")}`;
+        }
+      }
+
+      const fixture = new MemoizeFixture();
+      const result1 = fixture.compute(1);
+      const result2 = fixture.compute("1");
+
+      assert(fixture.calls === 2, "Should not reuse cache for different argument types");
+      assert(result1 !== result2, "Should return distinct results for different types");
+    }),
+  );
+
+  await suite.addResultAsync(
+    createStandaloneTest("Cache utility - memoize avoids delimiter collisions", () => {
+      class MemoizeFixture {
+        calls = 0;
+
+        @memoize()
+        compute(...args: any[]): string {
+          this.calls++;
+          return `${args.length}:${args.map(arg => `${typeof arg}:${String(arg)}`).join(",")}`;
+        }
+      }
+
+      const fixture = new MemoizeFixture();
+      fixture.compute("a|b");
+      fixture.compute("a", "b");
+
+      assert(fixture.calls === 2, "Should not collide keys with delimiter-like values");
+    }),
+  );
+
+  await suite.addResultAsync(
+    createStandaloneTest("Cache utility - memoize uses object identity by default", () => {
+      class MemoizeFixture {
+        calls = 0;
+
+        @memoize()
+        compute(...args: any[]): string {
+          this.calls++;
+          return `${args.length}:${args.map(arg => `${typeof arg}:${String(arg)}`).join(",")}`;
+        }
+      }
+
+      const fixture = new MemoizeFixture();
+      fixture.compute({ value: 1 });
+      fixture.compute({ value: 1 });
+
+      assert(fixture.calls === 2, "Should treat distinct object identities as unique keys");
     }),
   );
 
