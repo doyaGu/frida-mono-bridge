@@ -24,6 +24,7 @@ export interface LruCacheOptions<K, V> {
 }
 
 const DEFAULT_VALUE_SLOT = "__value__" as const;
+const MAX_MEMOIZE_SYMBOL_IDS = 10000;
 
 /**
  * Least-Recently-Used (LRU) cache.
@@ -33,6 +34,7 @@ const DEFAULT_VALUE_SLOT = "__value__" as const;
 export class LruCache<K, V> {
   private readonly map = new Map<K, V>();
   private readonly capacity: number;
+  private readonly unbounded: boolean;
   private readonly onEvict?: (key: K, value: V) => void;
 
   constructor(capacity: number);
@@ -45,6 +47,59 @@ export class LruCache<K, V> {
       this.capacity = capacityOrOptions.capacity;
       this.onEvict = capacityOrOptions.onEvict;
     }
+
+    // Some embedded JS engines (notably certain Frida GumJS builds) conflate `Infinity` with `NaN`.
+    // In those environments it's impossible to distinguish a caller passing `Infinity` vs `NaN`.
+    // We define deterministic semantics:
+    // - If the runtime's `Infinity` behaves as `NaN`, then a `NaN` capacity means "unbounded".
+    // - Otherwise, `NaN` is rejected as invalid.
+    const runtimeInfinityLooksLikeNaN = typeof Object.is === "function" && Object.is(Infinity, NaN);
+
+    if (typeof this.capacity !== "number") {
+      raise(MonoErrorCodes.INVALID_ARGUMENT, "LRU capacity must be a number", "Provide a valid capacity", {
+        parameter: "capacity",
+        value: this.capacity,
+      });
+    }
+
+    const capacityIsNaN = typeof Number.isNaN === "function" ? Number.isNaN(this.capacity) : false;
+    if (capacityIsNaN) {
+      // In runtimes where `Infinity` is represented as NaN, we must treat NaN as "unbounded".
+      // Otherwise, NaN is invalid.
+      if (!runtimeInfinityLooksLikeNaN) {
+        raise(
+          MonoErrorCodes.INVALID_ARGUMENT,
+          "LRU capacity must be a finite number or Infinity",
+          "Provide a valid capacity",
+          {
+            parameter: "capacity",
+            value: this.capacity,
+          },
+        );
+      }
+      this.unbounded = true;
+      return;
+    }
+
+    const capacityIsFinite = isFinite(this.capacity);
+    if (!capacityIsFinite) {
+      // Normal JS engines: allow +Infinity (unbounded) and reject -Infinity.
+      if (this.capacity > 0) {
+        this.unbounded = true;
+        return;
+      }
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        "LRU capacity must be a finite number or Infinity",
+        "Provide a valid capacity",
+        {
+          parameter: "capacity",
+          value: this.capacity,
+        },
+      );
+    }
+
+    this.unbounded = false;
 
     if (this.capacity <= 0) {
       raise(MonoErrorCodes.INVALID_ARGUMENT, "LRU capacity must be positive", "Provide a capacity >= 1", {
@@ -151,7 +206,7 @@ export class LruCache<K, V> {
   }
 
   private prune(): void {
-    if (!isFinite(this.capacity)) {
+    if (this.unbounded) {
       return;
     }
 
@@ -233,6 +288,15 @@ function getMemoizeId<T>(map: MemoizeIdMap<T>, value: T): number {
   }
   const id = memoizeNextId++;
   map.set(value, id);
+  if (map === memoizeSymbolIds && memoizeSymbolIds.size > MAX_MEMOIZE_SYMBOL_IDS) {
+    while (memoizeSymbolIds.size > MAX_MEMOIZE_SYMBOL_IDS) {
+      const oldestKey = memoizeSymbolIds.keys().next().value;
+      if (oldestKey === undefined) {
+        break;
+      }
+      memoizeSymbolIds.delete(oldestKey);
+    }
+  }
   return id;
 }
 
