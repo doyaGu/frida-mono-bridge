@@ -25,6 +25,45 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
   error: 3,
 };
 
+function formatLogArg(arg: unknown): string {
+  if (arg === null || arg === undefined) {
+    return String(arg);
+  }
+  if (typeof arg === "string") {
+    return arg;
+  }
+  if (typeof arg === "number" || typeof arg === "boolean" || typeof arg === "bigint" || typeof arg === "symbol") {
+    return String(arg);
+  }
+  if (typeof arg === "function") {
+    return `Function(${arg.name || "anonymous"})`;
+  }
+
+  try {
+    const seen = new WeakSet<object>();
+    return JSON.stringify(arg, (_key, value) => {
+      if (typeof value === "bigint") {
+        return `${value.toString()}n`;
+      }
+      if (value instanceof NativePointer) {
+        return `NativePointer(${value})`;
+      }
+      if (typeof value === "function") {
+        return `Function(${value.name || "anonymous"})`;
+      }
+      if (typeof value === "object" && value !== null) {
+        if (seen.has(value)) {
+          return "[Circular]";
+        }
+        seen.add(value);
+      }
+      return value;
+    });
+  } catch (_error) {
+    return String(arg);
+  }
+}
+
 /**
  * Logger with configurable level and tag.
  *
@@ -67,7 +106,7 @@ export class Logger {
     const time = new Date().toISOString();
     const formattedMessage =
       args.length > 0
-        ? `${message} ${args.map(arg => (typeof arg === "object" ? JSON.stringify(arg) : String(arg))).join(" ")}`
+        ? `${message} ${args.map(arg => formatLogArg(arg)).join(" ")}`
         : message;
 
     const logMethod = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
