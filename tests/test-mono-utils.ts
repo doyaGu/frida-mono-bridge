@@ -7,6 +7,7 @@
  */
 
 import { MonoError } from "../src";
+import type { MethodCallbacks } from "../src/model/trace";
 import { LruCache, memoize } from "../src/utils/cache";
 import { Logger } from "../src/utils/log";
 import {
@@ -21,6 +22,7 @@ import {
   tryMakePointer,
   unwrapInstance,
 } from "../src/utils/memory";
+import { createMatcher, matchesPattern, wildcardToRegex } from "../src/utils/pattern";
 import {
   createError,
   createTimer,
@@ -29,7 +31,6 @@ import {
   readUtf8String,
   safeStringify,
 } from "../src/utils/string";
-import type { MethodCallbacks } from "../src/model/trace";
 
 import {
   TestCategory,
@@ -38,10 +39,8 @@ import {
   assert,
   assertNotNull,
   assertThrows,
-  createErrorHandlingTest,
-  createIntegrationTest,
-  createPerformanceTest,
   createStandaloneTest,
+  createTest,
 } from "./test-framework";
 
 // Mock classes for testing pointer-like objects (not Mono API mocks)
@@ -63,21 +62,6 @@ export async function createMonoUtilsTests(): Promise<TestResult> {
 
   await suite.addResultAsync(
     createStandaloneTest("Find utility - wildcard pattern matching", () => {
-      // Test wildcard to regex conversion using custom implementation
-      // (wildcardToRegex is an internal function, not exported)
-      function wildcardToRegex(pattern: string): RegExp {
-        const escaped = pattern
-          .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-          .replace(/\*/g, ".*")
-          .replace(/\?/g, ".");
-        return new RegExp(`^${escaped}$`, "i");
-      }
-
-      function matchesPattern(name: string, pattern: string): boolean {
-        if (pattern === "*") return true;
-        return wildcardToRegex(pattern).test(name);
-      }
-
       const pattern1 = "*Test*";
       const regex1 = wildcardToRegex(pattern1);
       assert(regex1.test("SomethingTestSomething"), "Should match wildcard pattern");
@@ -93,26 +77,21 @@ export async function createMonoUtilsTests(): Promise<TestResult> {
 
   await suite.addResultAsync(
     createStandaloneTest("Find utility - pattern parsing", () => {
-      // Test ClassName.MethodName pattern parsing
-      const testPattern = "Namespace.ClassName.MethodName";
-      const parts = testPattern.split(".");
-      assert(parts.length === 3, "Should parse pattern correctly");
-      assert(parts[0] === "Namespace", "Should extract namespace");
-      assert(parts[1] === "ClassName", "Should extract class name");
-      assert(parts[2] === "MethodName", "Should extract method name");
+      const regexMatcher = createMatcher("^Class\\d+$", { regex: true, caseInsensitive: false });
+      assert(regexMatcher.test("Class123"), "Should match regex pattern");
+      assert(!regexMatcher.test("class123"), "Should honor case sensitivity");
+
+      assertThrows(() => createMatcher("(", { regex: true }), "Should throw for invalid regex patterns");
     }),
   );
 
   await suite.addResultAsync(
     createStandaloneTest("Find utility - exact class lookup", () => {
-      // Test exact class name parsing
       const fullName = "System.String";
-      const parts = fullName.split(".");
-      const className = parts.pop()!;
-      const namespace = parts.join(".");
 
-      assert(className === "String", "Should extract class name correctly");
-      assert(namespace === "System", "Should extract namespace correctly");
+      assert(matchesPattern(fullName, "System.String"), "Should match exact class name");
+      assert(matchesPattern(fullName, "system.string"), "Should match case-insensitively by default");
+      assert(!matchesPattern(fullName, "system.*", { caseInsensitive: false }), "Should respect case settings");
     }),
   );
 
@@ -221,14 +200,18 @@ export async function createMonoUtilsTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createErrorHandlingTest("Memory utility - safe allocation", () => {
-      // Test safe allocation
-      const validPtr = safeAlloc(100);
-      assertNotNull(validPtr, "Should allocate memory successfully");
+    createTest(
+      "Memory utility - safe allocation",
+      () => {
+        // Test safe allocation
+        const validPtr = safeAlloc(100);
+        assertNotNull(validPtr, "Should allocate memory successfully");
 
-      assertThrows(() => safeAlloc(0), "Should throw for zero size");
-      assertThrows(() => safeAlloc(-10), "Should throw for negative size");
-    }),
+        assertThrows(() => safeAlloc(0), "Should throw for zero size");
+        assertThrows(() => safeAlloc(-10), "Should throw for negative size");
+      },
+      { category: TestCategory.ERROR_HANDLING, requiresMono: false },
+    ),
   );
 
   await suite.addResultAsync(
@@ -298,26 +281,30 @@ export async function createMonoUtilsTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createErrorHandlingTest("Memory utility - ensurePointer", () => {
-      // Test with valid pointer
-      const validPtr = ptr(0x12345678);
-      const result = ensurePointer(validPtr, "Test pointer");
-      assert(result.equals(validPtr), "Should return the same pointer");
+    createTest(
+      "Memory utility - ensurePointer",
+      () => {
+        // Test with valid pointer
+        const validPtr = ptr(0x12345678);
+        const result = ensurePointer(validPtr, "Test pointer");
+        assert(result.equals(validPtr), "Should return the same pointer");
 
-      // Test with object that has handle property
-      const objWithHandle = { handle: validPtr };
-      const handleResult = ensurePointer(objWithHandle as any, "Object with handle");
-      assert(handleResult.equals(validPtr), "Should extract pointer from handle property");
+        // Test with object that has handle property
+        const objWithHandle = { handle: validPtr };
+        const handleResult = ensurePointer(objWithHandle as any, "Object with handle");
+        assert(handleResult.equals(validPtr), "Should extract pointer from handle property");
 
-      // Test with null - should throw
-      assertThrows(() => ensurePointer(null, "Null test"), "Should throw for null");
+        // Test with null - should throw
+        assertThrows(() => ensurePointer(null, "Null test"), "Should throw for null");
 
-      // Test with undefined - should throw
-      assertThrows(() => ensurePointer(undefined, "Undefined test"), "Should throw for undefined");
+        // Test with undefined - should throw
+        assertThrows(() => ensurePointer(undefined, "Undefined test"), "Should throw for undefined");
 
-      // Test with null pointer - should throw
-      assertThrows(() => ensurePointer(ptr(0), "Null pointer test"), "Should throw for null pointer");
-    }),
+        // Test with null pointer - should throw
+        assertThrows(() => ensurePointer(ptr(0), "Null pointer test"), "Should throw for null pointer");
+      },
+      { category: TestCategory.ERROR_HANDLING, requiresMono: false },
+    ),
   );
 
   await suite.addResultAsync(
@@ -522,11 +509,38 @@ export async function createMonoUtilsTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createErrorHandlingTest("Cache utility - invalid capacity", () => {
-      // Test invalid capacity handling
-      assertThrows(() => new LruCache<string, number>(0), "Should throw for zero capacity");
-      assertThrows(() => new LruCache<string, number>(-1), "Should throw for negative capacity");
-    }),
+    createTest(
+      "Cache utility - invalid capacity",
+      () => {
+        // Test invalid capacity handling
+        assertThrows(() => new LruCache<string, number>(0), "Should throw for zero capacity");
+        assertThrows(() => new LruCache<string, number>(-1), "Should throw for negative capacity");
+
+        // Deterministic semantics across runtimes:
+        // - In standard JS engines, NaN is invalid capacity.
+        // - In some Frida GumJS builds, `Infinity` behaves as `NaN` (cannot distinguish them), so
+        //   NaN capacity is treated as "unbounded" (no eviction).
+        const infinityLooksLikeNaN = typeof Object.is === "function" && Object.is(Infinity, NaN);
+        if (infinityLooksLikeNaN) {
+          const unbounded = new LruCache<string, number>(Number.NaN);
+          unbounded.set("a", 1);
+          unbounded.set("b", 2);
+          unbounded.set("c", 3);
+          assert(unbounded.size === 3, "NaN capacity should behave as unbounded in this runtime");
+        } else {
+          assertThrows(() => new LruCache<string, number>(Number.NaN), "Should throw for NaN capacity");
+        }
+
+        assertThrows(
+          () => new LruCache<string, number>(Number.NEGATIVE_INFINITY),
+          "Should throw for -Infinity capacity",
+        );
+
+        const infiniteCache = new LruCache<string, number>(Infinity);
+        assert(infiniteCache.maxSize === Infinity, "Should allow Infinity capacity");
+      },
+      { category: TestCategory.ERROR_HANDLING, requiresMono: false },
+    ),
   );
 
   await suite.addResultAsync(
@@ -858,6 +872,23 @@ export async function createMonoUtilsTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
+    createStandaloneTest("Logger - safe formatting for complex args", () => {
+      const logger = new Logger({ tag: "Test", level: "debug" });
+      const circular: any = { name: "circular" };
+      circular.self = circular;
+
+      let threw = false;
+      try {
+        logger.info("complex", circular, { big: BigInt(10) }, BigInt(5));
+      } catch (_error) {
+        threw = true;
+      }
+
+      assert(!threw, "Logger should not throw on circular or bigint args");
+    }),
+  );
+
+  await suite.addResultAsync(
     createStandaloneTest("Logger - factory methods", () => {
       // Test withTag factory
       const taggedLogger = Logger.withTag("CustomTag");
@@ -895,54 +926,66 @@ export async function createMonoUtilsTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createPerformanceTest("Cache utility - LRU cache performance", () => {
-      // Test LRU cache performance
-      const cache = new LruCache<string, number>(1000);
+    createTest(
+      "Cache utility - LRU cache performance",
+      () => {
+        // Test LRU cache performance
+        const cache = new LruCache<string, number>(1000);
 
-      // Fill cache
-      for (let i = 0; i < 1000; i++) {
-        cache.set(`key${i}`, i);
-      }
+        // Fill cache
+        for (let i = 0; i < 1000; i++) {
+          cache.set(`key${i}`, i);
+        }
 
-      // Random access pattern
-      for (let i = 0; i < 10000; i++) {
-        const key = `key${Math.floor(Math.random() * 1000)}`;
-        cache.get(key);
-      }
-    }),
+        // Random access pattern
+        for (let i = 0; i < 10000; i++) {
+          const key = `key${Math.floor(Math.random() * 1000)}`;
+          cache.get(key);
+        }
+      },
+      { category: TestCategory.PERFORMANCE, requiresMono: false },
+    ),
   );
 
   await suite.addResultAsync(
-    createPerformanceTest("String operations - performance timer overhead", () => {
-      // Test performance timer overhead
-      for (let i = 0; i < 10000; i++) {
-        const timer = createTimer();
-        timer.elapsed();
-        timer.restart();
-        timer.elapsedMs();
-        timer.elapsedSeconds();
-      }
-    }),
+    createTest(
+      "String operations - performance timer overhead",
+      () => {
+        // Test performance timer overhead
+        for (let i = 0; i < 10000; i++) {
+          const timer = createTimer();
+          timer.elapsed();
+          timer.restart();
+          timer.elapsedMs();
+          timer.elapsedSeconds();
+        }
+      },
+      { category: TestCategory.PERFORMANCE, requiresMono: false },
+    ),
   );
 
   await suite.addResultAsync(
-    createPerformanceTest("Memory operations - pointer resolution performance", () => {
-      // Test pointer resolution performance
-      const testPtr = ptr(0x12345678);
-      const mockObj = new MockMonoObject(testPtr);
-      const testValues = [testPtr, mockObj, { pointer: testPtr }, null, undefined];
+    createTest(
+      "Memory operations - pointer resolution performance",
+      () => {
+        // Test pointer resolution performance
+        const testPtr = ptr(0x12345678);
+        const mockObj = new MockMonoObject(testPtr);
+        const testValues = [testPtr, mockObj, { pointer: testPtr }, null, undefined];
 
-      for (let i = 0; i < 10000; i++) {
-        for (const value of testValues) {
-          resolveNativePointer(value);
-          pointerIsNull(value);
-          // Only test isValidPointer with compatible types
-          if (value === testPtr || value === null || value === undefined) {
-            isValidPointer(value as NativePointer);
+        for (let i = 0; i < 10000; i++) {
+          for (const value of testValues) {
+            resolveNativePointer(value);
+            pointerIsNull(value);
+            // Only test isValidPointer with compatible types
+            if (value === testPtr || value === null || value === undefined) {
+              isValidPointer(value as NativePointer);
+            }
           }
         }
-      }
-    }),
+      },
+      { category: TestCategory.PERFORMANCE, requiresMono: false },
+    ),
   );
 
   // ============================================================================
@@ -950,43 +993,51 @@ export async function createMonoUtilsTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createIntegrationTest("Utilities integration - cache with memory", () => {
-      // Test integration between cache and memory utilities
-      const cache = new LruCache<string, NativePointer>(10);
+    createTest(
+      "Utilities integration - cache with memory",
+      () => {
+        // Test integration between cache and memory utilities
+        const cache = new LruCache<string, NativePointer>(10);
 
-      // Cache validated pointers
-      const validPtr = ptr(0x12345678);
-      if (isValidPointer(validPtr)) {
-        cache.set("pointer", validPtr);
-      }
+        // Cache validated pointers
+        const validPtr = ptr(0x12345678);
+        if (isValidPointer(validPtr)) {
+          cache.set("pointer", validPtr);
+        }
 
-      const cachedPtr = cache.get("pointer");
-      assert(cachedPtr !== undefined && cachedPtr.equals(validPtr), "Should retrieve cached pointer");
-    }),
+        const cachedPtr = cache.get("pointer");
+        assert(cachedPtr !== undefined && cachedPtr.equals(validPtr), "Should retrieve cached pointer");
+      },
+      { category: TestCategory.INTEGRATION, requiresMono: false },
+    ),
   );
 
   await suite.addResultAsync(
-    createIntegrationTest("Utilities integration - comprehensive workflow", () => {
-      // Test comprehensive workflow using multiple utilities
-      const cache = new LruCache<string, any>(5);
-      const logger = Logger.withTag("WorkflowTest");
+    createTest(
+      "Utilities integration - comprehensive workflow",
+      () => {
+        // Test comprehensive workflow using multiple utilities
+        const cache = new LruCache<string, any>(5);
+        const logger = Logger.withTag("WorkflowTest");
 
-      // Step 1: Cache data
-      cache.set("testData", "workflow test");
+        // Step 1: Cache data
+        cache.set("testData", "workflow test");
 
-      // Step 2: Process with string operations
-      const stringified = safeStringify({ data: cache.get("testData") });
+        // Step 2: Process with string operations
+        const stringified = safeStringify({ data: cache.get("testData") });
 
-      // Step 3: Create timer
-      const timer = createTimer();
+        // Step 3: Create timer
+        const timer = createTimer();
 
-      // Step 4: Validate results
-      assert(cache.get("testData") === "workflow test", "Should get cached data");
-      assert(stringified.includes("workflow"), "Should stringify data");
-      assert(typeof timer.elapsedMs() === "number", "Should get elapsed time");
+        // Step 4: Validate results
+        assert(cache.get("testData") === "workflow test", "Should get cached data");
+        assert(stringified.includes("workflow"), "Should stringify data");
+        assert(typeof timer.elapsedMs() === "number", "Should get elapsed time");
 
-      logger.info("Comprehensive workflow test completed successfully");
-    }),
+        logger.info("Comprehensive workflow test completed successfully");
+      },
+      { category: TestCategory.INTEGRATION, requiresMono: false },
+    ),
   );
 
   const summary = suite.getSummary();
