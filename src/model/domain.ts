@@ -404,7 +404,7 @@ export class MonoDomain extends MonoHandle {
    * ```
    */
   assemblyOpen(path: string): MonoAssembly {
-    const pathPtr = Memory.allocUtf8String(path);
+    const pathPtr = this.api.allocUtf8StringCached(path);
     const assemblyPtr = this.native.mono_domain_assembly_open(this.pointer, pathPtr);
     if (pointerIsNull(assemblyPtr)) {
       raise(
@@ -569,10 +569,10 @@ export class MonoDomain extends MonoHandle {
 
     // Fast path for System.* classes - try mscorlib first
     if (namespace === "System" || namespace.startsWith("System.")) {
-      const mscorlibImage = this.api.native.mono_image_loaded(Memory.allocUtf8String("mscorlib"));
+      const mscorlibImage = this.api.native.mono_image_loaded(this.api.allocUtf8StringCached("mscorlib"));
       if (!pointerIsNull(mscorlibImage)) {
-        const nsPtr = Memory.allocUtf8String(namespace);
-        const namePtr = Memory.allocUtf8String(className);
+        const nsPtr = this.api.allocUtf8StringCached(namespace);
+        const namePtr = this.api.allocUtf8StringCached(className);
         const klassPtr = this.api.native.mono_class_from_name(mscorlibImage, nsPtr, namePtr);
         if (!pointerIsNull(klassPtr)) {
           return new MonoClass(this.api, klassPtr);
@@ -585,10 +585,10 @@ export class MonoDomain extends MonoHandle {
       const unityAssemblyNames = ["UnityEngine.CoreModule", "UnityEngine", "UnityEngine.dll"];
 
       for (const assemblyName of unityAssemblyNames) {
-        const unityImage = this.api.native.mono_image_loaded(Memory.allocUtf8String(assemblyName));
+        const unityImage = this.api.native.mono_image_loaded(this.api.allocUtf8StringCached(assemblyName));
         if (!pointerIsNull(unityImage)) {
-          const nsPtr = Memory.allocUtf8String(namespace);
-          const namePtr = Memory.allocUtf8String(className);
+          const nsPtr = this.api.allocUtf8StringCached(namespace);
+          const namePtr = this.api.allocUtf8StringCached(className);
           const klassPtr = this.api.native.mono_class_from_name(unityImage, nsPtr, namePtr);
           if (!pointerIsNull(klassPtr)) {
             return new MonoClass(this.api, klassPtr);
@@ -869,7 +869,7 @@ export class MonoDomain extends MonoHandle {
    */
   createDomain(friendlyName: string): MonoDomain | null {
     try {
-      const namePtr = Memory.allocUtf8String(friendlyName);
+      const namePtr = this.api.allocUtf8StringCached(friendlyName);
       const configFilePtr = NULL; // No config file
       const domainPtr = this.native.mono_domain_create_appdomain(namePtr, configFilePtr);
 

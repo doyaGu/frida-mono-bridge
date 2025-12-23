@@ -137,7 +137,7 @@ export class MonoArray<T = any> extends MonoObject implements Iterable<T> {
 
     // Get the Length property getter
     // mono_class_get_method_from_name(klass, name, param_count)
-    const methodName = Memory.allocUtf8String("get_Length");
+    const methodName = this.api.allocUtf8StringCached("get_Length");
     const getLengthMethod = this.native.mono_class_get_method_from_name(arrayClass, methodName, 0);
 
     if (pointerIsNull(getLengthMethod)) {

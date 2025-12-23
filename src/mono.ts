@@ -430,6 +430,12 @@ export class MonoNamespace {
 
     /** Default perform mode used by `perform()` when not specified. */
     performMode: "bind",
+
+    /** Capacity of the internal UTF-8 string pointer cache. */
+    utf8StringCacheCapacity: 256,
+
+    /** Capacity of the pinned UTF-8 string cache. */
+    pinnedStringCacheCapacity: 512,
   };
 
   // ============================================================================
@@ -470,7 +476,7 @@ export class MonoNamespace {
       );
     }
 
-    const threadManager = this._api._threadManager;
+    const threadManager = this._api.getThreadManager()!;
 
     // Step 2: Check if thread is already attached (either by bridge or externally)
     const wasAlreadyAttached = threadManager.isAttached();
@@ -549,10 +555,13 @@ export class MonoNamespace {
       });
 
       this._module = moduleInfo;
-      this._api = createMonoApi(this._module);
+      this._api = createMonoApi(this._module, {
+        utf8CacheCapacity: this.config.utf8StringCacheCapacity,
+        pinnedStringCacheCapacity: this.config.pinnedStringCacheCapacity,
+      });
 
       // Initialize thread manager
-      this._api._threadManager = new ThreadManager(this._api);
+      this._api.setThreadManager(new ThreadManager(this._api));
 
       // Wait for runtime readiness (root domain available).
       // NOTE: Thread attachment is NOT done here - that's perform()'s responsibility.
@@ -916,7 +925,7 @@ export class MonoNamespace {
    */
   ensureThreadAttached(): NativePointer {
     this.ensureInitializedSync();
-    return this._api!._threadManager.ensureAttached();
+    return this._api!.getThreadManager()!.ensureAttached();
   }
 
   /**
@@ -929,7 +938,7 @@ export class MonoNamespace {
     if (!this._api) {
       return false;
     }
-    return this._api._threadManager.detachIfExiting();
+    return this._api.getThreadManager()?.detachIfExiting() ?? false;
   }
 
   /**
@@ -940,7 +949,7 @@ export class MonoNamespace {
    */
   detachAllThreads(): void {
     if (this._api) {
-      this._api._threadManager.detachAll();
+      this._api.getThreadManager()?.detachAll();
     }
   }
 

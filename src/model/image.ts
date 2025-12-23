@@ -209,8 +209,8 @@ export class MonoImage extends MonoHandle {
     if (trimmedName.length === 0) {
       return null;
     }
-    const nsPtr = namespace ? Memory.allocUtf8String(namespace) : NULL;
-    const namePtr = Memory.allocUtf8String(trimmedName);
+    const nsPtr = this.api.allocUtf8StringCachedOrNullIfEmpty(namespace);
+    const namePtr = this.api.allocUtf8StringCached(trimmedName);
     const klassPtr = this.native.mono_class_from_name(this.pointer, nsPtr, namePtr);
     return pointerIsNull(klassPtr) ? null : new MonoClass(this.api, klassPtr);
   }

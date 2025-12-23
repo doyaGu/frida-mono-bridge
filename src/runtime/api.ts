@@ -90,6 +90,10 @@ const CACHE_LIMITS = {
   ADDRESS_CACHE: 512,
   /** Maximum number of cached delegate thunks */
   DELEGATE_THUNK_CACHE: 128,
+  /** Maximum number of cached UTF-8 string pointers */
+  UTF8_STRING_CACHE: 256,
+  /** Maximum number of pinned UTF-8 string pointers */
+  PINNED_STRING_CACHE: 512,
 } as const;
 
 /**
@@ -147,6 +151,12 @@ export class MonoApi {
   /** LRU cache for delegate thunk information */
   private readonly delegateThunkCache = new LruCache<string, DelegateThunkInfo>(CACHE_LIMITS.DELEGATE_THUNK_CACHE);
 
+  /**
+   * LRU cache for UTF-8 string pointers.
+   * Reduces memory allocation in hot paths like method/field lookups.
+   */
+  private readonly utf8StringCache: LruCache<string, NativePointer>;
+
   // ===== RUNTIME STATE =====
 
   /**
@@ -166,16 +176,41 @@ export class MonoApi {
   /** Track allocated resources for proper cleanup */
   private allocatedResources: NativePointer[] = [];
 
+  /**
+   * LRU cache for pinned UTF-8 string pointers kept alive until evicted, cleared, or disposed.
+   *
+   * Use this when a native API will store the pointer beyond the current call.
+   * Uses LRU eviction to prevent unbounded memory growth in long-running sessions.
+   */
+  private readonly pinnedUtf8Strings: LruCache<string, NativePointer>;
+
   /** Disposal flag to prevent use-after-dispose */
   private disposed = false;
 
-  // ===== PUBLIC API =====
+  // ===== THREAD MANAGEMENT =====
 
   /**
    * Thread manager for this API instance.
-   * @internal Used by guard.ts to avoid circular dependency
+   * Set via setThreadManager() after construction to avoid circular dependency.
    */
-  public _threadManager!: ThreadManager;
+  private threadManager?: ThreadManager;
+
+  /**
+   * Set the thread manager for this API instance.
+   * Must be called after construction to enable automatic thread attachment.
+   * @param manager The ThreadManager instance to use
+   */
+  setThreadManager(manager: ThreadManager): void {
+    this.threadManager = manager;
+  }
+
+  /**
+   * Get the thread manager for this API instance.
+   * @returns The ThreadManager instance, or undefined if not set
+   */
+  getThreadManager(): ThreadManager | undefined {
+    return this.threadManager;
+  }
 
   /**
    * Lazily bound native function invokers.
@@ -183,7 +218,14 @@ export class MonoApi {
    */
   public readonly native: MonoNativeBindings = this.createNativeBindings();
 
-  constructor(private readonly module: MonoModuleInfo) {}
+  constructor(
+    private readonly module: MonoModuleInfo,
+    utf8CacheCapacity: number = CACHE_LIMITS.UTF8_STRING_CACHE,
+    pinnedStringCacheCapacity: number = CACHE_LIMITS.PINNED_STRING_CACHE,
+  ) {
+    this.utf8StringCache = new LruCache<string, NativePointer>(utf8CacheCapacity);
+    this.pinnedUtf8Strings = new LruCache<string, NativePointer>(pinnedStringCacheCapacity);
+  }
 
   // ============================================================================
   // THREAD MANAGEMENT
@@ -392,7 +434,7 @@ export class MonoApi {
    */
   stringNew(text: string): NativePointer {
     const domain = this.getRootDomain();
-    const data = Memory.allocUtf8String(text);
+    const data = this.allocUtf8StringCached(text);
     return this.native.mono_string_new(domain, data);
   }
 
@@ -458,7 +500,7 @@ export class MonoApi {
       try {
         const toStringMethod = this.native.mono_class_get_method_from_name(
           klass,
-          Memory.allocUtf8String("ToString"),
+          this.allocUtf8StringCached("ToString"),
           0,
         );
         if (!pointerIsNull(toStringMethod)) {
@@ -644,7 +686,7 @@ export class MonoApi {
         "Provide a valid NativePointer to the callback function",
       );
     }
-    const namePtr = Memory.allocUtf8String(name);
+    const namePtr = this.allocUtf8StringCached(name);
     this.native.mono_add_internal_call(namePtr, callback);
   }
 
@@ -668,6 +710,7 @@ export class MonoApi {
     this.functionCache.clear();
     this.addressCache.clear();
     this.delegateThunkCache.clear();
+    this.utf8StringCache.clear();
   }
 
   /**
@@ -683,24 +726,20 @@ export class MonoApi {
     // Try to safely detach threads using detachIfExiting for the current thread.
     // This uses mono_thread_detach_if_exiting which only detaches if the thread
     // is actually exiting, preventing script hangs during normal disposal.
-    if (this._threadManager && typeof this._threadManager.detachAll === "function") {
-      this._threadManager.detachAll();
-    }
+    this.threadManager?.detachAll();
 
     // Clear all caches
     this.functionCache.clear();
     this.addressCache.clear();
     this.delegateThunkCache.clear();
+    this.utf8StringCache.clear();
+    this.pinnedUtf8Strings.clear();
 
-    // Clean up allocated resources
-    // for (const _ of this.allocatedResources) {
-    //   try {
-    //     // Note: We don't explicitly free Memory.alloc pointers as they rely on Frida's GC
-    //     // But we clear our reference to help with garbage collection
-    //   } catch (error) {
-    //     // Ignore cleanup errors
-    //   }
-    // }
+    // Note on Memory.alloc cleanup:
+    // Frida's Memory.alloc() pointers are managed by Frida's GC and do not require
+    // explicit free(). We clear our allocatedResources array to release references
+    // and allow GC to reclaim memory. The utf8StringCache above follows the same
+    // pattern: cache.clear() releases references but doesn't explicitly free.
     this.allocatedResources = [];
 
     // Clear pointers
@@ -754,6 +793,109 @@ export class MonoApi {
   call<T = NativePointer>(name: MonoApiName, ...args: MonoArg[]): T {
     const fn = this.native[name] as (...fnArgs: MonoArg[]) => T;
     return fn(...args);
+  }
+
+  /**
+   * Allocate a UTF-8 string with LRU caching to reduce memory allocation in hot paths.
+   *
+   * This method is intended for frequently-used lookup strings (method names, field names, etc.)
+   * that would otherwise cause memory growth in long-running sessions.
+   *
+   * The cache is bounded and cleared on dispose(). Evicted strings remain valid
+   * (Frida's Memory.alloc is GC-managed) but repeated lookups may re-allocate.
+   *
+   * @param str The string to allocate
+   * @param allowNul Whether to allow embedded NUL characters (default: false)
+   * @returns NativePointer to the UTF-8 encoded string
+   *
+   * @example
+   * ```typescript
+   * // Instead of: const namePtr = Memory.allocUtf8String(name);
+   * const namePtr = api.allocUtf8StringCached(name);
+   * ```
+   */
+  allocUtf8StringCached(str: string, allowNul = false): NativePointer {
+    this.ensureNotDisposed();
+    this.assertValidCString(str, allowNul);
+    return this.utf8StringCache.getOrCreate(str, () => Memory.allocUtf8String(str));
+  }
+
+  /**
+   * Allocate a UTF-8 C-string for passing to native Mono APIs.
+   *
+   * Safety notes:
+   * - Rejects embedded NUL ("\0") by default because it will truncate C-strings.
+   * - Returned pointers are GC-managed by Frida. Do not free them.
+   * - If the native side stores the pointer beyond the current call, use `allocUtf8StringPinned()`.
+   * - For hot-path lookups, prefer `allocUtf8StringCached()`.
+   */
+  allocUtf8String(str: string, allowNul = false): NativePointer {
+    this.ensureNotDisposed();
+
+    this.assertValidCString(str, allowNul);
+
+    return Memory.allocUtf8String(str);
+  }
+
+  /** Convenience wrapper: allocate UTF-8 string or return NULL for null/undefined. */
+  allocUtf8StringOrNull(str: string | null | undefined, allowNul = false): NativePointer {
+    if (str === null || str === undefined) {
+      return NULL;
+    }
+    return this.allocUtf8String(str, allowNul);
+  }
+
+  /** Convenience wrapper: allocate cached UTF-8 string or return NULL for null/undefined. */
+  allocUtf8StringCachedOrNull(str: string | null | undefined, allowNul = false): NativePointer {
+    if (str === null || str === undefined) {
+      return NULL;
+    }
+    this.assertValidCString(str, allowNul);
+    return this.allocUtf8StringCached(str);
+  }
+
+  /**
+   * Convenience wrapper: allocate cached UTF-8 string or return NULL for null/undefined/empty string.
+   *
+   * Useful for Mono APIs where an empty namespace should be passed as NULL.
+   */
+  allocUtf8StringCachedOrNullIfEmpty(str: string | null | undefined, allowNul = false): NativePointer {
+    if (!str) {
+      return NULL;
+    }
+    return this.allocUtf8StringCachedOrNull(str, allowNul);
+  }
+
+  /**
+   * Allocate (and keep alive) a UTF-8 C-string with LRU eviction to prevent memory leaks.
+   *
+   * This is the safest option when you are not 100% sure about lifetime.
+   * Uses LRU eviction to prevent unbounded memory growth in long-running sessions.
+   *
+   * @param str The string to allocate
+   * @param allowNul Whether to allow embedded NUL characters (default: false)
+   * @returns NativePointer to the UTF-8 encoded string
+   */
+  allocUtf8StringPinned(str: string, allowNul = false): NativePointer {
+    this.ensureNotDisposed();
+    this.assertValidCString(str, allowNul);
+    return this.pinnedUtf8Strings.getOrCreate(str, () => Memory.allocUtf8String(str));
+  }
+
+  /** Clear pinned UTF-8 strings (releasing JS references so GC can reclaim). */
+  clearPinnedUtf8Strings(): void {
+    this.ensureNotDisposed();
+    this.pinnedUtf8Strings.clear();
+  }
+
+  private assertValidCString(str: string, allowNul = false): void {
+    if (!allowNul && str.indexOf("\u0000") !== -1) {
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        "String contains embedded NUL (\\0) which will truncate a C-string",
+        "Remove the NUL character or pass { allowNul: true } if truncation is intended",
+      );
+    }
   }
 
   /**
@@ -983,18 +1125,13 @@ export class MonoApi {
           const nativeFn = this.getNativeFunction(name);
           const wrapper = (...args: MonoArg[]) => {
             const invoke = () => nativeFn(...args.map(normalizeArg));
-            const manager = (this as any)._threadManager;
+            const manager = this.threadManager;
 
             if (manager) {
-              if (typeof manager.isInAttachedContext === "function" && manager.isInAttachedContext()) {
+              if (manager.isInAttachedContext()) {
                 return invoke();
               }
-              if (typeof manager.run === "function") {
-                return manager.run(invoke);
-              }
-              if (typeof manager.withAttachedThread === "function") {
-                return manager.withAttachedThread(invoke);
-              }
+              return manager.run(invoke);
             }
 
             return invoke();
@@ -1042,9 +1179,30 @@ function normalizeArg(arg: MonoArg): any {
 }
 
 /**
+ * Options for creating a MonoApi instance.
+ */
+export interface CreateMonoApiOptions {
+  /**
+   * Capacity of the UTF-8 string cache.
+   * Higher values improve performance for lookup-heavy workloads at the cost of memory.
+   * @default 256
+   */
+  utf8CacheCapacity?: number;
+
+  /**
+   * Capacity of the pinned UTF-8 string cache.
+   * Pinned strings are kept alive for APIs that store pointers beyond the current call.
+   * Uses LRU eviction to prevent unbounded memory growth.
+   * @default 512
+   */
+  pinnedStringCacheCapacity?: number;
+}
+
+/**
  * Create a new MonoApi instance for the given module.
  *
  * @param module Module information for the Mono runtime
+ * @param options Optional configuration for the API instance
  * @returns Configured MonoApi instance
  *
  * @example
@@ -1054,6 +1212,6 @@ function normalizeArg(arg: MonoArg): any {
  * await api.waitForRootDomainReady(30000);
  * ```
  */
-export function createMonoApi(module: MonoModuleInfo): MonoApi {
-  return new MonoApi(module);
+export function createMonoApi(module: MonoModuleInfo, options?: CreateMonoApiOptions): MonoApi {
+  return new MonoApi(module, options?.utf8CacheCapacity, options?.pinnedStringCacheCapacity);
 }

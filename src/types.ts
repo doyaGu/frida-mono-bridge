@@ -20,6 +20,20 @@ export interface Config {
 
   /** Default perform mode used by `perform()` when not specified. */
   performMode: PerformMode;
+
+  /**
+   * Capacity of the internal UTF-8 string pointer cache.
+   * Useful to tune memory vs. hit-rate for lookup-heavy workloads.
+   */
+  utf8StringCacheCapacity?: number;
+
+  /**
+   * Capacity of the pinned UTF-8 string cache.
+   * Pinned strings are kept alive for APIs that store pointers beyond the current call.
+   * Uses LRU eviction to prevent unbounded memory growth.
+   * @default 512
+   */
+  pinnedStringCacheCapacity?: number;
 }
 
 export type MemoryType =

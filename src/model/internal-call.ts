@@ -267,7 +267,7 @@ export class InternalCallRegistrar {
       this.api.addInternalCall(name, callbackPtr);
     } else {
       // Bypass validation - call native function directly
-      const namePtr = Memory.allocUtf8String(name);
+      const namePtr = this.api.allocUtf8StringCached(name);
       this.api.native.mono_add_internal_call(namePtr, callbackPtr);
     }
 

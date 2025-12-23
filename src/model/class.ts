@@ -271,7 +271,7 @@ export class MonoClass extends MonoHandle {
    * @returns Method if found, null otherwise
    */
   tryMethod(name: string, paramCount = -1): MonoMethod | null {
-    const namePtr = Memory.allocUtf8String(name);
+    const namePtr = this.api.allocUtf8StringCached(name);
     const methodPtr = this.native.mono_class_get_method_from_name(this.pointer, namePtr, paramCount);
     return pointerIsNull(methodPtr) ? null : new MonoMethod(this.api, methodPtr);
   }
@@ -310,7 +310,7 @@ export class MonoClass extends MonoHandle {
    * @returns Field if found, null otherwise
    */
   tryField(name: string): MonoField | null {
-    const namePtr = Memory.allocUtf8String(name);
+    const namePtr = this.api.allocUtf8StringCached(name);
     const fieldPtr = this.native.mono_class_get_field_from_name(this.pointer, namePtr);
     return pointerIsNull(fieldPtr) ? null : new MonoField(this.api, fieldPtr);
   }
@@ -348,7 +348,7 @@ export class MonoClass extends MonoHandle {
    * @returns Property if found, null otherwise
    */
   tryProperty(name: string): MonoProperty | null {
-    const namePtr = Memory.allocUtf8String(name);
+    const namePtr = this.api.allocUtf8StringCached(name);
     const propertyPtr = this.native.mono_class_get_property_from_name(this.pointer, namePtr);
     return pointerIsNull(propertyPtr) ? null : new MonoProperty(this.api, propertyPtr);
   }
@@ -775,7 +775,7 @@ export class MonoClass extends MonoHandle {
   private makeGenericTypeViaReflection(typeArguments: MonoClass[]): MonoClass | null {
     try {
       const typeName = this.buildGenericTypeName(typeArguments);
-      const typeNamePtr = Memory.allocUtf8String(typeName);
+      const typeNamePtr = this.api.allocUtf8StringCached(typeName);
       const currentImage = this.image;
 
       // mono_reflection_type_from_name(name, image) -> MonoType*

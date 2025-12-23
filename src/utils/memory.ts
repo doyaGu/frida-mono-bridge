@@ -320,8 +320,55 @@ export function safeWriteMemory(pointer: NativePointer, data: ArrayBuffer | numb
 // ============================================================================
 
 /**
- * Generic Mono handle enumeration using iterator pattern
- * Used for enumerating methods, fields, properties, etc.
+ * Lazy generator for Mono handle enumeration.
+ * Creates wrapper objects on-demand as you iterate, reducing memory usage
+ * when only a subset of items is needed.
+ *
+ * @param fetch Function that takes iterator pointer and returns next handle
+ * @param factory Function to create typed object from handle pointer
+ * @yields Enumerated objects one at a time
+ *
+ * @example
+ * ```typescript
+ * // Find first method matching a condition without creating all wrappers
+ * for (const method of iterateMonoHandles(
+ *   (iter) => api.native.mono_class_get_methods(classPtr, iter),
+ *   (ptr) => new MonoMethod(api, ptr)
+ * )) {
+ *   if (method.name === "ToString") {
+ *     return method; // Early exit, no more wrappers created
+ *   }
+ * }
+ * ```
+ */
+export function* iterateMonoHandles<T>(
+  fetch: (iter: NativePointer) => NativePointer,
+  factory: (ptr: NativePointer) => T,
+): Generator<T, void, undefined> {
+  // Allocate iterator state pointer for Mono's iteration API.
+  // Mono iteration functions (e.g., mono_class_get_methods) expect a pointer
+  // to a gpointer that they update in-place to track iteration state.
+  // Initialize with NULL to signal "start from beginning".
+  const iterator = Memory.alloc(Process.pointerSize);
+  iterator.writePointer(NULL);
+
+  // Iterate until fetch returns NULL (end of enumeration).
+  // The fetch function updates the iterator pointer in-place for the next iteration.
+  while (true) {
+    const handle = fetch(iterator);
+    if (pointerIsNull(handle)) {
+      break;
+    }
+    yield factory(handle);
+  }
+}
+
+/**
+ * Generic Mono handle enumeration using iterator pattern.
+ * Eagerly collects all items into an array.
+ *
+ * For large collections where you only need a subset, consider using
+ * `iterateMonoHandles()` which creates wrappers lazily.
  *
  * @param fetch Function that takes iterator pointer and returns next handle
  * @param factory Function to create typed object from handle pointer
@@ -339,17 +386,6 @@ export function enumerateMonoHandles<T>(
   fetch: (iter: NativePointer) => NativePointer,
   factory: (ptr: NativePointer) => T,
 ): T[] {
-  const iterator = Memory.alloc(Process.pointerSize);
-  iterator.writePointer(NULL);
-  const results: T[] = [];
-
-  while (true) {
-    const handle = fetch(iterator);
-    if (pointerIsNull(handle)) {
-      break;
-    }
-    results.push(factory(handle));
-  }
-
-  return results;
+  // Use the generator internally for consistent implementation
+  return Array.from(iterateMonoHandles(fetch, factory));
 }

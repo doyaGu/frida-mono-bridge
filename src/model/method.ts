@@ -165,7 +165,7 @@ export class MonoMethod extends MonoHandle {
    * @returns MonoMethod if found, null otherwise
    */
   static tryFind(api: MonoApi, image: MonoImage, descriptor: string): MonoMethod | null {
-    const descPtr = Memory.allocUtf8String(descriptor);
+    const descPtr = api.allocUtf8StringCached(descriptor);
     const methodDesc = api.native.mono_method_desc_new(descPtr, 1);
     if (pointerIsNull(methodDesc)) {
       return null;
@@ -191,7 +191,7 @@ export class MonoMethod extends MonoHandle {
    * @throws {MonoMethodNotFoundError} if method not found
    */
   static find(api: MonoApi, image: MonoImage, descriptor: string): MonoMethod {
-    const descPtr = Memory.allocUtf8String(descriptor);
+    const descPtr = api.allocUtf8StringCached(descriptor);
     const methodDesc = api.native.mono_method_desc_new(descPtr, 1);
     if (pointerIsNull(methodDesc)) {
       raise(
@@ -712,7 +712,7 @@ export class MonoMethod extends MonoHandle {
         return null;
       }
 
-      const makeGenericMethodName = Memory.allocUtf8String("MakeGenericMethod");
+      const makeGenericMethodName = this.api.allocUtf8StringCached("MakeGenericMethod");
       const makeGenericMethod = this.native.mono_class_get_method_from_name(methodInfoClass, makeGenericMethodName, 1);
 
       if (pointerIsNull(makeGenericMethod)) {
@@ -749,15 +749,15 @@ export class MonoMethod extends MonoHandle {
   private createTypeArray(typeArguments: MonoClass[], domain: NativePointer): NativePointer {
     try {
       // Get System.Type class
-      const mscorlibImage = this.api.native.mono_image_loaded(Memory.allocUtf8String("mscorlib"));
+      const mscorlibImage = this.api.native.mono_image_loaded(this.api.allocUtf8StringCached("mscorlib"));
       if (pointerIsNull(mscorlibImage)) {
         return NULL;
       }
 
       const typeClass = this.api.native.mono_class_from_name(
         mscorlibImage,
-        Memory.allocUtf8String("System"),
-        Memory.allocUtf8String("Type"),
+        this.api.allocUtf8StringCached("System"),
+        this.api.allocUtf8StringCached("Type"),
       );
 
       if (pointerIsNull(typeClass)) {
@@ -815,7 +815,7 @@ export class MonoMethod extends MonoHandle {
       }
 
       // Try to get the "mhandle" field (internal method pointer)
-      const mhandleFieldName = Memory.allocUtf8String("mhandle");
+      const mhandleFieldName = this.api.allocUtf8StringCached("mhandle");
       const mhandleField = this.native.mono_class_get_field_from_name(klass, mhandleFieldName);
 
       if (!pointerIsNull(mhandleField)) {
