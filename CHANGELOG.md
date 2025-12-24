@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2025-12-24
+
+### Added
+- UTF-8 string caching for performance optimization in native API calls
+- Unbounded cache support with improved edge case handling
+- Circular reference detection in argument formatting for better debugging
+- Test fixtures and validators for streamlined test infrastructure
+- Comprehensive memoize decorator tests for edge cases
+
+### Changed
+- Consolidated test infrastructure with shared fixtures and validators
+- Reorganized internal architecture for improved type safety
+- Refactored pattern matching functions into dedicated utility module
+- Enhanced lazy decorator implementation for better clarity and functionality
+- Improved import organization across multiple modules for consistency
+- Migrated utilities to domain objects for better encapsulation
+
+### Fixed
+- Enhanced test reliability with null checks before detaching functions
+- Improved memory management and resource cleanup
+- Better error handling and validation across test suite
+- Added validity checks in MonoImage for name retrieval and class lookup
+
 ## [0.3.0] - 2025-12-13
 
 ### Added
@@ -184,15 +207,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **0.3.1** - Performance optimizations, test infrastructure consolidation, architecture improvements
 - **0.3.0** - facade, async lifecycle, signature pipeline modernization
 - **0.2.2** - Bundled declarations, improved package structure
 - **0.2.1** - esbuild-based bundling
 - **0.2.0** - ES module support, resilient method interception, utility consolidation
 - **0.1.0** - Initial public release
 
-[Unreleased]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/doyaGu/frida-mono-bridge/compare/3fc9567...v0.3.0
-[0.2.2]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.2.1...3fc9567
+[Unreleased]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/doyaGu/frida-mono-bridge/compare/0.2.2...v0.3.0
+[0.2.2]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.2.1...0.2.2
 [0.2.1]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/doyaGu/frida-mono-bridge/releases/tag/v0.1.0
