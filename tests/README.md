@@ -1,8 +1,41 @@
 # Test Suite
 
-Comprehensive test suite for frida-mono-bridge with **1,103 tests** across **36 test files**.
+Comprehensive test suite for frida-mono-bridge.
+
+> Note on counts: the exact number of tests can drift over time and may vary by target/runtime.
+> Treat the automated runner summary (`TEST SUMMARY`) as the source of truth.
 
 ## Quick Start
+
+### Automated Test Runner (Recommended)
+
+Use the automated test runner for compiling and running all tests:
+
+```powershell
+# Run all tests against a target process
+npm run test:runner -- --target "YourGame.exe"
+
+# Recommended on Windows: provide an EXE so the runner can start/restart the game when needed.
+# If the runner starts the game during this run, it will also stop it after the run completes.
+npm run test:runner -- --target "YourGame.exe" --exe "C:\Path\To\YourGame.exe"
+
+# Run specific test category
+npm run test:runner -- --target 1234 --category "mono-class"
+
+# Retries on crash/timeout (useful for flaky/risky suites)
+npm run test:runner -- --target "YourGame.exe" --exe "C:\Path\To\YourGame.exe" --retries 2
+
+# Compile only (no execution)
+npm run test:runner:compile
+
+# Enable verbose output
+npm run test:runner -- --target "YourGame.exe" --verbose
+
+# Increase timeout for slow projects / cold starts
+npm run test:runner -- --target "YourGame.exe" --exe "C:\Path\To\YourGame.exe" --timeout 120
+```
+
+### Manual Test Execution
 
 ```powershell
 # Compile all tests
@@ -20,15 +53,19 @@ frida -p <PID> -l dist/test-internal-call.js --timeout 60
 
 ## Test Statistics
 
-| Metric                   | Value                  |
-| ------------------------ | ---------------------- |
-| **Total Tests**          | 1,103                  |
-| **Test Files**           | 36                     |
-| **Test Categories**      | 7                      |
-| **Standalone Tests**     | ~80 (no Mono required) |
-| **Mono-dependent Tests** | ~1,027                 |
+These numbers are approximate and may become stale; see the runner summary for the current totals.
+
+| Metric                   | Value                     |
+| ------------------------ | ------------------------- |
+| **Total Tests**          | ~1,000+                   |
+| **Test Files**           | 36+                       |
+| **Test Categories**      | Runner suites + groupings |
+| **Standalone Tests**     | ~80 (no Mono required)    |
+| **Mono-dependent Tests** | ~1,027                    |
 
 ## Test Categories
+
+This section groups tests conceptually. The automated runner also supports running individual suites (e.g. `mono-class`, `runtime-api`, `gc-tools`).
 
 | Category                 | Test Files | Tests | Description                                         |
 | ------------------------ | ---------- | ----- | --------------------------------------------------- |
@@ -232,46 +269,48 @@ runTestCategory(
 
 ## npm Scripts
 
-| Script                              | Description             |
-| ----------------------------------- | ----------------------- |
-| `npm test`                          | Compile all tests       |
-| `npm run test:mono-class`           | MonoClass tests         |
-| `npm run test:mono-method`          | MonoMethod tests        |
-| `npm run test:mono-field`           | MonoField tests         |
-| `npm run test:mono-property`        | MonoProperty tests      |
-| `npm run test:mono-string`          | MonoString tests        |
-| `npm run test:mono-array`           | MonoArray tests         |
-| `npm run test:mono-delegate`        | MonoDelegate tests      |
-| `npm run test:mono-object`          | MonoObject tests        |
-| `npm run test:mono-assembly`        | MonoAssembly tests      |
-| `npm run test:mono-image`           | MonoImage tests         |
-| `npm run test:mono-domain`          | MonoDomain tests        |
-| `npm run test:mono-threading`       | Threading tests         |
-| `npm run test:mono-module`          | Module tests            |
-| `npm run test:mono-data`            | Data operations tests   |
-| `npm run test:mono-types`           | MonoType tests          |
-| `npm run test:mono-utils`           | Utility tests           |
-| `npm run test:mono-error-handling`  | Error handling tests    |
-| `npm run test:runtime-api`          | Runtime API tests       |
-| `npm run test:generic-types`        | Generic types tests     |
-| `npm run test:custom-attributes`    | Custom attributes tests |
-| `npm run test:internal-call`        | Internal call tests     |
-| `npm run test:trace-tools`          | Trace utilities tests   |
-| `npm run test:gc-tools`             | GC utilities tests      |
-| `npm run test:data-operations`      | Data operations tests   |
-| `npm run test:integration`          | Integration tests       |
-| `npm run test:unity-gameobject`     | Unity GameObject tests  |
-| `npm run test:unity-components`     | Unity Components tests  |
-| `npm run test:unity-engine-modules` | Unity Engine tests      |
+| Script                              | Description               |
+| ----------------------------------- | ------------------------- |
+| `npm test`                          | Compile all tests         |
+| `npm run test:mono-class`           | MonoClass tests           |
+| `npm run test:mono-method`          | MonoMethod tests          |
+| `npm run test:mono-field`           | MonoField tests           |
+| `npm run test:mono-property`        | MonoProperty tests        |
+| `npm run test:mono-string`          | MonoString tests          |
+| `npm run test:mono-array`           | MonoArray tests           |
+| `npm run test:mono-delegate`        | MonoDelegate tests        |
+| `npm run test:mono-object`          | MonoObject tests          |
+| `npm run test:mono-assembly`        | MonoAssembly tests        |
+| `npm run test:mono-image`           | MonoImage tests           |
+| `npm run test:mono-domain`          | MonoDomain tests          |
+| `npm run test:mono-threading`       | Threading tests           |
+| `npm run test:mono-module`          | Module tests              |
+| `npm run test:mono-data`            | Data operations tests     |
+| `npm run test:mono-types`           | MonoType tests            |
+| `npm run test:mono-utils`           | Utility tests             |
+| `npm run test:mono-error-handling`  | Error handling tests      |
+| `npm run test:runtime-api`          | Runtime API tests         |
+| `npm run test:generic-types`        | Generic types tests       |
+| `npm run test:custom-attributes`    | Custom attributes tests   |
+| `npm run test:internal-call`        | Internal call tests       |
+| `npm run test:trace-tools`          | Trace utilities tests     |
+| `npm run test:gc-tools`             | GC utilities tests        |
+| `npm run test:data-operations`      | Data operations tests     |
+| `npm run test:integration`          | Integration tests         |
+| `npm run test:unity-gameobject`     | Unity GameObject tests    |
+| `npm run test:unity-components`     | Unity Components tests    |
+| `npm run test:unity-engine-modules` | Unity Engine tests        |
+| `npm run test:runner`               | Run all tests (automated) |
+| `npm run test:runner:compile`       | Compile all tests only    |
 
 ---
 
 ## Expected Output
 
 ```
-================================================
+===============================================
 == Mono Class Tests ==
-================================================
+===============================================
   PASS MonoClass - find System.String class (1ms)
   PASS MonoClass - get class name (0ms)
   PASS MonoClass - get class namespace (0ms)
@@ -313,7 +352,10 @@ ALL TESTS PASSED!
 
 1. **test-mono-assembly**: May hang after completion due to assembly lifecycle. Run separately or last.
 
-2. **Find wildcard searches**: Slow in Unity projects. Use `tryClass()` or `limit` option.
+2. **test-mono-module**: Can leave some targets in a bad state for subsequent suites (e.g. causing `test-mono-data` to hang).
+   The automated runner mitigates this by restarting the target after `mono-module` (and other risky suites) when `--exe` is provided.
+
+3. **Find wildcard searches**: Slow in Unity projects. Use `tryClass()` or `limit` option.
 
 ---
 
