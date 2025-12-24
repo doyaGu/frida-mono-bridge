@@ -9,6 +9,7 @@
  */
 
 import Mono from "../src";
+import { withDomain } from "./test-fixtures";
 import {
   assert,
   assertApiAvailable,
@@ -17,7 +18,6 @@ import {
   createApiAvailabilityTest,
   createErrorHandlingTest,
   createIntegrationTest,
-  createMonoDependentTest,
   createPerformanceTest,
   TestCategory,
   TestResult,
@@ -35,7 +35,7 @@ export async function createMonoApiTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Mono API should initialize correctly", () => {
+    withDomain("Mono API should initialize correctly", () => {
       assertPerformWorks("Mono API initialization");
       assertApiAvailable("Mono API should be accessible after initialization");
 
@@ -48,7 +48,7 @@ export async function createMonoApiTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("API should provide consistent module information", () => {
+    withDomain("API should provide consistent module information", () => {
       const module = Mono.module;
       assertNotNull(module, "Module information should be available");
 
@@ -66,7 +66,7 @@ export async function createMonoApiTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("API should handle multiple initializations gracefully", () => {
+    withDomain("API should handle multiple initializations gracefully", () => {
       // Test that multiple accesses to Mono.api return same instance
       const api1 = Mono.api;
       const api2 = Mono.api;
@@ -114,7 +114,7 @@ export async function createMonoApiTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("API should provide comprehensive export coverage", () => {
+    withDomain("API should provide comprehensive export coverage", () => {
       const api = Mono.api;
 
       // Test critical export categories
@@ -186,7 +186,7 @@ export async function createMonoApiTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Export functions should be callable and return expected types", () => {
+    withDomain("Export functions should be callable and return expected types", () => {
       const api = Mono.api;
 
       // Test string creation
@@ -221,7 +221,7 @@ export async function createMonoApiTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("API should handle parameter processing correctly", () => {
+    withDomain("API should handle parameter processing correctly", () => {
       const api = Mono.api;
 
       // Test numeric parameter processing
@@ -244,7 +244,7 @@ export async function createMonoApiTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("API should handle return value processing correctly", () => {
+    withDomain("API should handle return value processing correctly", () => {
       const api = Mono.api;
 
       // Test pointer return values
@@ -345,7 +345,7 @@ export async function createMonoApiTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("API should provide version information", () => {
+    withDomain("API should provide version information", () => {
       const version = Mono.version;
       assertNotNull(version, "Version information should be available");
 
@@ -367,7 +367,7 @@ export async function createMonoApiTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("API should adapt to different Mono versions", () => {
+    withDomain("API should adapt to different Mono versions", () => {
       const api = Mono.api;
       const version = Mono.version;
 
@@ -399,7 +399,7 @@ export async function createMonoApiTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("API should handle Unity Mono version differences", () => {
+    withDomain("API should handle Unity Mono version differences", () => {
       const api = Mono.api;
 
       // Test for Unity-specific export patterns
@@ -530,7 +530,7 @@ export async function createMonoApiTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("API should manage resources correctly", () => {
+    withDomain("API should manage resources correctly", () => {
       const api = Mono.api;
 
       // Test that API doesn't leak resources during normal operations
@@ -553,7 +553,7 @@ export async function createMonoApiTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("API should handle cleanup operations", () => {
+    withDomain("API should handle cleanup operations", () => {
       const api = Mono.api;
 
       // Test that cleanup methods exist and are callable

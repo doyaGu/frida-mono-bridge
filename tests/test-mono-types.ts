@@ -5,6 +5,7 @@
 
 import Mono from "../src";
 import { MonoTypeKind, MonoTypeNameFormat } from "../src/model/type";
+import { withDomain } from "./test-fixtures";
 import {
   assert,
   assertApiAvailable,
@@ -15,7 +16,6 @@ import {
   createApiAvailabilityTest,
   createDomainTestAsync,
   createDomainTestEnhanced,
-  createMonoDependentTest,
   createNestedPerformTest,
   createPerformSmokeTest,
   createSmokeTest,
@@ -38,19 +38,19 @@ export async function createMonoTypesTests(): Promise<TestResult> {
 
   // Modern API tests
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.perform should work for domain tests", () => {
+    withDomain("Mono.perform should work for domain tests", () => {
       assertPerformWorks("Mono.perform() should work for domain tests");
     }),
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.domain property should be accessible", () => {
+    withDomain("Mono.domain property should be accessible", () => {
       assertDomainAvailable("Mono.domain should be accessible");
     }),
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Root domain should be accessible", () => {
+    withDomain("Root domain should be accessible", () => {
       const domain = Mono.api.getRootDomain();
       assertNotNull(domain, "Root domain should not be null");
       assert(!domain.isNull(), "Root domain should not be NULL pointer");
@@ -58,7 +58,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Root domain should be cached", () => {
+    withDomain("Root domain should be cached", () => {
       const domain1 = Mono.api.getRootDomain();
       const domain2 = Mono.api.getRootDomain();
 
@@ -69,7 +69,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Current domain can be retrieved", () => {
+    withDomain("Current domain can be retrieved", () => {
       // mono_domain_get is optional in some Mono versions
       if (!Mono.api.hasExport("mono_domain_get")) {
         console.log("    (Skipped: mono_domain_get not available in this Mono version)");
@@ -82,7 +82,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Current domain should be root domain initially", () => {
+    withDomain("Current domain should be root domain initially", () => {
       // mono_domain_get is optional in some Mono versions
       if (!Mono.api.hasExport("mono_domain_get")) {
         console.log("    (Skipped: mono_domain_get not available in this Mono version)");
@@ -96,7 +96,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Multiple domain retrievals should be consistent", () => {
+    withDomain("Multiple domain retrievals should be consistent", () => {
       const domains = [];
       for (let i = 0; i < 5; i++) {
         domains.push(Mono.api.getRootDomain());
@@ -109,8 +109,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Domain should have assembly access methods", () => {
-      const domain = Mono.domain;
+    withDomain("Domain should have assembly access methods", ({ domain }) => {
       assert(typeof domain.assemblies !== "undefined", "Domain should have assemblies property");
       assert(typeof domain.assembly === "function", "Domain should have assembly method");
       assert(typeof domain.class === "function", "Domain should have class method");
@@ -122,7 +121,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Domain should be accessible through multiple calls", () => {
+    withDomain("Domain should be accessible through multiple calls", () => {
       const domain1 = Mono.domain;
       const domain2 = Mono.domain;
 
@@ -301,7 +300,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Class APIs should be available", () => {
+    withDomain("Class APIs should be available", () => {
       assertApiAvailable("Mono.api should be accessible for class operations");
       assert(Mono.api.hasExport("mono_class_from_name"), "mono_class_from_name should be available");
       assert(
@@ -320,7 +319,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Class APIs should be callable functions", () => {
+    withDomain("Class APIs should be callable functions", () => {
       assert(typeof Mono.api.native.mono_class_from_name === "function", "mono_class_from_name should be a function");
       assert(
         typeof Mono.api.native.mono_class_get_method_from_name === "function",
@@ -338,18 +337,15 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Domain should provide class access methods", () => {
+    withDomain("Domain should provide class access methods", ({ domain }) => {
       assertDomainAvailable("Mono.domain should be accessible for class operations");
 
-      const domain = Mono.domain;
       assert(typeof domain.class === "function", "Domain should have class method");
     }),
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should find common system classes", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should find common system classes", ({ domain }) => {
       // Try to find common system classes
       const stringClass = domain.tryClass("System.String");
       if (stringClass) {
@@ -372,9 +368,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should find classes through assembly image", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should find classes through assembly image", ({ domain }) => {
       // Use mscorlib directly to avoid enumerating all assemblies
       const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
@@ -392,9 +386,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should handle non-existent class gracefully", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should handle non-existent class gracefully", ({ domain }) => {
       const nonExistent = domain.tryClass("NonExistent.Class.Name");
       assert(nonExistent === null, "Non-existent class should return null");
 
@@ -404,8 +396,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should get class methods and fields", () => {
-      const domain = Mono.domain;
+    withDomain("Should get class methods and fields", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       if (stringClass) {
@@ -428,9 +419,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should support namespace-based class lookup", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should support namespace-based class lookup", ({ domain }) => {
       // Test different namespace patterns
       const collections = domain.tryClass("System.Collections.Generic.List`1");
       if (collections) {
@@ -450,8 +439,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should handle class inheritance and parent relationships", () => {
-      const domain = Mono.domain;
+    withDomain("Should handle class inheritance and parent relationships", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
       const objectClass = domain.tryClass("System.Object");
 
@@ -469,9 +457,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Class operations should be consistent", () => {
-      const domain = Mono.domain;
-
+    withDomain("Class operations should be consistent", ({ domain }) => {
       // Test multiple calls return consistent results
       const stringClass1 = domain.tryClass("System.String");
       const stringClass2 = domain.tryClass("System.String");
@@ -491,9 +477,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should handle class lookup variations", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should handle class lookup variations", ({ domain }) => {
       // Test case sensitivity (typically case-sensitive)
       const stringLower = domain.tryClass("system.string");
       const stringProper = domain.tryClass("System.String");
@@ -640,8 +624,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should identify primitive type kinds", () => {
-      const domain = Mono.domain;
+    withDomain("Should identify primitive type kinds", ({ domain }) => {
       const primitiveTypes = [
         { name: "System.Boolean", expectedKind: MonoTypeKind.Boolean },
         { name: "System.Byte", expectedKind: MonoTypeKind.U1 },
@@ -679,8 +662,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should identify String type kind", () => {
-      const domain = Mono.domain;
+    withDomain("Should identify String type kind", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
       assertNotNull(stringClass, "System.String should be available");
 
@@ -698,8 +680,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should identify Object type kind", () => {
-      const domain = Mono.domain;
+    withDomain("Should identify Object type kind", ({ domain }) => {
       const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object should be available");
 
@@ -714,8 +695,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should identify ValueType type kind", () => {
-      const domain = Mono.domain;
+    withDomain("Should identify ValueType type kind", ({ domain }) => {
       // DateTime is a value type struct
       const dateTimeClass = domain.tryClass("System.DateTime");
       if (dateTimeClass) {
@@ -745,8 +725,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should identify Enum type kind", () => {
-      const domain = Mono.domain;
+    withDomain("Should identify Enum type kind", ({ domain }) => {
       const dayOfWeekClass = domain.tryClass("System.DayOfWeek");
       if (dayOfWeekClass) {
         const type = dayOfWeekClass.type;
@@ -779,8 +758,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should identify Class type kind", () => {
-      const domain = Mono.domain;
+    withDomain("Should identify Class type kind", ({ domain }) => {
       // Exception is a class
       const exceptionClass = domain.tryClass("System.Exception");
       if (exceptionClass) {
@@ -810,8 +788,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should identify Array type kinds", () => {
-      const domain = Mono.domain;
+    withDomain("Should identify Array type kinds", ({ domain }) => {
       // Single-dimensional array
       const intArrayClass = domain.tryClass("System.Int32[]");
       if (intArrayClass) {
@@ -839,8 +816,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should identify Generic type kinds", () => {
-      const domain = Mono.domain;
+    withDomain("Should identify Generic type kinds", ({ domain }) => {
       // Generic type definition
       const listClass = domain.tryClass("System.Collections.Generic.List`1");
       if (listClass) {
@@ -879,8 +855,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should identify Pointer/IntPtr type kinds", () => {
-      const domain = Mono.domain;
+    withDomain("Should identify Pointer/IntPtr type kinds", ({ domain }) => {
       const intPtrClass = domain.tryClass("System.IntPtr");
       if (intPtrClass) {
         const type = intPtrClass.type;
@@ -907,8 +882,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should identify Void type kind", () => {
-      const domain = Mono.domain;
+    withDomain("Should identify Void type kind", ({ domain }) => {
       const voidClass = domain.tryClass("System.Void");
       if (voidClass) {
         const type = voidClass.type;
@@ -925,9 +899,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test MonoType.getSummary() for all kinds", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should test MonoType.getSummary() for all kinds", ({ domain }) => {
       const testTypes = [
         "System.Int32",
         "System.String",
@@ -957,9 +929,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test MonoType size and alignment", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should test MonoType size and alignment", ({ domain }) => {
       const sizeTests = [
         { name: "System.Byte", expectedSize: 1 },
         { name: "System.Int16", expectedSize: 2 },
@@ -988,9 +958,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test MonoType.isByRef()", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should test MonoType.isByRef()", ({ domain }) => {
       // Get a method with ref/out parameter to test byref type
       const intClass = domain.tryClass("System.Int32");
       if (intClass) {
@@ -1013,9 +981,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test MonoType.getElementType() for arrays", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should test MonoType.getElementType() for arrays", ({ domain }) => {
       const intArrayClass = domain.tryClass("System.Int32[]");
       if (intArrayClass) {
         const type = intArrayClass.type;
@@ -1047,9 +1013,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test MonoType.getClass() relationship", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should test MonoType.getClass() relationship", ({ domain }) => {
       const testClasses = ["System.Int32", "System.String", "System.DateTime"];
 
       for (const className of testClasses) {
@@ -1070,8 +1034,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test MonoType.getUnderlyingType() for enums", () => {
-      const domain = Mono.domain;
+    withDomain("Should test MonoType.getUnderlyingType() for enums", ({ domain }) => {
       const dayOfWeekClass = domain.tryClass("System.DayOfWeek");
       if (dayOfWeekClass) {
         const type = dayOfWeekClass.type;
@@ -1093,8 +1056,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test MonoType name formats", () => {
-      const domain = Mono.domain;
+    withDomain("Should test MonoType name formats", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
       if (stringClass) {
         const type = stringClass.type;
@@ -1118,7 +1080,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should verify type kind constants", () => {
+    withDomain("Should verify type kind constants", () => {
       // Verify all type kinds are defined
       const expectedKinds = [
         "End",
@@ -1174,9 +1136,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test MonoType.toString()", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should test MonoType.toString()", ({ domain }) => {
       const testTypes = ["System.Int32", "System.String", "System.DateTime"];
 
       for (const typeName of testTypes) {
@@ -1197,9 +1157,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   // ===== MULTI-DIMENSIONAL ARRAY TESTS =====
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should identify single-dimensional array rank", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should identify single-dimensional array rank", ({ domain }) => {
       // Test single-dimensional array
       const intArrayClass = domain.tryClass("System.Int32[]");
       if (intArrayClass) {
@@ -1239,9 +1197,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should return rank 0 for non-array types", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should return rank 0 for non-array types", ({ domain }) => {
       // Test non-array types
       const testTypes = ["System.Int32", "System.String", "System.Object", "System.DateTime"];
 
@@ -1261,9 +1217,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should include array info in MonoType.getSummary()", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should include array info in MonoType.getSummary()", ({ domain }) => {
       // Test array type
       const intArrayClass = domain.tryClass("System.Int32[]");
       if (intArrayClass) {
@@ -1291,9 +1245,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should handle multi-dimensional array type names", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should handle multi-dimensional array type names", ({ domain }) => {
       // Try to find or create multi-dimensional array types
       // Multi-dimensional arrays are represented as [,] for 2D, [,,] for 3D, etc.
       const multiDimTypeNames = ["System.Int32[,]", "System.Int32[,,]", "System.String[,]"];
@@ -1329,9 +1281,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should identify array element type correctly", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should identify array element type correctly", ({ domain }) => {
       // Test getting element type from array
       const intArrayClass = domain.tryClass("System.Int32[]");
       if (intArrayClass) {
@@ -1370,9 +1320,7 @@ export async function createMonoTypesTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should handle jagged arrays", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should handle jagged arrays", ({ domain }) => {
       // Jagged arrays (array of arrays) - Int32[][]
       // The outer type is Int32[][], which is an array of Int32[]
       const jaggedTypeName = "System.Int32[][]";

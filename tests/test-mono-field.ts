@@ -5,15 +5,10 @@
  */
 
 import Mono from "../src";
-import {
-  TestResult,
-  assert,
-  assertNotNull,
-  assertThrows,
-  createErrorHandlingTest,
-  createMonoDependentTest,
-} from "./test-framework";
+import { setupCoreClassesFixture, withCoreClasses, withDomain } from "./test-fixtures";
+import { TestResult, assert, assertNotNull, assertThrows, createErrorHandlingTest } from "./test-framework";
 import { createBasicLookupPerformanceTest, createFieldLookupPerformanceTest } from "./test-utilities";
+import { verifyFieldSummary } from "./test-validators";
 
 export async function createMonoFieldTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
@@ -21,65 +16,48 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD DISCOVERY AND ENUMERATION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should discover fields by name", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-      assertNotNull(stringClass, "String class should be available");
-
-      // Try to find a common field - String might not have public fields, so let's try another class
-      const int32Class = domain.tryClass("System.Int32");
-      if (int32Class) {
-        const field = int32Class.tryField("MaxValue");
-        if (field) {
-          assert(field.name === "MaxValue", "Field name should be MaxValue");
-          assert(field.parent.name === "Int32", "Field parent should be Int32");
-        } else {
-          console.log("  - MaxValue field not found on Int32");
-        }
+    await withCoreClasses("MonoField should discover fields by name", ({ int32Class }) => {
+      const field = int32Class.tryField("MaxValue");
+      if (field) {
+        assert(field.name === "MaxValue", "Field name should be MaxValue");
+        assert(field.parent.name === "Int32", "Field parent should be Int32");
+      } else {
+        console.log("  - MaxValue field not found on Int32");
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should enumerate all fields in class", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
+    await withCoreClasses("MonoField should enumerate all fields in class", ({ int32Class }) => {
+      const fields = int32Class.fields;
+      assert(fields.length >= 0, "Should find fields (or none)");
 
-      if (int32Class) {
-        const fields = int32Class.fields;
-        assert(fields.length >= 0, "Should find fields (or none)");
+      // Look for common static fields
+      const maxValueField = fields.find(f => f.name === "MaxValue");
+      const minValueField = fields.find(f => f.name === "MinValue");
 
-        // Look for common static fields
-        const maxValueField = fields.find(f => f.name === "MaxValue");
-        const minValueField = fields.find(f => f.name === "MinValue");
-
-        if (maxValueField) {
-          assert(maxValueField.name === "MaxValue", "Should find MaxValue field");
-        }
-        if (minValueField) {
-          assert(minValueField.name === "MinValue", "Should find MinValue field");
-        }
+      if (maxValueField) {
+        assert(maxValueField.name === "MaxValue", "Should find MaxValue field");
+      }
+      if (minValueField) {
+        assert(minValueField.name === "MinValue", "Should find MinValue field");
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should handle missing fields gracefully", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const missingField = stringClass!.tryField("DefinitelyDoesNotExist");
+    await withCoreClasses("MonoField should handle missing fields gracefully", ({ stringClass }) => {
+      const missingField = stringClass.tryField("DefinitelyDoesNotExist");
       assert(missingField === null, "Missing field should return null");
     }),
   );
 
   results.push(
     await createErrorHandlingTest("MonoField should throw for missing required fields", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
+      const { stringClass } = setupCoreClassesFixture();
 
       assertThrows(() => {
-        stringClass!.field("DefinitelyDoesNotExist");
+        stringClass.field("DefinitelyDoesNotExist");
       }, "Should throw when required field is not found");
     }),
   );
@@ -87,28 +65,21 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD VALUE GETTING AND SETTING TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should get static field values", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField && maxValueField.isStatic) {
-          try {
-            const value = maxValueField.getStaticValue();
-            assertNotNull(value, "Static field value should be available");
-          } catch (error) {
-            console.log(`  - Static field get failed: ${error}`);
-          }
+    await withCoreClasses("MonoField should get static field values", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField && maxValueField.isStatic) {
+        try {
+          const value = maxValueField.getStaticValue();
+          assertNotNull(value, "Static field value should be available");
+        } catch (error) {
+          console.log(`  - Static field get failed: ${error}`);
         }
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should set static field values", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoField should set static field values", ({ domain }) => {
       // Try to find a class with a writable static field
       const testClass = domain.tryClass("System.Threading.Thread");
       if (testClass) {
@@ -128,37 +99,30 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should get instance field values", () => {
-      const domain = Mono.domain;
-      const objectClass = domain.tryClass("System.Object");
+    await withCoreClasses("MonoField should get instance field values", ({ objectClass }) => {
+      // Create an object instance
+      const obj = objectClass.alloc();
 
-      if (objectClass) {
-        // Create an object instance
-        const obj = objectClass.alloc();
+      // Try to find instance fields (Object might not have public fields)
+      const fields = objectClass.fields;
+      const instanceFields = fields.filter(f => !f.isStatic);
 
-        // Try to find instance fields (Object might not have public fields)
-        const fields = objectClass.fields;
-        const instanceFields = fields.filter(f => !f.isStatic);
-
-        if (instanceFields.length > 0) {
-          const field = instanceFields[0];
-          try {
-            const value = field.getValue(obj);
-            assertNotNull(value, "Instance field value should be available");
-          } catch (error) {
-            console.log(`  - Instance field get failed: ${error}`);
-          }
-        } else {
-          console.log("  - No instance fields found on Object class");
+      if (instanceFields.length > 0) {
+        const field = instanceFields[0];
+        try {
+          const value = field.getValue(obj);
+          assertNotNull(value, "Instance field value should be available");
+        } catch (error) {
+          console.log(`  - Instance field get failed: ${error}`);
         }
+      } else {
+        console.log("  - No instance fields found on Object class");
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should set instance field values", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoField should set instance field values", ({ domain }) => {
       // Use StringBuilder which is safe to allocate and has internal fields
       const stringBuilderClass = domain.tryClass("System.Text.StringBuilder");
       if (stringBuilderClass) {
@@ -243,65 +207,47 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== TYPE CHECKING AND VALIDATION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should provide field type information", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          try {
-            const fieldType = maxValueField.type;
-            assertNotNull(fieldType, "Field type should be available");
-            const typeName = fieldType.name;
-            assert(
-              typeName.includes("Int32") || typeName.includes("int"),
-              `MaxValue field type should include 'Int32' or 'int', got: ${typeName}`,
-            );
-          } catch (error) {
-            console.log(`  - Field type retrieval not supported: ${error}`);
-          }
+    await withCoreClasses("MonoField should provide field type information", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        try {
+          const fieldType = maxValueField.type;
+          assertNotNull(fieldType, "Field type should be available");
+          const typeName = fieldType.name;
+          assert(
+            typeName.includes("Int32") || typeName.includes("int"),
+            `MaxValue field type should include 'Int32' or 'int', got: ${typeName}`,
+          );
+        } catch (error) {
+          console.log(`  - Field type retrieval not supported: ${error}`);
         }
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should provide field metadata", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          try {
-            const summary = maxValueField.getSummary();
-            assertNotNull(summary, "Field summary should be available");
-            assert(summary.name === "MaxValue", "Summary name should be MaxValue");
-            assert(typeof summary.flags === "number", "Summary flags should be a number");
-            assert(typeof summary.isStatic === "boolean", "Summary isStatic should be boolean");
-            assert(typeof summary.offset === "number", "Summary offset should be number");
-          } catch (error) {
-            console.log(`  - Field metadata retrieval not fully supported: ${error}`);
-          }
+    await withCoreClasses("MonoField should provide field metadata", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        try {
+          verifyFieldSummary(maxValueField);
+          const summary = maxValueField.getSummary();
+          assert(summary.name === "MaxValue", "Summary name should be MaxValue");
+        } catch (error) {
+          console.log(`  - Field metadata retrieval not fully supported: ${error}`);
         }
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should provide field description", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          const description = maxValueField.describe();
-          assertNotNull(description, "Field description should be available");
-          assert(description.includes("MaxValue"), "Description should include field name");
-          assert(description.includes("static"), "Description should include static modifier");
-        }
+    await withCoreClasses("MonoField should provide field description", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        const description = maxValueField.describe();
+        assertNotNull(description, "Field description should be available");
+        assert(description.includes("MaxValue"), "Description should include field name");
+        assert(description.includes("static"), "Description should include static modifier");
       }
     }),
   );
@@ -309,28 +255,21 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== STATIC VS INSTANCE FIELD OPERATIONS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should identify static fields correctly", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
+    await withCoreClasses("MonoField should identify static fields correctly", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        assert(maxValueField.isStatic, "MaxValue should be static");
+      }
 
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          assert(maxValueField.isStatic, "MaxValue should be static");
-        }
-
-        const minValueField = int32Class.tryField("MinValue");
-        if (minValueField) {
-          assert(minValueField.isStatic, "MinValue should be static");
-        }
+      const minValueField = int32Class.tryField("MinValue");
+      if (minValueField) {
+        assert(minValueField.isStatic, "MinValue should be static");
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should identify instance fields correctly", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoField should identify instance fields correctly", ({ domain }) => {
       // Try to find a class with instance fields
       const pointClass = domain.tryClass("System.Drawing.Point");
       if (pointClass) {
@@ -346,50 +285,40 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should handle static field operations", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
+    await withCoreClasses("MonoField should handle static field operations", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField && maxValueField.isStatic) {
+        try {
+          const value = maxValueField.getStaticValue();
+          assertNotNull(value, "Should get static field value");
 
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField && maxValueField.isStatic) {
-          try {
-            const value = maxValueField.getStaticValue();
-            assertNotNull(value, "Should get static field value");
-
-            // Test typed access
-            const typedValue = maxValueField.getTypedStaticValue();
-            assertNotNull(typedValue, "Should get typed static field value");
-          } catch (error) {
-            console.log(`  - Static field operation failed: ${error}`);
-          }
+          // Test typed access
+          const typedValue = maxValueField.getTypedStaticValue();
+          assertNotNull(typedValue, "Should get typed static field value");
+        } catch (error) {
+          console.log(`  - Static field operation failed: ${error}`);
         }
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should handle instance field operations", () => {
-      const domain = Mono.domain;
-      const objectClass = domain.tryClass("System.Object");
+    await withCoreClasses("MonoField should handle instance field operations", ({ objectClass }) => {
+      const obj = objectClass.alloc();
+      const fields = objectClass.fields;
+      const instanceFields = fields.filter(f => !f.isStatic);
 
-      if (objectClass) {
-        const obj = objectClass.alloc();
-        const fields = objectClass.fields;
-        const instanceFields = fields.filter(f => !f.isStatic);
+      if (instanceFields.length > 0) {
+        const field = instanceFields[0];
+        try {
+          const value = field.getValue(obj);
+          assertNotNull(value, "Should get instance field value");
 
-        if (instanceFields.length > 0) {
-          const field = instanceFields[0];
-          try {
-            const value = field.getValue(obj);
-            assertNotNull(value, "Should get instance field value");
-
-            // Test typed access
-            const typedValue = field.getTypedValue(obj);
-            assertNotNull(typedValue, "Should get typed instance field value");
-          } catch (error) {
-            console.log(`  - Instance field operation failed: ${error}`);
-          }
+          // Test typed access
+          const typedValue = field.getTypedValue(obj);
+          assertNotNull(typedValue, "Should get typed instance field value");
+        } catch (error) {
+          console.log(`  - Instance field operation failed: ${error}`);
         }
       }
     }),
@@ -398,65 +327,45 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD ATTRIBUTES AND METADATA TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should provide accessibility information", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          const accessibility = maxValueField.accessibility;
-          assertNotNull(accessibility, "Accessibility should be available");
-          assert(typeof accessibility === "string", "Accessibility should be a string");
-        }
+    await withCoreClasses("MonoField should provide accessibility information", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        const accessibility = maxValueField.accessibility;
+        assertNotNull(accessibility, "Accessibility should be available");
+        assert(typeof accessibility === "string", "Accessibility should be a string");
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should identify readonly fields", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          const isReadonly = maxValueField.isInitOnly;
-          assert(typeof isReadonly === "boolean", "isInitOnly should return boolean");
-        }
+    await withCoreClasses("MonoField should identify readonly fields", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        const isReadonly = maxValueField.isInitOnly;
+        assert(typeof isReadonly === "boolean", "isInitOnly should return boolean");
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should identify constant fields", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          const isConstant = maxValueField.isLiteral;
-          assert(typeof isConstant === "boolean", "isLiteral should return boolean");
-        }
+    await withCoreClasses("MonoField should identify constant fields", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        const isConstant = maxValueField.isLiteral;
+        assert(typeof isConstant === "boolean", "isLiteral should return boolean");
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should provide field flags", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
+    await withCoreClasses("MonoField should provide field flags", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        const flags = maxValueField.flags;
+        assert(typeof flags === "number", "Flags should be a number");
 
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          const flags = maxValueField.flags;
-          assert(typeof flags === "number", "Flags should be a number");
-
-          const flagNames = maxValueField.flagNames;
-          assert(Array.isArray(flagNames), "Flag names should be an array");
-        }
+        const flagNames = maxValueField.flagNames;
+        assert(Array.isArray(flagNames), "Flag names should be an array");
       }
     }),
   );
@@ -464,28 +373,20 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD ACCESS MODIFIERS AND SECURITY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should handle public fields", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          const accessibility = maxValueField.accessibility;
-          // MaxValue should be public
-          assert(accessibility === "public" || accessibility === "private-scope", "MaxValue should be accessible");
-        }
+    await withCoreClasses("MonoField should handle public fields", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        const accessibility = maxValueField.accessibility;
+        // MaxValue should be public
+        assert(accessibility === "public" || accessibility === "private-scope", "MaxValue should be accessible");
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should handle private fields gracefully", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
+    await withCoreClasses("MonoField should handle private fields gracefully", ({ stringClass }) => {
       // Try to access private fields (might not be visible through reflection)
-      const fields = stringClass!.fields;
+      const fields = stringClass.fields;
       const privateFields = fields.filter(f => {
         try {
           const accessibility = f.accessibility;
@@ -503,38 +404,28 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD OFFSET AND MEMORY LAYOUT TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should provide field offset information", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
+    await withCoreClasses("MonoField should provide field offset information", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        const offset = maxValueField.offset;
+        assert(typeof offset === "number", "Offset should be a number");
 
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          const offset = maxValueField.offset;
-          assert(typeof offset === "number", "Offset should be a number");
-
-          // Static fields might have offset 0 or special values
-          console.log(`  - MaxValue field offset: ${offset}`);
-        }
+        // Static fields might have offset 0 or special values
+        console.log(`  - MaxValue field offset: ${offset}`);
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should provide field token", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          try {
-            const token = maxValueField.token;
-            assert(typeof token === "number", "Token should be a number");
-            assert(token > 0, "Token should be positive");
-          } catch (error) {
-            console.log(`  - Field token retrieval not supported: ${error}`);
-          }
+    await withCoreClasses("MonoField should provide field token", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        try {
+          const token = maxValueField.token;
+          assert(typeof token === "number", "Token should be a number");
+          assert(token > 0, "Token should be positive");
+        } catch (error) {
+          console.log(`  - Field token retrieval not supported: ${error}`);
         }
       }
     }),
@@ -543,40 +434,30 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD VALUE CONVERSION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should convert field values to objects", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField && maxValueField.isStatic) {
-          try {
-            const valueObject = maxValueField.getValueObject(null);
-            if (valueObject) {
-              assertNotNull(valueObject.pointer, "Value object should have pointer");
-            }
-          } catch (error) {
-            console.log(`  - Field value object conversion failed: ${error}`);
+    await withCoreClasses("MonoField should convert field values to objects", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField && maxValueField.isStatic) {
+        try {
+          const valueObject = maxValueField.getValueObject(null);
+          if (valueObject) {
+            assertNotNull(valueObject.pointer, "Value object should have pointer");
           }
+        } catch (error) {
+          console.log(`  - Field value object conversion failed: ${error}`);
         }
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should coerce primitive values", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField && maxValueField.isStatic) {
-          try {
-            const value = maxValueField.readValue(null, { coerce: true });
-            assertNotNull(value, "Coerced value should be available");
-          } catch (error) {
-            console.log(`  - Field value coercion failed: ${error}`);
-          }
+    await withCoreClasses("MonoField should coerce primitive values", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField && maxValueField.isStatic) {
+        try {
+          const value = maxValueField.readValue(null, { coerce: true });
+          assertNotNull(value, "Coerced value should be available");
+        } catch (error) {
+          console.log(`  - Field value coercion failed: ${error}`);
         }
       }
     }),
@@ -607,20 +488,17 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
 
   results.push(
     await createErrorHandlingTest("MonoField should handle invalid field operations gracefully", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
+      const { stringClass } = setupCoreClassesFixture();
 
-      const missingField = stringClass!.tryField("NonExistentField");
+      const missingField = stringClass.tryField("NonExistentField");
       assert(missingField === null, "Missing field should return null");
     }),
   );
 
   results.push(
     await createErrorHandlingTest("MonoField should handle null instance access", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const fields = stringClass!.fields;
+      const { stringClass } = setupCoreClassesFixture();
+      const fields = stringClass.fields;
       const instanceFields = fields.filter(f => !f.isStatic);
 
       if (instanceFields.length > 0) {
@@ -634,21 +512,16 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should handle type mismatch errors", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          // Try to set with wrong type - may throw or silently fail
-          try {
-            const wrongValue = Mono.api.stringNew("wrong");
-            maxValueField.setStaticValue(wrongValue);
-            console.log("  - No error on type mismatch (implementation-dependent)");
-          } catch (error) {
-            console.log(`  - Type mismatch handled: ${error}`);
-          }
+    await withCoreClasses("MonoField should handle type mismatch errors", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        // Try to set with wrong type - may throw or silently fail
+        try {
+          const wrongValue = Mono.api.stringNew("wrong");
+          maxValueField.setStaticValue(wrongValue);
+          console.log("  - No error on type mismatch (implementation-dependent)");
+        } catch (error) {
+          console.log(`  - Type mismatch handled: ${error}`);
         }
       }
     }),
@@ -657,17 +530,12 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD TOSTRING AND SERIALIZATION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField toString should work correctly", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (int32Class) {
-        const maxValueField = int32Class.tryField("MaxValue");
-        if (maxValueField) {
-          const stringRep = maxValueField.toString();
-          assertNotNull(stringRep, "toString should return a value");
-          assert(stringRep.includes("MonoField"), "toString should include class type");
-        }
+    await withCoreClasses("MonoField toString should work correctly", ({ int32Class }) => {
+      const maxValueField = int32Class.tryField("MaxValue");
+      if (maxValueField) {
+        const stringRep = maxValueField.toString();
+        assertNotNull(stringRep, "toString should return a value");
+        assert(stringRep.includes("MonoField"), "toString should include class type");
       }
     }),
   );
@@ -675,30 +543,24 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== PRIMITIVE TYPE FIELD TESTS (BOUNDARY) =====
 
   results.push(
-    await createMonoDependentTest("MonoField should read/access Boolean static fields", () => {
-      const domain = Mono.domain;
-      const boolClass = domain.tryClass("System.Boolean");
+    await withCoreClasses("MonoField should read/access Boolean static fields", ({ booleanClass }) => {
+      const trueString = booleanClass.tryField("TrueString");
+      const falseString = booleanClass.tryField("FalseString");
 
-      if (boolClass) {
-        const trueString = boolClass.tryField("TrueString");
-        const falseString = boolClass.tryField("FalseString");
-
-        if (trueString) {
-          const type = trueString.type;
-          assertNotNull(type, "Boolean field should have type");
-          console.log(`  - TrueString type: ${type.name}`);
-        }
-        if (falseString) {
-          const type = falseString.type;
-          assertNotNull(type, "Boolean field should have type");
-        }
+      if (trueString) {
+        const type = trueString.type;
+        assertNotNull(type, "Boolean field should have type");
+        console.log(`  - TrueString type: ${type.name}`);
+      }
+      if (falseString) {
+        const type = falseString.type;
+        assertNotNull(type, "Boolean field should have type");
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should access Double constants (Min/MaxValue)", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should access Double constants (Min/MaxValue)", ({ domain }) => {
       const doubleClass = domain.tryClass("System.Double");
 
       if (doubleClass) {
@@ -720,8 +582,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should access Byte constants", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should access Byte constants", ({ domain }) => {
       const byteClass = domain.tryClass("System.Byte");
 
       if (byteClass) {
@@ -745,8 +606,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should access Int64 (Long) fields", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should access Int64 (Long) fields", ({ domain }) => {
       const int64Class = domain.tryClass("System.Int64");
 
       if (int64Class) {
@@ -764,8 +624,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should access Single (Float) constants", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should access Single (Float) constants", ({ domain }) => {
       const singleClass = domain.tryClass("System.Single");
 
       if (singleClass) {
@@ -789,8 +648,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should access Char constants", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should access Char constants", ({ domain }) => {
       const charClass = domain.tryClass("System.Char");
 
       if (charClass) {
@@ -810,8 +668,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== ARRAY TYPE FIELD TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should handle array-typed fields", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should handle array-typed fields", ({ domain }) => {
       // System.Environment has some array fields
       const envClass = domain.tryClass("System.Environment");
 
@@ -837,9 +694,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== GENERIC TYPE FIELD TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should handle fields in generic types", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoField should handle fields in generic types", ({ domain }) => {
       // Nullable<T> has instance fields
       const nullableClass = domain.tryClass("System.Nullable`1");
 
@@ -857,8 +712,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== STRUCT FIELD LAYOUT TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should handle struct field layout (DateTime)", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should handle struct field layout (DateTime)", ({ domain }) => {
       const dateTimeClass = domain.tryClass("System.DateTime");
 
       if (dateTimeClass) {
@@ -885,8 +739,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should handle Guid struct fields", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should handle Guid struct fields", ({ domain }) => {
       const guidClass = domain.tryClass("System.Guid");
 
       if (guidClass) {
@@ -913,8 +766,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== LITERAL/CONST FIELD TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should identify literal (const) fields", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should identify literal (const) fields", ({ domain }) => {
       const mathClass = domain.tryClass("System.Math");
 
       if (mathClass) {
@@ -938,8 +790,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== ENUM FIELD TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should enumerate all enum values as fields", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should enumerate all enum values as fields", ({ domain }) => {
       const dayOfWeekClass = domain.tryClass("System.DayOfWeek");
 
       if (dayOfWeekClass) {
@@ -966,8 +817,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should handle flag enum fields (FileAccess)", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should handle flag enum fields (FileAccess)", ({ domain }) => {
       const fileAccessClass = domain.tryClass("System.IO.FileAccess");
 
       if (fileAccessClass) {
@@ -989,9 +839,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== INHERITED FIELD TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should access inherited fields through parent class", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoField should access inherited fields through parent class", ({ domain }) => {
       // Exception has Message field from base
       const exceptionClass = domain.tryClass("System.ArgumentException");
 
@@ -1026,8 +874,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD ATTRIBUTE TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should report field attributes/flags", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should report field attributes/flags", ({ domain }) => {
       const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
@@ -1055,8 +902,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD DESCRIBE COMPLETENESS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField describe() should include complete information", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField describe() should include complete information", ({ domain }) => {
       const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
@@ -1082,9 +928,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== THREAD STATIC FIELD TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should identify thread-static fields if available", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoField should identify thread-static fields if available", ({ domain }) => {
       // Look for classes that might have ThreadStatic fields
       const threadClass = domain.tryClass("System.Threading.Thread");
 
@@ -1105,9 +949,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD WRITE TO STATIC TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should handle static field write operations", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoField should handle static field write operations", ({ domain }) => {
       // Find a class with writable static fields
       const consoleClass = domain.tryClass("System.Console");
 
@@ -1129,8 +971,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD POINTER TYPE TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should handle IntPtr fields", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should handle IntPtr fields", ({ domain }) => {
       const intPtrClass = domain.tryClass("System.IntPtr");
 
       if (intPtrClass) {
@@ -1152,9 +993,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD COUNT/SIZE TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should report field size information", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoField should report field size information", ({ domain }) => {
       // Test fields of different sizes
       const testCases = [
         { class: "System.Byte", expectedSize: 1 },
@@ -1177,8 +1016,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should provide JSON representation", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should provide JSON representation", ({ domain }) => {
       const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
@@ -1201,8 +1039,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD PARENT CLASS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should provide parent class information", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should provide parent class information", ({ domain }) => {
       const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
@@ -1220,8 +1057,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== FIELD FULL NAME TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField should provide full name information", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should provide full name information", ({ domain }) => {
       const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
@@ -1239,8 +1075,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   // ===== TYPE-SPECIFIC READ/WRITE TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should correctly read Boolean type", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should correctly read Boolean type", ({ domain }) => {
       const boolClass = domain.tryClass("System.Boolean");
 
       if (boolClass) {
@@ -1259,8 +1094,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should correctly read Int32 static field", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should correctly read Int32 static field", ({ domain }) => {
       const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
@@ -1294,8 +1128,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should correctly read Byte type", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should correctly read Byte type", ({ domain }) => {
       const byteClass = domain.tryClass("System.Byte");
 
       if (byteClass) {
@@ -1321,8 +1154,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should correctly read Int16 (Short) type", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should correctly read Int16 (Short) type", ({ domain }) => {
       const int16Class = domain.tryClass("System.Int16");
 
       if (int16Class) {
@@ -1348,8 +1180,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should correctly read UInt16 (UShort) type", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should correctly read UInt16 (UShort) type", ({ domain }) => {
       const uint16Class = domain.tryClass("System.UInt16");
 
       if (uint16Class) {
@@ -1367,8 +1198,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should correctly read Int64 (Long) type", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should correctly read Int64 (Long) type", ({ domain }) => {
       const int64Class = domain.tryClass("System.Int64");
 
       if (int64Class) {
@@ -1389,8 +1219,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should correctly read UInt32 type", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should correctly read UInt32 type", ({ domain }) => {
       const uint32Class = domain.tryClass("System.UInt32");
 
       if (uint32Class) {
@@ -1408,8 +1237,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should correctly read SByte (Int8) type", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should correctly read SByte (Int8) type", ({ domain }) => {
       const sbyteClass = domain.tryClass("System.SByte");
 
       if (sbyteClass) {
@@ -1435,8 +1263,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should correctly read Single (Float) type", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should correctly read Single (Float) type", ({ domain }) => {
       const singleClass = domain.tryClass("System.Single");
 
       if (singleClass) {
@@ -1472,8 +1299,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should correctly read Double type", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should correctly read Double type", ({ domain }) => {
       const doubleClass = domain.tryClass("System.Double");
 
       if (doubleClass) {
@@ -1503,8 +1329,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should correctly read Char type", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should correctly read Char type", ({ domain }) => {
       const charClass = domain.tryClass("System.Char");
 
       if (charClass) {
@@ -1533,8 +1358,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should correctly read String type field", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should correctly read String type field", ({ domain }) => {
       const boolClass = domain.tryClass("System.Boolean");
 
       if (boolClass) {
@@ -1586,8 +1410,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should read String.Empty correctly", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should read String.Empty correctly", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       if (stringClass) {
@@ -1602,8 +1425,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue should handle enum underlying values", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue should handle enum underlying values", ({ domain }) => {
       const dayOfWeekClass = domain.tryClass("System.DayOfWeek");
 
       if (dayOfWeekClass) {
@@ -1639,8 +1461,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should read Math.PI and Math.E constants", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should read Math.PI and Math.E constants", ({ domain }) => {
       const mathClass = domain.tryClass("System.Math");
 
       if (mathClass) {
@@ -1673,8 +1494,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should read IntPtr.Zero and IntPtr.Size", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should read IntPtr.Zero and IntPtr.Size", ({ domain }) => {
       const intPtrClass = domain.tryClass("System.IntPtr");
 
       if (intPtrClass) {
@@ -1701,8 +1521,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField should read without coercion when coerce=false", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField should read without coercion when coerce=false", ({ domain }) => {
       const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
@@ -1728,8 +1547,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField getValueObject should return boxed value", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField getValueObject should return boxed value", ({ domain }) => {
       const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
@@ -1755,8 +1573,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField getTypedStaticValue should return typed value", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField getTypedStaticValue should return typed value", ({ domain }) => {
       const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
@@ -1771,8 +1588,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue for DateTime.MinValue and MaxValue", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue for DateTime.MinValue and MaxValue", ({ domain }) => {
       const dateTimeClass = domain.tryClass("System.DateTime");
 
       if (dateTimeClass) {
@@ -1803,8 +1619,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue for Guid.Empty", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue for Guid.Empty", ({ domain }) => {
       const guidClass = domain.tryClass("System.Guid");
 
       if (guidClass) {
@@ -1825,8 +1640,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue for UInt64.MaxValue", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue for UInt64.MaxValue", ({ domain }) => {
       const uint64Class = domain.tryClass("System.UInt64");
 
       if (uint64Class) {
@@ -1847,8 +1661,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue for Decimal type constants", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue for Decimal type constants", ({ domain }) => {
       const decimalClass = domain.tryClass("System.Decimal");
 
       if (decimalClass) {
@@ -1877,8 +1690,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField readValue for TimeSpan constants", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoField readValue for TimeSpan constants", ({ domain }) => {
       const timeSpanClass = domain.tryClass("System.TimeSpan");
 
       if (timeSpanClass) {
@@ -1908,9 +1720,7 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoField type coercion should handle all primitive types consistently", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoField type coercion should handle all primitive types consistently", ({ domain }) => {
       const testCases = [
         { class: "System.Boolean", fields: ["TrueString", "FalseString"] },
         { class: "System.Byte", fields: ["MinValue", "MaxValue"] },

@@ -8,7 +8,8 @@
 import Mono from "../src";
 import { GarbageCollector, createGarbageCollector } from "../src/model/gc";
 import { GCHandle, GCHandlePool } from "../src/runtime/gchandle";
-import { TestResult, assert, assertNotNull, createMonoDependentTest, createStandaloneTest } from "./test-framework";
+import { withDomain } from "./test-fixtures";
+import { TestResult, assert, assertNotNull, createStandaloneTest } from "./test-framework";
 
 /**
  * Helper to create a managed object for GC testing
@@ -69,14 +70,14 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // API Existence Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("GC - Mono.gc exists", () => {
+    await withDomain("GC - Mono.gc exists", () => {
       assert(typeof Mono.gc !== "undefined", "Mono.gc should exist");
       assertNotNull(Mono.gc, "Mono.gc should not be null");
     }),
   );
 
   results.push(
-    await createMonoDependentTest("GC - Mono.gc is GarbageCollector instance", () => {
+    await withDomain("GC - Mono.gc is GarbageCollector instance", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "Mono.gc should exist");
 
@@ -120,7 +121,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // GCUtilities Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("GCUtilities - collect() does not throw", () => {
+    await withDomain("GCUtilities - collect() does not throw", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -131,7 +132,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCUtilities - collect with generation 0", () => {
+    await withDomain("GCUtilities - collect with generation 0", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -141,7 +142,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCUtilities - collect with generation 1", () => {
+    await withDomain("GCUtilities - collect with generation 1", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -150,7 +151,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCUtilities - collect with generation 2 (full)", () => {
+    await withDomain("GCUtilities - collect with generation 2 (full)", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -160,7 +161,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCUtilities - collect with -1 collects all", () => {
+    await withDomain("GCUtilities - collect with -1 collects all", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -170,7 +171,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCUtilities - maxGeneration property", () => {
+    await withDomain("GCUtilities - maxGeneration property", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -185,7 +186,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // GCHandle Tests (with graceful handling for Unity)
   // ============================================
   results.push(
-    await createMonoDependentTest("GCHandle - create handle for object", () => {
+    await withDomain("GCHandle - create handle for object", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -215,7 +216,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCHandle - pinned handle", () => {
+    await withDomain("GCHandle - pinned handle", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -244,7 +245,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCHandle - getTarget returns valid pointer", () => {
+    await withDomain("GCHandle - getTarget returns valid pointer", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -278,7 +279,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCHandle - isWeak property for strong handle", () => {
+    await withDomain("GCHandle - isWeak property for strong handle", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -308,7 +309,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Weak Handle Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("GCHandle - create weak handle", () => {
+    await withDomain("GCHandle - create weak handle", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -336,7 +337,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCHandle - isWeak property for weak handle", () => {
+    await withDomain("GCHandle - isWeak property for weak handle", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -364,7 +365,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCHandle - weak handle with track resurrection", () => {
+    await withDomain("GCHandle - weak handle with track resurrection", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -395,7 +396,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Handle Pool Management Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("GCHandle - releaseAll clears all handles", () => {
+    await withDomain("GCHandle - releaseAll clears all handles", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -432,7 +433,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCHandle - multiple handles for same object", () => {
+    await withDomain("GCHandle - multiple handles for same object", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -465,7 +466,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCHandle - release same handle twice is safe", () => {
+    await withDomain("GCHandle - release same handle twice is safe", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -497,7 +498,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // GCHandlePool Direct Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("GCHandlePool - create pool directly", () => {
+    await withDomain("GCHandlePool - create pool directly", () => {
       const api = Mono.api;
       const pool = new GCHandlePool(api);
       assertNotNull(pool, "Pool should be created");
@@ -506,7 +507,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GarbageCollector - create via factory function", () => {
+    await withDomain("GarbageCollector - create via factory function", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
 
@@ -522,7 +523,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCHandlePool - create and release handle", () => {
+    await withDomain("GCHandlePool - create and release handle", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -551,7 +552,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCHandlePool - createWeak", () => {
+    await withDomain("GCHandlePool - createWeak", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -579,7 +580,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCHandlePool - releaseAll", () => {
+    await withDomain("GCHandlePool - releaseAll", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -612,7 +613,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // GC Handle Edge Cases
   // ============================================
   results.push(
-    await createMonoDependentTest("GCHandle - free() sets handle to 0", () => {
+    await withDomain("GCHandle - free() sets handle to 0", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -641,7 +642,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCHandle - free() twice is safe", () => {
+    await withDomain("GCHandle - free() twice is safe", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -670,7 +671,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GCHandle - getTarget on freed handle returns NULL", () => {
+    await withDomain("GCHandle - getTarget on freed handle returns NULL", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -701,7 +702,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Integration Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("GC - collect does not break active handles", () => {
+    await withDomain("GC - collect does not break active handles", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -741,7 +742,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC - pinned handle survives GC", () => {
+    await withDomain("GC - pinned handle survives GC", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -779,7 +780,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Memory Statistics Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("GC - getMemoryStats returns valid structure", () => {
+    await withDomain("GC - getMemoryStats returns valid structure", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -797,7 +798,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC - getActiveHandleCount returns number", () => {
+    await withDomain("GC - getActiveHandleCount returns number", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -809,7 +810,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC - getGenerationStats returns array", () => {
+    await withDomain("GC - getGenerationStats returns array", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -826,7 +827,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC - getMemorySummary returns string", () => {
+    await withDomain("GC - getMemorySummary returns string", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -841,7 +842,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC - isCollected checks weak handle", () => {
+    await withDomain("GC - isCollected checks weak handle", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -872,7 +873,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC - collectAndReport returns delta", () => {
+    await withDomain("GC - collectAndReport returns delta", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -896,7 +897,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC - MemoryStats interface is correct", () => {
+    await withDomain("GC - MemoryStats interface is correct", () => {
       // Type-level test - verify the structure matches expected interface
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
@@ -917,7 +918,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Configuration System Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("GC Config - DEFAULT_GC_CONFIG exists", () => {
+    await withDomain("GC Config - DEFAULT_GC_CONFIG exists", () => {
       const { DEFAULT_GC_CONFIG } = require("../src/model/gc");
       assertNotNull(DEFAULT_GC_CONFIG, "DEFAULT_GC_CONFIG should exist");
       assert(typeof DEFAULT_GC_CONFIG.maxHandles === "number", "Should have maxHandles");
@@ -929,7 +930,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Config - createGarbageCollector with custom config", () => {
+    await withDomain("GC Config - createGarbageCollector with custom config", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
 
@@ -954,7 +955,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Config - partial config merge with defaults", () => {
+    await withDomain("GC Config - partial config merge with defaults", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
 
@@ -976,7 +977,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Config - currentConfig is read-only copy", () => {
+    await withDomain("GC Config - currentConfig is read-only copy", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
 
@@ -997,7 +998,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // New Properties Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("GC Property - isDisposed initially false", () => {
+    await withDomain("GC Property - isDisposed initially false", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
 
@@ -1009,7 +1010,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Property - isDisposed becomes true after dispose", () => {
+    await withDomain("GC Property - isDisposed becomes true after dispose", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
 
@@ -1021,7 +1022,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Property - stats is alias for getMemoryStats", () => {
+    await withDomain("GC Property - stats is alias for getMemoryStats", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
 
@@ -1038,7 +1039,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Property - supportsMovingCollector is false", () => {
+    await withDomain("GC Property - supportsMovingCollector is false", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
 
@@ -1050,7 +1051,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Property - supportsPinnedObjectHeap is false", () => {
+    await withDomain("GC Property - supportsPinnedObjectHeap is false", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
 
@@ -1065,7 +1066,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Try Methods Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("GC Try - tryCreateHandle succeeds with valid object", () => {
+    await withDomain("GC Try - tryCreateHandle succeeds with valid object", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -1105,7 +1106,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Try - tryCreateHandle returns null when disposed", () => {
+    await withDomain("GC Try - tryCreateHandle returns null when disposed", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1124,7 +1125,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Try - tryCreateWeakHandle succeeds with valid object", () => {
+    await withDomain("GC Try - tryCreateWeakHandle succeeds with valid object", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -1162,7 +1163,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Try - tryCreateWeakHandle returns null when disposed", () => {
+    await withDomain("GC Try - tryCreateWeakHandle returns null when disposed", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1181,7 +1182,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Try - tryCreateHandle with pinned flag", () => {
+    await withDomain("GC Try - tryCreateHandle with pinned flag", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -1219,7 +1220,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Capacity Management Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("GC Capacity - hasHandleCapacity initially true", () => {
+    await withDomain("GC Capacity - hasHandleCapacity initially true", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api, { maxHandles: 100 });
@@ -1231,7 +1232,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Capacity - hasHandleCapacity becomes false at limit", () => {
+    await withDomain("GC Capacity - hasHandleCapacity becomes false at limit", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -1270,7 +1271,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Capacity - tryCreateHandle returns null at limit", () => {
+    await withDomain("GC Capacity - tryCreateHandle returns null at limit", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -1310,7 +1311,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // HandleStats Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("GC Stats - getHandleStats returns valid structure", () => {
+    await withDomain("GC Stats - getHandleStats returns valid structure", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1332,7 +1333,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Stats - getHandleStats tracks created handles", () => {
+    await withDomain("GC Stats - getHandleStats tracks created handles", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -1373,7 +1374,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Stats - getHandleStats tracks weak handles", () => {
+    await withDomain("GC Stats - getHandleStats tracks weak handles", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -1409,7 +1410,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Stats - getHandleStats tracks pinned handles", () => {
+    await withDomain("GC Stats - getHandleStats tracks pinned handles", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -1451,7 +1452,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Dispose Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("GC Dispose - dispose() can be called multiple times", () => {
+    await withDomain("GC Dispose - dispose() can be called multiple times", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1466,7 +1467,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Dispose - operations throw after dispose", () => {
+    await withDomain("GC Dispose - operations throw after dispose", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1486,7 +1487,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Dispose - getMemoryStats throws after dispose", () => {
+    await withDomain("GC Dispose - getMemoryStats throws after dispose", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1506,7 +1507,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Dispose - createHandle throws after dispose", () => {
+    await withDomain("GC Dispose - createHandle throws after dispose", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1532,7 +1533,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Dispose - collectAndReport throws after dispose", () => {
+    await withDomain("GC Dispose - collectAndReport throws after dispose", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1555,7 +1556,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // New Finalizer Methods Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("GC Finalizer - reRegisterFinalize exists", () => {
+    await withDomain("GC Finalizer - reRegisterFinalize exists", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1573,7 +1574,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Finalizer - reRegisterFinalize with NULL pointer", () => {
+    await withDomain("GC Finalizer - reRegisterFinalize with NULL pointer", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1589,7 +1590,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Integration Tests for New Features
   // =====================================================
   results.push(
-    await createMonoDependentTest("GC Integration - activeHandleCount matches stats", () => {
+    await withDomain("GC Integration - activeHandleCount matches stats", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -1626,7 +1627,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Integration - stats property equals getMemoryStats", () => {
+    await withDomain("GC Integration - stats property equals getMemoryStats", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1644,7 +1645,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Integration - collectAndReport includes timing", () => {
+    await withDomain("GC Integration - collectAndReport includes timing", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1666,7 +1667,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Edge Cases for New Features
   // =====================================================
   results.push(
-    await createMonoDependentTest("GC Edge - config with zero maxHandles", () => {
+    await withDomain("GC Edge - config with zero maxHandles", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
 
@@ -1679,7 +1680,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Edge - config with negative highUsageThreshold", () => {
+    await withDomain("GC Edge - config with negative highUsageThreshold", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
 
@@ -1692,7 +1693,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Edge - config with very large maxHandles", () => {
+    await withDomain("GC Edge - config with very large maxHandles", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
 
@@ -1705,7 +1706,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Edge - getHandleStats after releaseAllHandles", () => {
+    await withDomain("GC Edge - getHandleStats after releaseAllHandles", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -1743,7 +1744,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Stress and Performance Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("GC Stress - create and release many handles", () => {
+    await withDomain("GC Stress - create and release many handles", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -1792,7 +1793,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Stress - multiple GC cycles", () => {
+    await withDomain("GC Stress - multiple GC cycles", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1814,7 +1815,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Stress - mixed handle types", () => {
+    await withDomain("GC Stress - mixed handle types", () => {
       if (!isGCHandleSupported()) {
         console.log("[INFO] GC handle API not fully supported, skipping");
         return;
@@ -1857,7 +1858,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Performance - getMemoryStats overhead", () => {
+    await withDomain("GC Performance - getMemoryStats overhead", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1881,7 +1882,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Performance - getHandleStats overhead", () => {
+    await withDomain("GC Performance - getHandleStats overhead", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1908,7 +1909,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Error Handling Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("GC Error - createHandle with NULL pointer", () => {
+    await withDomain("GC Error - createHandle with NULL pointer", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1926,7 +1927,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Error - tryCreateHandle with NULL pointer", () => {
+    await withDomain("GC Error - tryCreateHandle with NULL pointer", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1939,7 +1940,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Error - collect with invalid generation", () => {
+    await withDomain("GC Error - collect with invalid generation", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1957,7 +1958,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Error - collect with negative generation other than -1", () => {
+    await withDomain("GC Error - collect with negative generation other than -1", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1971,7 +1972,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC Error - getGenerationStats structure", () => {
+    await withDomain("GC Error - getGenerationStats structure", () => {
       const api = Mono.api;
       const { createGarbageCollector } = require("../src/model/gc");
       const gc = createGarbageCollector(api);
@@ -1996,7 +1997,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   // Finalization Queue Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("GC - getFinalizationQueueInfo exists", () => {
+    await withDomain("GC - getFinalizationQueueInfo exists", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -2011,7 +2012,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC - requestFinalization exists", () => {
+    await withDomain("GC - requestFinalization exists", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -2024,7 +2025,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC - waitForPendingFinalizers exists", () => {
+    await withDomain("GC - waitForPendingFinalizers exists", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 
@@ -2037,7 +2038,7 @@ export async function createGCToolsTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("GC - suppressFinalize exists", () => {
+    await withDomain("GC - suppressFinalize exists", () => {
       const gc = Mono.gc;
       assertNotNull(gc, "GC utilities should exist");
 

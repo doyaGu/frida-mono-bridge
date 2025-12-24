@@ -5,14 +5,8 @@
  */
 
 import Mono from "../src";
-import {
-  TestResult,
-  assert,
-  assertNotNull,
-  assertThrows,
-  createErrorHandlingTest,
-  createMonoDependentTest,
-} from "./test-framework";
+import { withCoreClasses, withDomain } from "./test-fixtures";
+import { TestResult, assert, assertNotNull, assertThrows, createErrorHandlingTest } from "./test-framework";
 import { createBasicLookupPerformanceTest, createPropertyLookupPerformanceTest } from "./test-utilities";
 
 export async function createMonoPropertyTests(): Promise<TestResult[]> {
@@ -21,12 +15,8 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== PROPERTY DISCOVERY AND ENUMERATION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should discover properties by name", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-      assertNotNull(stringClass, "String class should be available");
-
-      const lengthProperty = stringClass!.tryProperty("Length");
+    await withCoreClasses("MonoProperty should discover properties by name", ({ stringClass }) => {
+      const lengthProperty = stringClass.tryProperty("Length");
       if (lengthProperty) {
         assert(lengthProperty.name === "Length", "Property name should be Length");
         assert(lengthProperty.parent.name === "String", "Property parent should be String");
@@ -37,39 +27,30 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should enumerate all properties in class", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
+    await withCoreClasses("MonoProperty should enumerate all properties in class", ({ stringClass }) => {
+      const properties = stringClass.properties;
+      assert(properties.length >= 0, "Should find properties (or none)");
 
-      if (stringClass) {
-        const properties = stringClass.properties;
-        assert(properties.length >= 0, "Should find properties (or none)");
-
-        const lengthProperty = properties.find(p => p.name === "Length");
-        if (lengthProperty) {
-          assert(lengthProperty.name === "Length", "Should find Length property in enumeration");
-        }
+      const lengthProperty = properties.find(p => p.name === "Length");
+      if (lengthProperty) {
+        assert(lengthProperty.name === "Length", "Should find Length property in enumeration");
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle missing properties gracefully", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const missingProperty = stringClass!.tryProperty("DefinitelyDoesNotExist");
+    await withCoreClasses("MonoProperty should handle missing properties gracefully", ({ stringClass }) => {
+      const missingProperty = stringClass.tryProperty("DefinitelyDoesNotExist");
       assert(missingProperty === null, "Missing property should return null");
     }),
   );
 
   results.push(
     await createErrorHandlingTest("MonoProperty should throw for missing required properties", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
+      const stringClass = Mono.domain.class("System.String");
 
       assertThrows(() => {
-        stringClass!.property("DefinitelyDoesNotExist");
+        stringClass.property("DefinitelyDoesNotExist");
       }, "Should throw when required property is not found");
     }),
   );
@@ -77,11 +58,8 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== GETTER/SETTER METHOD RESOLUTION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should resolve getter methods", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const lengthProperty = stringClass!.tryProperty("Length");
+    await withCoreClasses("MonoProperty should resolve getter methods", ({ stringClass }) => {
+      const lengthProperty = stringClass.tryProperty("Length");
       if (lengthProperty) {
         const getter = lengthProperty.getter;
         if (getter) {
@@ -98,9 +76,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should resolve setter methods", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should resolve setter methods", ({ domain }) => {
       // Try to find a class with writable properties
       const listClass = domain.tryClass("System.Collections.Generic.List`1");
       if (listClass) {
@@ -122,11 +98,8 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle read-only properties", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const lengthProperty = stringClass!.tryProperty("Length");
+    await withCoreClasses("MonoProperty should handle read-only properties", ({ stringClass }) => {
+      const lengthProperty = stringClass.tryProperty("Length");
       if (lengthProperty) {
         const canRead = lengthProperty.canRead;
         const canWrite = lengthProperty.canWrite;
@@ -138,9 +111,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle write-only properties", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should handle write-only properties", ({ domain }) => {
       // Try to find a class with write-only properties
       const streamClass = domain.tryClass("System.IO.Stream");
       if (streamClass) {
@@ -161,11 +132,8 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== PROPERTY VALUE GETTING AND SETTING TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should get property values", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const lengthProperty = stringClass!.tryProperty("Length");
+    await withCoreClasses("MonoProperty should get property values", ({ stringClass }) => {
+      const lengthProperty = stringClass.tryProperty("Length");
       if (lengthProperty && lengthProperty.canRead) {
         const testString = Mono.api.stringNew("Hello");
 
@@ -180,9 +148,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should set property values", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should set property values", ({ domain }) => {
       // Try to find a class with writable properties
       const stringBuilderClass = domain.tryClass("System.Text.StringBuilder");
       if (stringBuilderClass) {
@@ -203,9 +169,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle static property values", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should handle static property values", ({ domain }) => {
       // Try to find a class with static properties
       const environmentClass = domain.tryClass("System.Environment");
       if (environmentClass) {
@@ -223,9 +187,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should set static property values", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should set static property values", ({ domain }) => {
       // Try to find a class with writable static properties
       const consoleClass = domain.tryClass("System.Console");
       if (consoleClass) {
@@ -250,11 +212,8 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== READ-ONLY AND WRITE-ONLY PROPERTY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should identify read-only properties correctly", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const lengthProperty = stringClass!.tryProperty("Length");
+    await withCoreClasses("MonoProperty should identify read-only properties correctly", ({ stringClass }) => {
+      const lengthProperty = stringClass.tryProperty("Length");
       if (lengthProperty) {
         assert(lengthProperty.canRead, "Length should be readable");
         assert(!lengthProperty.canWrite, "Length should not be writable");
@@ -269,9 +228,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should identify write-only properties correctly", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should identify write-only properties correctly", ({ domain }) => {
       // Try to find write-only properties
       const streamClass = domain.tryClass("System.IO.Stream");
       if (streamClass) {
@@ -296,9 +253,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== INDEXED PROPERTIES TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should identify indexed properties", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should identify indexed properties", ({ domain }) => {
       // Try to find a class with indexed properties
       const listClass = domain.tryClass("System.Collections.Generic.List`1");
       if (listClass) {
@@ -319,9 +274,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle indexed property parameters", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should handle indexed property parameters", ({ domain }) => {
       // Try to find a class with indexed properties
       const dictionaryClass = domain.tryClass("System.Collections.Generic.Dictionary`2");
       if (dictionaryClass) {
@@ -358,9 +311,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== STATIC VS INSTANCE PROPERTY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should identify static properties correctly", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should identify static properties correctly", ({ domain }) => {
       const environmentClass = domain.tryClass("System.Environment");
       if (environmentClass) {
         const newlineProperty = environmentClass.tryProperty("NewLine");
@@ -377,11 +328,8 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should identify instance properties correctly", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const lengthProperty = stringClass!.tryProperty("Length");
+    await withCoreClasses("MonoProperty should identify instance properties correctly", ({ stringClass }) => {
+      const lengthProperty = stringClass.tryProperty("Length");
       if (lengthProperty) {
         assert(!lengthProperty.isStatic, "Length should be instance property");
 
@@ -396,11 +344,8 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== PROPERTY ATTRIBUTES AND METADATA TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should provide property type information", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const lengthProperty = stringClass!.tryProperty("Length");
+    await withCoreClasses("MonoProperty should provide property type information", ({ stringClass }) => {
+      const lengthProperty = stringClass.tryProperty("Length");
       if (lengthProperty) {
         try {
           const propertyType = lengthProperty.type;
@@ -418,11 +363,8 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should provide property metadata", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const lengthProperty = stringClass!.tryProperty("Length");
+    await withCoreClasses("MonoProperty should provide property metadata", ({ stringClass }) => {
+      const lengthProperty = stringClass.tryProperty("Length");
       if (lengthProperty) {
         const propertyInfo = lengthProperty.propertyInfo;
         assertNotNull(propertyInfo, "Property info should be available");
@@ -435,11 +377,8 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should provide property description", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const lengthProperty = stringClass!.tryProperty("Length");
+    await withCoreClasses("MonoProperty should provide property description", ({ stringClass }) => {
+      const lengthProperty = stringClass.tryProperty("Length");
       if (lengthProperty) {
         const description = lengthProperty.describe();
         assertNotNull(description, "Property description should be available");
@@ -452,11 +391,8 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty describe() for indexer should use this[] syntax", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const charsProperty = stringClass!.tryProperty("Chars");
+    await withCoreClasses("MonoProperty describe() for indexer should use this[] syntax", ({ stringClass }) => {
+      const charsProperty = stringClass.tryProperty("Chars");
       if (charsProperty) {
         const description = charsProperty.describe();
         assertNotNull(description, "Property description should be available");
@@ -473,11 +409,8 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== TYPED PROPERTY ACCESS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should provide typed property access", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const lengthProperty = stringClass!.tryProperty("Length");
+    await withCoreClasses("MonoProperty should provide typed property access", ({ stringClass }) => {
+      const lengthProperty = stringClass.tryProperty("Length");
       if (lengthProperty && lengthProperty.canRead) {
         const testString = Mono.api.stringNew("Hello");
 
@@ -493,9 +426,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should provide typed property setting", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should provide typed property setting", ({ domain }) => {
       const stringBuilderClass = domain.tryClass("System.Text.StringBuilder");
       if (stringBuilderClass) {
         const lengthProperty = stringBuilderClass.tryProperty("Length");
@@ -548,8 +479,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle null instance access", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should handle null instance access", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const lengthProperty = stringClass!.tryProperty("Length");
@@ -583,8 +513,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== PROPERTY TOSTRING AND SERIALIZATION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty legacy toString test (name and type format)", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty legacy toString test (name and type format)", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const lengthProperty = stringClass!.tryProperty("Length");
@@ -600,8 +529,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== PROPERTY FLAGS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should provide property flags", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should provide property flags", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const lengthProperty = stringClass!.tryProperty("Length");
@@ -620,8 +548,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== NEW PROPERTY ATTRIBUTE TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should check isSpecialName correctly", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should check isSpecialName correctly", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const lengthProperty = stringClass!.tryProperty("Length");
@@ -641,8 +568,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should check isRTSpecialName correctly", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should check isRTSpecialName correctly", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const lengthProperty = stringClass!.tryProperty("Length");
@@ -655,8 +581,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should check hasDefault correctly", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should check hasDefault correctly", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const lengthProperty = stringClass!.tryProperty("Length");
@@ -669,9 +594,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should identify indexers with isIndexer", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should identify indexers with isIndexer", ({ domain }) => {
       // String.Chars is an indexer
       const stringClass = domain.tryClass("System.String");
       if (stringClass) {
@@ -706,8 +629,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== NEW getSummary TEST =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty getSummary should return complete information", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty getSummary should return complete information", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const lengthProperty = stringClass!.tryProperty("Length");
@@ -735,8 +657,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty getSummary for indexer should show parameters", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty getSummary for indexer should show parameters", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const charsProperty = stringClass!.tryProperty("Chars");
@@ -758,8 +679,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== UPDATED toString TEST =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty toString should return property name and type", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty toString should return property name and type", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const lengthProperty = stringClass!.tryProperty("Length");
@@ -779,8 +699,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== PROPERTY PARENT CLASS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should provide parent class information", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should provide parent class information", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const lengthProperty = stringClass!.tryProperty("Length");
@@ -796,9 +715,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== PROPERTY TYPE TESTS (BOUNDARY) =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle Boolean properties", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should handle Boolean properties", ({ domain }) => {
       // System.String.Empty would be a static property if it existed
       // Try System.DateTime which has several properties
       const dateTimeClass = domain.tryClass("System.DateTime");
@@ -820,8 +737,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle DateTime properties", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should handle DateTime properties", ({ domain }) => {
       const dateTimeClass = domain.tryClass("System.DateTime");
 
       if (dateTimeClass) {
@@ -848,8 +764,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle TimeSpan properties", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should handle TimeSpan properties", ({ domain }) => {
       const timeSpanClass = domain.tryClass("System.TimeSpan");
 
       if (timeSpanClass) {
@@ -875,8 +790,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== PROPERTY GETTER/SETTER METHOD TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should provide getter method details", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should provide getter method details", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const lengthProperty = stringClass!.tryProperty("Length");
@@ -899,8 +813,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should provide setter method details when available", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should provide setter method details when available", ({ domain }) => {
       const stringBuilderClass = domain.tryClass("System.Text.StringBuilder");
 
       if (stringBuilderClass) {
@@ -927,8 +840,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== STATIC PROPERTY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle static properties (Environment.NewLine)", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should handle static properties (Environment.NewLine)", ({ domain }) => {
       const envClass = domain.tryClass("System.Environment");
 
       if (envClass) {
@@ -953,8 +865,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle Console static properties", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should handle Console static properties", ({ domain }) => {
       const consoleClass = domain.tryClass("System.Console");
 
       if (consoleClass) {
@@ -977,8 +888,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== INDEXED PROPERTY TESTS (EXTENDED) =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle indexed properties (String.Chars)", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should handle indexed properties (String.Chars)", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       if (stringClass) {
@@ -1003,9 +913,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle Dictionary indexer property", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should handle Dictionary indexer property", ({ domain }) => {
       // Generic Dictionary has Item property as indexer
       const dictClass = domain.tryClass("System.Collections.Generic.Dictionary`2");
 
@@ -1027,9 +935,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle List indexer property", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should handle List indexer property", ({ domain }) => {
       const listClass = domain.tryClass("System.Collections.Generic.List`1");
 
       if (listClass) {
@@ -1053,9 +959,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== READ-ONLY VS READ-WRITE PROPERTY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should distinguish read-only properties", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should distinguish read-only properties", ({ domain }) => {
       // String.Length is read-only
       const stringClass = domain.tryClass("System.String");
       if (stringClass) {
@@ -1080,9 +984,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty should distinguish read-write properties", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should distinguish read-write properties", ({ domain }) => {
       // StringBuilder.Capacity is read-write
       const sbClass = domain.tryClass("System.Text.StringBuilder");
       if (sbClass) {
@@ -1110,9 +1012,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== PROPERTY RETURN TYPE TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle various return types", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should handle various return types", ({ domain }) => {
       // Test different return types
       const testCases = [
         { class: "System.String", property: "Length", expectedType: "Int32" },
@@ -1137,9 +1037,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== INHERITED PROPERTY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle inherited properties", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should handle inherited properties", ({ domain }) => {
       // Object.GetType() is inherited by all classes
       // But properties are less commonly inherited - check Exception
       const exceptionClass = domain.tryClass("System.ArgumentException");
@@ -1169,8 +1067,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== PROPERTY DESCRIBE COMPLETENESS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty describe() should include complete information", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty describe() should include complete information", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const lengthProperty = stringClass!.tryProperty("Length");
@@ -1207,9 +1104,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== VIRTUAL/OVERRIDDEN PROPERTY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should identify virtual properties", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should identify virtual properties", ({ domain }) => {
       // Stream.Length is typically virtual/abstract
       const streamClass = domain.tryClass("System.IO.Stream");
 
@@ -1238,9 +1133,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== INTERFACE PROPERTY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle interface properties (ICollection.Count)", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should handle interface properties (ICollection.Count)", ({ domain }) => {
       const iCollectionClass = domain.tryClass("System.Collections.ICollection");
 
       if (iCollectionClass) {
@@ -1260,9 +1153,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== NULLABLE TYPE PROPERTY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle Nullable<T> properties", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should handle Nullable<T> properties", ({ domain }) => {
       const nullableClass = domain.tryClass("System.Nullable`1");
 
       if (nullableClass) {
@@ -1290,9 +1181,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== ATTRIBUTE PROPERTY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle Attribute properties", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should handle Attribute properties", ({ domain }) => {
       const attributeClass = domain.tryClass("System.Attribute");
 
       if (attributeClass) {
@@ -1313,8 +1202,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== REFLECTION TYPE PROPERTY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should handle Type reflection properties", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoProperty should handle Type reflection properties", ({ domain }) => {
       const typeClass = domain.tryClass("System.Type");
 
       if (typeClass) {
@@ -1343,9 +1231,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // ===== PROPERTY COUNT TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoProperty should enumerate all properties for common types", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoProperty should enumerate all properties for common types", ({ domain }) => {
       const testClasses = ["System.String", "System.DateTime", "System.Type", "System.IO.Stream", "System.Exception"];
 
       testClasses.forEach(className => {
@@ -1363,7 +1249,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   // =====================================================
 
   results.push(
-    await createMonoDependentTest("MonoProperty - setValue handles string conversion", () => {
+    await withDomain("MonoProperty - setValue handles string conversion", () => {
       Mono.perform(() => {
         // Test string property conversion (Exception.Message)
         const exceptionClass = Mono.domain.tryClass("System.Exception");
@@ -1381,7 +1267,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty - type accessor works correctly", () => {
+    await withDomain("MonoProperty - type accessor works correctly", () => {
       Mono.perform(() => {
         const stringClass = Mono.domain.tryClass("System.String");
         assertNotNull(stringClass, "String class should exist");
@@ -1401,7 +1287,7 @@ export async function createMonoPropertyTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoProperty - getPropertyInfo returns complete info", () => {
+    await withDomain("MonoProperty - getPropertyInfo returns complete info", () => {
       Mono.perform(() => {
         const stringClass = Mono.domain.tryClass("System.String");
         assertNotNull(stringClass, "String class should exist");

@@ -11,8 +11,8 @@
  * - getGenericTypeDefinition()
  */
 
-import Mono from "../src";
-import { TestResult, assert, assertNotNull, createMonoDependentTest } from "./test-framework";
+import { withAssemblies, withCoreClasses, withDomain, withGenerics } from "./test-fixtures";
+import { TestResult, assert, assertNotNull } from "./test-framework";
 
 /**
  * Create MonoClass generic type test suite
@@ -24,25 +24,19 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   // Non-Generic Type Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("Generic - String is not generic type", () => {
-      const stringClass = Mono.domain.tryClass("System.String");
-      assertNotNull(stringClass, "String class should exist");
-
-      assert(!stringClass!.isGenericType, "String should not be generic");
-      assert(!stringClass!.isGenericTypeDefinition, "String should not be generic definition");
-      assert(!stringClass!.isConstructedGenericType, "String should not be constructed generic");
-      assert(stringClass!.genericArgumentCount === 0, "String should have 0 generic arguments");
-      assert(stringClass!.genericParameterCount === 0, "String should have 0 generic parameters");
+    await withCoreClasses("Generic - String is not generic type", ({ stringClass }) => {
+      assert(!stringClass.isGenericType, "String should not be generic");
+      assert(!stringClass.isGenericTypeDefinition, "String should not be generic definition");
+      assert(!stringClass.isConstructedGenericType, "String should not be constructed generic");
+      assert(stringClass.genericArgumentCount === 0, "String should have 0 generic arguments");
+      assert(stringClass.genericParameterCount === 0, "String should have 0 generic parameters");
     }),
   );
 
   results.push(
-    await createMonoDependentTest("Generic - Int32 is not generic type", () => {
-      const intClass = Mono.domain.tryClass("System.Int32");
-      assertNotNull(intClass, "Int32 class should exist");
-
-      assert(!intClass!.isGenericType, "Int32 should not be generic");
-      assert(intClass!.genericArguments.length === 0, "Int32 should have no generic arguments");
+    await withCoreClasses("Generic - Int32 is not generic type", ({ int32Class }) => {
+      assert(!int32Class.isGenericType, "Int32 should not be generic");
+      assert(int32Class.genericArguments.length === 0, "Int32 should have no generic arguments");
     }),
   );
 
@@ -50,10 +44,7 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   // Generic Type Definition Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("Generic - List`1 exists", () => {
-      // Generic type definitions have backtick and number (List`1)
-      const listClass = Mono.domain.tryClass("System.Collections.Generic.List`1");
-
+    await withGenerics("Generic - List`1 exists", ({ listClass }) => {
       if (!listClass) {
         console.log("[INFO] List<T> not found, trying alternate names");
         return;
@@ -69,16 +60,14 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Generic - Dictionary`2 exists", () => {
-      const dictClass = Mono.domain.tryClass("System.Collections.Generic.Dictionary`2");
-
-      if (!dictClass) {
+    await withGenerics("Generic - Dictionary`2 exists", ({ dictionaryClass }) => {
+      if (!dictionaryClass) {
         console.log("[INFO] Dictionary<K,V> not found");
         return;
       }
 
-      console.log(`[INFO] Found ${dictClass.fullName}`);
-      const paramCount = dictClass.genericParameterCount;
+      console.log(`[INFO] Found ${dictionaryClass.fullName}`);
+      const paramCount = dictionaryClass.genericParameterCount;
       console.log(`[INFO] Generic parameter count: ${paramCount}`);
 
       // Dictionary should have 2 type parameters (K, V)
@@ -92,11 +81,11 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   // Constructed Generic Type Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("Generic - Find constructed generic types", () => {
+    await withDomain("Generic - Find constructed generic types", ({ domain }) => {
       let genericFound = false;
 
       // Search for any constructed generic type
-      for (const assembly of Mono.domain.assemblies.slice(0, 5)) {
+      for (const assembly of domain.assemblies.slice(0, 5)) {
         for (const klass of assembly.classes.slice(0, 100)) {
           const argCount = klass.genericArgumentCount;
           if (argCount > 0) {
@@ -122,9 +111,9 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Generic - getGenericArguments returns MonoClass array", () => {
+    await withDomain("Generic - getGenericArguments returns MonoClass array", ({ domain }) => {
       // Search for any constructed generic type
-      for (const assembly of Mono.domain.assemblies) {
+      for (const assembly of domain.assemblies) {
         for (const klass of assembly.classes) {
           const argCount = klass.genericArgumentCount;
           if (argCount > 0) {
@@ -151,9 +140,9 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   // Generic Type Definition Retrieval Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("Generic - getGenericTypeDefinition for constructed type", () => {
+    await withDomain("Generic - getGenericTypeDefinition for constructed type", ({ domain }) => {
       // Search for any constructed generic type
-      for (const assembly of Mono.domain.assemblies) {
+      for (const assembly of domain.assemblies) {
         for (const klass of assembly.classes) {
           if (klass.isConstructedGenericType) {
             const def = klass.genericTypeDefinition;
@@ -181,8 +170,8 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   // Caching Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("Generic - getGenericArguments is cached", () => {
-      for (const assembly of Mono.domain.assemblies) {
+    await withDomain("Generic - getGenericArguments is cached", ({ domain }) => {
+      for (const assembly of domain.assemblies) {
         for (const klass of assembly.classes) {
           if (klass.genericArgumentCount > 0) {
             const args1 = klass.genericArguments;
@@ -201,8 +190,8 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Generic - getGenericTypeDefinition is cached", () => {
-      for (const assembly of Mono.domain.assemblies) {
+    await withDomain("Generic - getGenericTypeDefinition is cached", ({ domain }) => {
+      for (const assembly of domain.assemblies) {
         for (const klass of assembly.classes) {
           if (klass.isConstructedGenericType) {
             const def1 = klass.genericTypeDefinition;
@@ -224,11 +213,8 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   // Describe Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("Generic - describe() includes generic info", () => {
-      const stringClass = Mono.domain.tryClass("System.String");
-      assertNotNull(stringClass, "String should exist");
-
-      const desc = stringClass!.describe();
+    await withCoreClasses("Generic - describe() includes generic info", ({ stringClass }) => {
+      const desc = stringClass.describe();
 
       assert("isGenericType" in desc, "describe should have isGenericType");
       assert("isGenericTypeDefinition" in desc, "describe should have isGenericTypeDefinition");
@@ -244,15 +230,12 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   // Edge Cases
   // ============================================
   results.push(
-    await createMonoDependentTest("Generic - non-existent Unity API graceful handling", () => {
-      const stringClass = Mono.domain.tryClass("System.String");
-      assertNotNull(stringClass, "String should exist");
-
+    await withCoreClasses("Generic - non-existent Unity API graceful handling", ({ stringClass }) => {
       // These should not throw even if Unity API is not available
-      const argCount = stringClass!.genericArgumentCount;
-      const paramCount = stringClass!.genericParameterCount;
-      const args = stringClass!.genericArguments;
-      const def = stringClass!.genericTypeDefinition;
+      const argCount = stringClass.genericArgumentCount;
+      const paramCount = stringClass.genericParameterCount;
+      const args = stringClass.genericArguments;
+      const def = stringClass.genericTypeDefinition;
 
       assert(argCount === 0, "Non-generic should have 0 arguments");
       assert(paramCount === 0, "Non-generic should have 0 parameters");
@@ -262,9 +245,7 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Generic - Nullable`1 is generic type definition", () => {
-      const nullableClass = Mono.domain.tryClass("System.Nullable`1");
-
+    await withGenerics("Generic - Nullable`1 is generic type definition", ({ nullableClass }) => {
       if (!nullableClass) {
         console.log("[INFO] Nullable<T> not found");
         return;
@@ -282,8 +263,8 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Generic - Action`1 is generic delegate", () => {
-      const actionClass = Mono.domain.tryClass("System.Action`1");
+    await withDomain("Generic - Action`1 is generic delegate", ({ domain }) => {
+      const actionClass = domain.tryClass("System.Action`1");
 
       if (!actionClass) {
         console.log("[INFO] Action<T> not found");
@@ -305,8 +286,7 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   // Integration Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("Generic - enumerate all generic types in mscorlib", () => {
-      const mscorlib = Mono.domain.tryAssembly("mscorlib");
+    await withAssemblies("Generic - enumerate all generic types in mscorlib", ({ mscorlib }) => {
       if (!mscorlib) {
         console.log("[INFO] mscorlib not found");
         return;
@@ -333,23 +313,20 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   // Generic Method Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("Generic Method - non-generic method is not generic", () => {
-      const stringClass = Mono.domain.tryClass("System.String");
-      assertNotNull(stringClass, "String should exist");
-
-      const toStringMethod = stringClass!.tryMethod("ToString", 0);
+    await withCoreClasses("Generic Method - non-generic method is not generic", ({ stringClass }) => {
+      const toStringMethod = stringClass.tryMethod("ToString", 0);
       assertNotNull(toStringMethod, "ToString should exist");
 
-      assert(!toStringMethod!.isGenericMethod, "ToString should not be generic");
-      assert(!toStringMethod!.isGenericMethodDefinition, "ToString should not be generic definition");
-      assert(toStringMethod!.genericArgumentCount === 0, "ToString should have 0 generic args");
-      assert(toStringMethod!.genericArguments.length === 0, "ToString should have empty generic args");
+      assert(!toStringMethod.isGenericMethod, "ToString should not be generic");
+      assert(!toStringMethod.isGenericMethodDefinition, "ToString should not be generic definition");
+      assert(toStringMethod.genericArgumentCount === 0, "ToString should have 0 generic args");
+      assert(toStringMethod.genericArguments.length === 0, "ToString should have empty generic args");
     }),
   );
 
   results.push(
-    await createMonoDependentTest("Generic Method - Array generic methods", () => {
-      const arrayClass = Mono.domain.tryClass("System.Array");
+    await withDomain("Generic Method - Array generic methods", ({ domain }) => {
+      const arrayClass = domain.tryClass("System.Array");
       if (!arrayClass) {
         console.log("[INFO] System.Array not found");
         return;
@@ -371,8 +348,8 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Generic Method - Enumerable LINQ methods", () => {
-      const enumerableClass = Mono.domain.tryClass("System.Linq.Enumerable");
+    await withDomain("Generic Method - Enumerable LINQ methods", ({ domain }) => {
+      const enumerableClass = domain.tryClass("System.Linq.Enumerable");
       if (!enumerableClass) {
         console.log("[INFO] System.Linq.Enumerable not found (LINQ may not be loaded)");
         return;
@@ -395,14 +372,11 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Generic Method - describe includes generic info", () => {
-      const stringClass = Mono.domain.tryClass("System.String");
-      assertNotNull(stringClass, "String should exist");
-
-      const toStringMethod = stringClass!.tryMethod("ToString", 0);
+    await withCoreClasses("Generic Method - describe includes generic info", ({ stringClass }) => {
+      const toStringMethod = stringClass.tryMethod("ToString", 0);
       assertNotNull(toStringMethod, "ToString should exist");
 
-      const desc = toStringMethod!.describe();
+      const desc = toStringMethod.describe();
 
       assert("isGenericMethod" in desc, "describe should have isGenericMethod");
       assert("genericArgumentCount" in desc, "describe should have genericArgumentCount");
@@ -413,28 +387,22 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Generic Method - makeGenericMethod returns null for non-generic", () => {
-      const stringClass = Mono.domain.tryClass("System.String");
-      assertNotNull(stringClass, "String should exist");
-
-      const toStringMethod = stringClass!.tryMethod("ToString", 0);
+    await withCoreClasses("Generic Method - makeGenericMethod returns null for non-generic", ({ stringClass }) => {
+      const toStringMethod = stringClass.tryMethod("ToString", 0);
       assertNotNull(toStringMethod, "ToString should exist");
 
-      const result = toStringMethod!.makeGenericMethod([]);
+      const result = toStringMethod.makeGenericMethod([]);
       assert(result === null, "makeGenericMethod should return null for non-generic method");
     }),
   );
 
   results.push(
-    await createMonoDependentTest("Generic Method - getGenericArguments graceful handling", () => {
-      const intClass = Mono.domain.tryClass("System.Int32");
-      assertNotNull(intClass, "Int32 should exist");
-
-      const toStringMethod = intClass!.tryMethod("ToString", 0);
+    await withCoreClasses("Generic Method - getGenericArguments graceful handling", ({ int32Class }) => {
+      const toStringMethod = int32Class.tryMethod("ToString", 0);
       assertNotNull(toStringMethod, "ToString should exist");
 
       // Should not throw even if Unity API is not available
-      const args = toStringMethod!.genericArguments;
+      const args = toStringMethod.genericArguments;
       assert(Array.isArray(args), "Should return array");
       assert(args.length === 0, "Non-generic method should have empty args");
     }),
@@ -444,18 +412,14 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   // makeGenericType Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("makeGenericType - Create List<String>", () => {
-      const listDef = Mono.domain.tryClass("System.Collections.Generic.List`1");
-      if (!listDef) {
+    await withGenerics("makeGenericType - Create List<String>", ({ listClass, stringClass }) => {
+      if (!listClass) {
         console.log("[SKIP] List`1 not found");
         return;
       }
 
-      const stringClass = Mono.domain.tryClass("System.String");
-      assertNotNull(stringClass, "String class should exist");
-
-      console.log(`[INFO] Creating List<String> from ${listDef.fullName}`);
-      const listOfString = listDef.makeGenericType([stringClass!]);
+      console.log(`[INFO] Creating List<String> from ${listClass.fullName}`);
+      const listOfString = listClass.makeGenericType([stringClass]);
 
       if (listOfString) {
         console.log(`[SUCCESS] Created: ${listOfString.fullName}`);
@@ -467,38 +431,32 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("makeGenericType - Create Dictionary<String, Int32>", () => {
-      const dictDef = Mono.domain.tryClass("System.Collections.Generic.Dictionary`2");
-      if (!dictDef) {
-        console.log("[SKIP] Dictionary`2 not found");
-        return;
-      }
+    await withGenerics(
+      "makeGenericType - Create Dictionary<String, Int32>",
+      ({ dictionaryClass, stringClass, int32Class }) => {
+        if (!dictionaryClass) {
+          console.log("[SKIP] Dictionary`2 not found");
+          return;
+        }
 
-      const stringClass = Mono.domain.tryClass("System.String");
-      const intClass = Mono.domain.tryClass("System.Int32");
-      assertNotNull(stringClass, "String class should exist");
-      assertNotNull(intClass, "Int32 class should exist");
+        console.log(`[INFO] Creating Dictionary<String, Int32> from ${dictionaryClass.fullName}`);
+        const dictOfStringInt = dictionaryClass.makeGenericType([stringClass, int32Class]);
 
-      console.log(`[INFO] Creating Dictionary<String, Int32> from ${dictDef.fullName}`);
-      const dictOfStringInt = dictDef.makeGenericType([stringClass!, intClass!]);
-
-      if (dictOfStringInt) {
-        console.log(`[SUCCESS] Created: ${dictOfStringInt.fullName}`);
-        assert(dictOfStringInt.isConstructedGenericType, "Result should be constructed generic type");
-      } else {
-        console.log("[INFO] makeGenericType returned null - API may not be available");
-      }
-    }),
+        if (dictOfStringInt) {
+          console.log(`[SUCCESS] Created: ${dictOfStringInt.fullName}`);
+          assert(dictOfStringInt.isConstructedGenericType, "Result should be constructed generic type");
+        } else {
+          console.log("[INFO] makeGenericType returned null - API may not be available");
+        }
+      },
+    ),
   );
 
   results.push(
-    await createMonoDependentTest("makeGenericType - throws on non-generic type", () => {
-      const stringClass = Mono.domain.tryClass("System.String");
-      assertNotNull(stringClass, "String class should exist");
-
+    await withCoreClasses("makeGenericType - throws on non-generic type", ({ stringClass }) => {
       let threw = false;
       try {
-        stringClass!.makeGenericType([stringClass!]);
+        stringClass.makeGenericType([stringClass]);
       } catch (_e) {
         threw = true;
         console.log(`[INFO] Correctly threw: ${_e}`);
@@ -509,19 +467,15 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("makeGenericType - throws on wrong argument count", () => {
-      const listDef = Mono.domain.tryClass("System.Collections.Generic.List`1");
-      if (!listDef) {
+    await withGenerics("makeGenericType - throws on wrong argument count", ({ listClass, stringClass }) => {
+      if (!listClass) {
         console.log("[SKIP] List`1 not found");
         return;
       }
 
-      const stringClass = Mono.domain.tryClass("System.String");
-      assertNotNull(stringClass, "String class should exist");
-
       let threw = false;
       try {
-        listDef.makeGenericType([stringClass!, stringClass!]); // 2 args for 1 param
+        listClass.makeGenericType([stringClass, stringClass]); // 2 args for 1 param
       } catch (_e) {
         threw = true;
         console.log(`[INFO] Correctly threw: ${_e}`);
@@ -532,18 +486,14 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("makeGenericType - Nullable<Int32>", () => {
-      const nullableDef = Mono.domain.tryClass("System.Nullable`1");
-      if (!nullableDef) {
+    await withGenerics("makeGenericType - Nullable<Int32>", ({ nullableClass, int32Class }) => {
+      if (!nullableClass) {
         console.log("[SKIP] Nullable`1 not found");
         return;
       }
 
-      const intClass = Mono.domain.tryClass("System.Int32");
-      assertNotNull(intClass, "Int32 class should exist");
-
-      console.log(`[INFO] Creating Nullable<Int32> from ${nullableDef.fullName}`);
-      const nullableInt = nullableDef.makeGenericType([intClass!]);
+      console.log(`[INFO] Creating Nullable<Int32> from ${nullableClass.fullName}`);
+      const nullableInt = nullableClass.makeGenericType([int32Class]);
 
       if (nullableInt) {
         console.log(`[SUCCESS] Created: ${nullableInt.fullName}`);
@@ -558,22 +508,19 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   // makeGenericMethod Tests
   // ============================================
   results.push(
-    await createMonoDependentTest("makeGenericMethod - returns null for non-generic method", () => {
-      const stringClass = Mono.domain.tryClass("System.String");
-      assertNotNull(stringClass, "String should exist");
-
-      const toStringMethod = stringClass!.tryMethod("ToString", 0);
+    await withCoreClasses("makeGenericMethod - returns null for non-generic method", ({ stringClass }) => {
+      const toStringMethod = stringClass.tryMethod("ToString", 0);
       assertNotNull(toStringMethod, "ToString should exist");
 
-      const result = toStringMethod!.makeGenericMethod([]);
+      const result = toStringMethod.makeGenericMethod([]);
       assert(result === null, "makeGenericMethod should return null for non-generic method");
     }),
   );
 
   results.push(
-    await createMonoDependentTest("makeGenericMethod - throws on wrong argument count", () => {
+    await withDomain("makeGenericMethod - throws on wrong argument count", ({ domain }) => {
       // Try to find a generic method - Enumerable has many
-      const enumerable = Mono.domain.tryClass("System.Linq.Enumerable");
+      const enumerable = domain.tryClass("System.Linq.Enumerable");
       if (!enumerable) {
         console.log("[SKIP] System.Linq.Enumerable not found");
         return;
@@ -590,7 +537,7 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
 
       console.log(`[INFO] Testing with ${genericMethod.name}`);
 
-      const intClass = Mono.domain.tryClass("System.Int32")!;
+      const intClass = domain.tryClass("System.Int32")!;
 
       let threw = false;
       try {
@@ -605,8 +552,8 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("makeGenericMethod - Enumerable.Where<T>", () => {
-      const enumerable = Mono.domain.tryClass("System.Linq.Enumerable");
+    await withDomain("makeGenericMethod - Enumerable.Where<T>", ({ domain }) => {
+      const enumerable = domain.tryClass("System.Linq.Enumerable");
       if (!enumerable) {
         console.log("[SKIP] System.Linq.Enumerable not found");
         return;
@@ -627,7 +574,7 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
         return;
       }
 
-      const intClass = Mono.domain.tryClass("System.Int32")!;
+      const intClass = domain.tryClass("System.Int32")!;
       console.log(`[INFO] Making Where<Int32> from ${whereMethod.name}`);
 
       const whereInt = whereMethod.makeGenericMethod([intClass]);
@@ -642,8 +589,8 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("makeGenericMethod - Array.Empty<T>", () => {
-      const arrayClass = Mono.domain.tryClass("System.Array");
+    await withDomain("makeGenericMethod - Array.Empty<T>", ({ domain }) => {
+      const arrayClass = domain.tryClass("System.Array");
       if (!arrayClass) {
         console.log("[SKIP] System.Array not found");
         return;
@@ -658,7 +605,7 @@ export async function createGenericTypeTests(): Promise<TestResult[]> {
         return;
       }
 
-      const stringClass = Mono.domain.tryClass("System.String")!;
+      const stringClass = domain.tryClass("System.String")!;
       console.log(`[INFO] Making Empty<String> from ${emptyMethod.name}`);
 
       const emptyString = emptyMethod.makeGenericMethod([stringClass]);

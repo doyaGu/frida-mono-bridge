@@ -9,13 +9,13 @@
  */
 
 import Mono from "../src";
+import { withDomain } from "./test-fixtures";
 import {
   assert,
   assertNotNull,
   assertPerformWorks,
   createErrorHandlingTest,
   createIntegrationTest,
-  createMonoDependentTest,
   createPerformanceTest,
   TestCategory,
   TestResult,
@@ -32,7 +32,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should be detected and accessible", () => {
+    withDomain("Module should be detected and accessible", () => {
       assertPerformWorks("Module detection should work");
 
       const module = Mono.module;
@@ -56,7 +56,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should match expected Mono patterns", () => {
+    withDomain("Module should match expected Mono patterns", () => {
       const module = Mono.module;
       assertNotNull(module, "Module should be available");
 
@@ -84,7 +84,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should have valid memory layout", () => {
+    withDomain("Module should have valid memory layout", () => {
       const module = Mono.module;
       assertNotNull(module, "Module should be available");
 
@@ -126,7 +126,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should enumerate exports correctly", () => {
+    withDomain("Module should enumerate exports correctly", () => {
       const module = Mono.module;
       assertNotNull(module, "Module should be available");
 
@@ -174,7 +174,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should provide version information", () => {
+    withDomain("Module should provide version information", () => {
       const version = Mono.version;
       assertNotNull(version, "Version information should be available");
 
@@ -206,7 +206,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should adapt to Unity Mono versions", () => {
+    withDomain("Module should adapt to Unity Mono versions", () => {
       const module = Mono.module;
       const version = Mono.version;
 
@@ -249,7 +249,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should handle version-specific exports", () => {
+    withDomain("Module should handle version-specific exports", () => {
       const api = Mono.api;
       const module = Mono.module;
 
@@ -294,7 +294,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should provide metadata access", () => {
+    withDomain("Module should provide metadata access", () => {
       const module = Mono.module;
       const api = Mono.api;
 
@@ -319,7 +319,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should export required functions", () => {
+    withDomain("Module should export required functions", () => {
       const api = Mono.api;
 
       assertNotNull(api, "API should be available");
@@ -360,7 +360,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should handle export resolution", () => {
+    withDomain("Module should handle export resolution", () => {
       const api = Mono.api;
 
       assertNotNull(api, "API should be available");
@@ -404,7 +404,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should handle loading scenarios", () => {
+    withDomain("Module should handle loading scenarios", () => {
       const module = Mono.module;
 
       assertNotNull(module, "Module should be available");
@@ -433,7 +433,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should handle dependency information", () => {
+    withDomain("Module should handle dependency information", () => {
       const module = Mono.module;
 
       assertNotNull(module, "Module should be available");
@@ -473,7 +473,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should handle unloading scenarios", () => {
+    withDomain("Module should handle unloading scenarios", () => {
       const module = Mono.module;
 
       assertNotNull(module, "Module should be available");
@@ -513,7 +513,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should resolve dependencies correctly", () => {
+    withDomain("Module should resolve dependencies correctly", () => {
       const api = Mono.api;
 
       assertNotNull(api, "API should be available");
@@ -553,7 +553,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Module should handle circular dependencies", () => {
+    withDomain("Module should handle circular dependencies", () => {
       const api = Mono.api;
 
       assertNotNull(api, "API should be available");
@@ -795,7 +795,7 @@ export async function createMonoModuleTests(): Promise<TestResult> {
       assertNotNull(api, "API should be available");
 
       // Test that threading operations work with current module
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager();
       assertNotNull(threadManager, "Thread manager should be available");
 
       if (typeof threadManager.run === "function") {

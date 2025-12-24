@@ -9,6 +9,7 @@
  */
 
 import Mono from "../src";
+import { withDomain } from "./test-fixtures";
 import {
   assert,
   assertApiAvailable,
@@ -17,7 +18,6 @@ import {
   createApiAvailabilityTest,
   createErrorHandlingTest,
   createIntegrationTest,
-  createMonoDependentTest,
   createPerformanceTest,
   TestCategory,
   TestResult,
@@ -34,7 +34,7 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should be accessible", () => {
+    await withDomain("Thread manager should be accessible", () => {
       assertPerformWorks("Thread manager should be accessible");
       assertApiAvailable("Thread manager should be accessible");
 
@@ -42,7 +42,7 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
       assertNotNull(api, "API should be available");
 
       // Test that thread manager is initialized
-      assertNotNull(api._threadManager, "Thread manager should be initialized");
+      assertNotNull(api.getThreadManager()!, "Thread manager should be initialized");
 
       console.log("    Thread manager accessible and initialized");
     }),
@@ -70,7 +70,7 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread attachment should work correctly", () => {
+    await withDomain("Thread attachment should work correctly", () => {
       const api = Mono.api;
 
       // Test thread attachment
@@ -95,7 +95,7 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread detachment should work correctly", () => {
+    await withDomain("Thread detachment should work correctly", () => {
       const api = Mono.api;
 
       // First attach a thread
@@ -117,9 +117,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should handle multiple attachments", () => {
+    await withDomain("Thread manager should handle multiple attachments", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -147,9 +147,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should track attachment state", () => {
+    await withDomain("Thread manager should track attachment state", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -175,9 +175,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should provide context-aware execution", () => {
+    await withDomain("Thread manager should provide context-aware execution", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -218,9 +218,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should handle nested operations", () => {
+    await withDomain("Thread manager should handle nested operations", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -258,9 +258,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should provide batch operations", () => {
+    await withDomain("Thread manager should provide batch operations", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -287,9 +287,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should handle concurrent access", () => {
+    await withDomain("Thread manager should handle concurrent access", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -319,9 +319,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should maintain state consistency", () => {
+    await withDomain("Thread manager should maintain state consistency", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -352,9 +352,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should handle thread-local data", () => {
+    await withDomain("Thread manager should handle thread-local data", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -381,9 +381,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should cache thread handles", () => {
+    await withDomain("Thread manager should cache thread handles", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -415,9 +415,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should provide stats for resource tracking", () => {
+    await withDomain("Thread manager should provide stats for resource tracking", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -438,9 +438,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should handle resource cleanup", () => {
+    await withDomain("Thread manager should handle resource cleanup", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -472,9 +472,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should handle disposal gracefully", () => {
+    await withDomain("Thread manager should handle disposal gracefully", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       // Test that API is not disposed
       assert(!api.isDisposed, "API should not be disposed initially");
@@ -490,7 +490,7 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
         () => {
           throw new Error("Test error");
         },
-        error => {
+        (error: Error) => {
           return `handled: ${error.message}`;
         },
       );
@@ -518,7 +518,7 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   await suite.addResultAsync(
     createPerformanceTest("Performance: Thread attachment operations", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -551,7 +551,7 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   await suite.addResultAsync(
     createPerformanceTest("Performance: Context-aware execution", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -582,7 +582,7 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   await suite.addResultAsync(
     createPerformanceTest("Performance: Batch operations", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -621,7 +621,7 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   await suite.addResultAsync(
     createErrorHandlingTest("Thread manager should handle invalid operations", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -690,7 +690,7 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   await suite.addResultAsync(
     createIntegrationTest("Thread manager should integrate with API operations", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -723,7 +723,7 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
 
         // Test that thread manager is in correct state during Mono.perform
         const api = Mono.api;
-        const threadManager = api._threadManager;
+        const threadManager = api.getThreadManager()!;
         const isAttached = threadManager.isAttached();
         assert(isAttached === true, "Thread should be attached during Mono.perform");
       });
@@ -784,9 +784,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager detach should return false for non-attached thread", () => {
+    await withDomain("Thread manager detach should return false for non-attached thread", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -805,9 +805,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager detachIfExiting should be safe to call", () => {
+    await withDomain("Thread manager detachIfExiting should be safe to call", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -832,9 +832,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager detachAll should be available", () => {
+    await withDomain("Thread manager detachAll should be available", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 
@@ -855,7 +855,7 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.detachIfExiting should be accessible from top-level API", () => {
+    await withDomain("Mono.detachIfExiting should be accessible from top-level API", () => {
       // Verify top-level API is available
       assert(typeof Mono.detachIfExiting === "function", "Mono.detachIfExiting should be a function");
       assert(typeof Mono.detachAllThreads === "function", "Mono.detachAllThreads should be a function");
@@ -877,9 +877,9 @@ export async function createMonoThreadingTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Thread manager should track attachment state correctly", () => {
+    await withDomain("Thread manager should track attachment state correctly", () => {
       const api = Mono.api;
-      const threadManager = api._threadManager;
+      const threadManager = api.getThreadManager()!;
 
       assertNotNull(threadManager, "Thread manager should be available");
 

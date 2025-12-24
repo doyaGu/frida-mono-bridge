@@ -6,13 +6,13 @@
 import Mono from "../src";
 import { MonoObject } from "../src/model/object";
 import { readUtf16String } from "../src/utils/string";
+import { withDomain } from "./test-fixtures";
 import {
   assert,
   assertApiAvailable,
   assertNotNull,
   createErrorHandlingTest,
   createIntegrationTest,
-  createMonoDependentTest,
   createNestedPerformTest,
   createPerformanceTest,
   createSmokeTest,
@@ -34,7 +34,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   await suite.addResultAsync(createSmokeTest(TestCategory.MONO_DEPENDENT, "comprehensive data operations"));
 
   await suite.addResultAsync(
-    createMonoDependentTest("Data operations APIs should be available", () => {
+    await withDomain("Data operations APIs should be available", () => {
       assertApiAvailable("Mono.api should be accessible for comprehensive data operations");
 
       // Array APIs
@@ -71,8 +71,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should create and access basic arrays", () => {
-      const domain = Mono.domain;
+    await withDomain("Should create and access basic arrays", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
       assertNotNull(stringClass, "System.String class should be available");
 
@@ -98,8 +97,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test array bounds checking", () => {
-      const domain = Mono.domain;
+    await withDomain("Should test array bounds checking", ({ domain }) => {
       const intClass = domain.tryClass("System.Int32");
       assertNotNull(intClass, "System.Int32 class should be available");
 
@@ -127,9 +125,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test multi-dimensional array concepts", () => {
-      const domain = Mono.domain;
-
+    await withDomain("Should test multi-dimensional array concepts", ({ domain }) => {
       // Test multi-dimensional array type names
       const multiDimTypes = ["System.Int32[,]", "System.String[,,]", "System.Object[2,3]"];
 
@@ -147,8 +143,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test array iteration patterns", () => {
-      const domain = Mono.domain;
+    await withDomain("Should test array iteration patterns", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
       assertNotNull(stringClass, "System.String class should be available");
 
@@ -163,7 +158,11 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
       for (let i = 0; i < testStrings.length; i++) {
         const testString = Mono.api.stringNew(testStrings[i]);
         const elementAddress = Mono.api.native.mono_array_addr_with_size(testArray, ptrSize, i);
-        elementAddress.writePointer(testString);
+        if (Mono.api.hasExport("mono_gc_wbarrier_set_arrayref")) {
+          Mono.api.native.mono_gc_wbarrier_set_arrayref(testArray, elementAddress, testString);
+        } else {
+          elementAddress.writePointer(testString);
+        }
       }
 
       // Iterate and verify
@@ -191,8 +190,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test LINQ-style array operations", () => {
-      const domain = Mono.domain;
+    await withDomain("Should test LINQ-style array operations", ({ domain }) => {
       const intClass = domain.tryClass("System.Int32");
       assertNotNull(intClass, "System.Int32 class should be available");
 
@@ -251,7 +249,11 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
       for (let i = 0; i < arraySize; i++) {
         const testString = Mono.api.stringNew(`Item_${i}`);
         const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, ptrSize, i);
-        elementAddress.writePointer(testString);
+        if (Mono.api.hasExport("mono_gc_wbarrier_set_arrayref")) {
+          Mono.api.native.mono_gc_wbarrier_set_arrayref(largeArray, elementAddress, testString);
+        } else {
+          elementAddress.writePointer(testString);
+        }
       }
 
       // Read all elements
@@ -279,7 +281,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test comprehensive string creation", () => {
+    await withDomain("Should test comprehensive string creation", () => {
       const testCases = [
         { input: "Basic string", description: "basic ASCII" },
         { input: "", description: "empty string" },
@@ -318,7 +320,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test string manipulation operations", () => {
+    await withDomain("Should test string manipulation operations", () => {
       const testString = Mono.api.stringNew("Hello, World! This is a test string.");
       assertNotNull(testString, "Test string should be created");
 
@@ -345,7 +347,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test string encoding and UTF handling", () => {
+    await withDomain("Should test string encoding and UTF handling", () => {
       const encodingTests = [
         "ASCII only",
         "Café résumé", // Accented characters
@@ -384,7 +386,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test string comparison and searching", () => {
+    await withDomain("Should test string comparison and searching", () => {
       const testStrings = [
         "Hello World",
         "hello world", // Different case
@@ -461,8 +463,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test object lifecycle and memory management", () => {
-      const domain = Mono.domain;
+    await withDomain("Should test object lifecycle and memory management", ({ domain }) => {
       const objectClass = domain.tryClass("System.Object");
       assertNotNull(objectClass, "System.Object class should be available");
 
@@ -494,8 +495,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test object boxing and unboxing operations", () => {
-      const domain = Mono.domain;
+    await withDomain("Should test object boxing and unboxing operations", ({ domain }) => {
       const intClass = domain.tryClass("System.Int32");
       assertNotNull(intClass, "System.Int32 class should be available");
 
@@ -521,8 +521,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   // ===== MONO OBJECT BOXING/UNBOXING COMPREHENSIVE TESTS (BOUNDARY) =====
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should box and unbox Int32 values", () => {
-      const domain = Mono.domain;
+    await withDomain("Should box and unbox Int32 values", ({ domain }) => {
       const intClass = domain.tryClass("System.Int32");
       assertNotNull(intClass, "System.Int32 class should be available");
 
@@ -547,8 +546,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should box and unbox Int64 values", () => {
-      const domain = Mono.domain;
+    await withDomain("Should box and unbox Int64 values", ({ domain }) => {
       const int64Class = domain.tryClass("System.Int64");
       assertNotNull(int64Class, "System.Int64 class should be available");
 
@@ -568,8 +566,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should box and unbox Double values", () => {
-      const domain = Mono.domain;
+    await withDomain("Should box and unbox Double values", ({ domain }) => {
       const doubleClass = domain.tryClass("System.Double");
       assertNotNull(doubleClass, "System.Double class should be available");
 
@@ -592,8 +589,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should box and unbox Boolean values", () => {
-      const domain = Mono.domain;
+    await withDomain("Should box and unbox Boolean values", ({ domain }) => {
       const boolClass = domain.tryClass("System.Boolean");
       assertNotNull(boolClass, "System.Boolean class should be available");
 
@@ -623,8 +619,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should box and unbox Byte values", () => {
-      const domain = Mono.domain;
+    await withDomain("Should box and unbox Byte values", ({ domain }) => {
       const byteClass = domain.tryClass("System.Byte");
       assertNotNull(byteClass, "System.Byte class should be available");
 
@@ -644,8 +639,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should box and unbox Single (Float) values", () => {
-      const domain = Mono.domain;
+    await withDomain("Should box and unbox Single (Float) values", ({ domain }) => {
       const floatClass = domain.tryClass("System.Single");
       assertNotNull(floatClass, "System.Single class should be available");
 
@@ -668,8 +662,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should box and unbox Char values", () => {
-      const domain = Mono.domain;
+    await withDomain("Should box and unbox Char values", ({ domain }) => {
       const charClass = domain.tryClass("System.Char");
       assertNotNull(charClass, "System.Char class should be available");
 
@@ -694,8 +687,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should box and unbox struct (DateTime) values", () => {
-      const domain = Mono.domain;
+    await withDomain("Should box and unbox struct (DateTime) values", ({ domain }) => {
       const dateTimeClass = domain.tryClass("System.DateTime");
       assertNotNull(dateTimeClass, "System.DateTime class should be available");
 
@@ -715,8 +707,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should box and unbox Guid struct values", () => {
-      const domain = Mono.domain;
+    await withDomain("Should box and unbox Guid struct values", ({ domain }) => {
       const guidClass = domain.tryClass("System.Guid");
       assertNotNull(guidClass, "System.Guid class should be available");
 
@@ -742,8 +733,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should box and unbox enum values", () => {
-      const domain = Mono.domain;
+    await withDomain("Should box and unbox enum values", ({ domain }) => {
       const dayOfWeekClass = domain.tryClass("System.DayOfWeek");
       assertNotNull(dayOfWeekClass, "System.DayOfWeek enum should be available");
 
@@ -764,9 +754,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should handle boxing boundary values", () => {
-      const domain = Mono.domain;
-
+    await withDomain("Should handle boxing boundary values", ({ domain }) => {
       // Test Int32 boundary values
       const int32Class = domain.tryClass("System.Int32");
       assertNotNull(int32Class, "System.Int32 class should be available");
@@ -805,8 +793,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should verify boxed object class is correct", () => {
-      const domain = Mono.domain;
+    await withDomain("Should verify boxed object class is correct", ({ domain }) => {
       const intClass = domain.tryClass("System.Int32");
       assertNotNull(intClass, "System.Int32 class should be available");
 
@@ -827,8 +814,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should handle multiple boxing/unboxing cycles", () => {
-      const domain = Mono.domain;
+    await withDomain("Should handle multiple boxing/unboxing cycles", ({ domain }) => {
       const intClass = domain.tryClass("System.Int32");
       assertNotNull(intClass, "System.Int32 class should be available");
 
@@ -856,8 +842,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test MonoObject wrapper boxing/unboxing", () => {
-      const domain = Mono.domain;
+    await withDomain("Should test MonoObject wrapper boxing/unboxing", ({ domain }) => {
       const intClass = domain.tryClass("System.Int32");
       assertNotNull(intClass, "System.Int32 class should be available");
 
@@ -884,8 +869,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test object cloning and copying", () => {
-      const domain = Mono.domain;
+    await withDomain("Should test object cloning and copying", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
       assertNotNull(stringClass, "System.String class should be available");
 
@@ -922,8 +906,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test object field and method access", () => {
-      const domain = Mono.domain;
+    await withDomain("Should test object field and method access", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
       assertNotNull(stringClass, "System.String class should be available");
 
@@ -959,9 +942,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test Unity-specific data types", () => {
-      const domain = Mono.domain;
-
+    await withDomain("Should test Unity-specific data types", ({ domain }) => {
       // Test common Unity data types
       const unityTypes = [
         "UnityEngine.Vector3",
@@ -996,8 +977,7 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test Vector3 operations", () => {
-      const domain = Mono.domain;
+    await withDomain("Should test Vector3 operations", ({ domain }) => {
       const vector3Class = domain.tryClass("UnityEngine.Vector3");
 
       if (vector3Class) {
@@ -1063,7 +1043,11 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
         for (let i = 0; i < 3; i++) {
           const itemString = Mono.api.stringNew(`Item ${i}`);
           const elementAddress = Mono.api.native.mono_array_addr_with_size(objectArray, ptrSize, i);
-          elementAddress.writePointer(itemString);
+          if (Mono.api.hasExport("mono_gc_wbarrier_set_arrayref")) {
+            Mono.api.native.mono_gc_wbarrier_set_arrayref(objectArray, elementAddress, itemString);
+          } else {
+            elementAddress.writePointer(itemString);
+          }
         }
 
         // Verify array length
@@ -1254,36 +1238,60 @@ export async function createMonoDataTests(): Promise<TestResult[]> {
       // Create large array
       const largeArray = Mono.api.native.mono_array_new(domain.pointer, stringClass.pointer, largeArraySize);
 
+      // IMPORTANT: Keep the array rooted/pinned while we hold only a raw pointer.
+      // Without a GCHandle, the GC may collect/move the array during allocations,
+      // and later raw pointer reads/writes can crash.
+      let largeArrayHandleV1: number | null = null;
+      let largeArrayHandleV2: NativePointer | null = null;
+      if (Mono.api.hasExport("mono_gchandle_new_v2") && Mono.api.hasExport("mono_gchandle_free_v2")) {
+        largeArrayHandleV2 = Mono.api.native.mono_gchandle_new_v2(largeArray, 1);
+      } else if (Mono.api.hasExport("mono_gchandle_new") && Mono.api.hasExport("mono_gchandle_free")) {
+        largeArrayHandleV1 = Mono.api.native.mono_gchandle_new(largeArray, 1);
+      }
+
       // For object arrays (strings are objects), element size is pointer size
       const ptrSize = Process.pointerSize;
 
-      // Populate with data
-      for (let i = 0; i < largeArraySize; i++) {
-        const testString = Mono.api.stringNew(`Large array item ${i}`);
-        const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, ptrSize, i);
-        elementAddress.writePointer(testString);
-      }
+      try {
+        // Populate with data
+        for (let i = 0; i < largeArraySize; i++) {
+          const testString = Mono.api.stringNew(`Large array item ${i}`);
+          const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, ptrSize, i);
+          if (Mono.api.hasExport("mono_gc_wbarrier_set_arrayref")) {
+            Mono.api.native.mono_gc_wbarrier_set_arrayref(largeArray, elementAddress, testString);
+          } else {
+            elementAddress.writePointer(testString);
+          }
+        }
 
-      // Perform operations on the large array
-      let sumLengths = 0;
-      for (let i = 0; i < largeArraySize; i++) {
-        const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, ptrSize, i);
-        const elementPtr = elementAddress.readPointer();
-        if (!elementPtr.isNull()) {
-          const length = Mono.api.native.mono_string_length(elementPtr);
-          sumLengths += length;
+        // Perform operations on the large array
+        let sumLengths = 0;
+        for (let i = 0; i < largeArraySize; i++) {
+          const elementAddress = Mono.api.native.mono_array_addr_with_size(largeArray, ptrSize, i);
+          const elementPtr = elementAddress.readPointer();
+          if (!elementPtr.isNull()) {
+            const length = Mono.api.native.mono_string_length(elementPtr);
+            sumLengths += length;
+          }
+        }
+
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+
+        assert(sumLengths > 0, "Should have processed some string lengths");
+        assert(duration < 10000, `Large array operations should complete within 10 seconds, took ${duration}ms`);
+
+        console.log(
+          `    Large data structure: ${largeArraySize} elements processed in ${duration}ms, total length: ${sumLengths}`,
+        );
+      } finally {
+        if (largeArrayHandleV2) {
+          Mono.api.native.mono_gchandle_free_v2(largeArrayHandleV2);
+        }
+        if (largeArrayHandleV1 !== null) {
+          Mono.api.native.mono_gchandle_free(largeArrayHandleV1);
         }
       }
-
-      const endTime = Date.now();
-      const duration = endTime - startTime;
-
-      assert(sumLengths > 0, "Should have processed some string lengths");
-      assert(duration < 10000, `Large array operations should complete within 10 seconds, took ${duration}ms`);
-
-      console.log(
-        `    Large data structure: ${largeArraySize} elements processed in ${duration}ms, total length: ${sumLengths}`,
-      );
     }),
   );
 

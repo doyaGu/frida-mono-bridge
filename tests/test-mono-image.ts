@@ -5,13 +5,13 @@
  */
 
 import Mono from "../src";
+import { withDomain } from "./test-fixtures";
 import {
   TestResult,
   assert,
   assertNotNull,
   assertThrows,
   createErrorHandlingTest,
-  createMonoDependentTest,
   createPerformanceTest,
 } from "./test-framework";
 
@@ -21,8 +21,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== IMAGE OPERATIONS AND METADATA ACCESS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage should provide image name", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should provide image name", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib assembly should be available");
 
@@ -36,8 +35,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage should provide access to classes", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should provide access to classes", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -50,8 +48,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage should provide class count", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should provide class count", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -64,8 +61,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage should provide class tokens", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should provide class tokens", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -100,8 +96,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // );
 
   results.push(
-    await createMonoDependentTest("MonoImage should validate image integrity", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should validate image integrity", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -121,8 +116,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== IMAGE-TO-ASSEMBLY RELATIONSHIPS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage should maintain relationship to assembly", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should maintain relationship to assembly", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -142,8 +136,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage should provide consistent class access", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should provide consistent class access", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -173,8 +166,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== IMAGE METADATA TABLES ACCESS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage should provide metadata table access", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should provide metadata table access", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -190,8 +182,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage should handle metadata table validation", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should handle metadata table validation", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -211,8 +202,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== UNITY IMAGE HANDLING TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage should handle Unity engine images", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should handle Unity engine images", ({ domain }) => {
       const unityEngine = domain.tryAssembly("UnityEngine");
 
       if (unityEngine) {
@@ -234,8 +224,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage should handle Unity core module images", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should handle Unity core module images", ({ domain }) => {
       const unityCore = domain.tryAssembly("UnityEngine.CoreModule");
 
       if (unityCore) {
@@ -253,8 +242,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage should identify Unity-specific class patterns", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should identify Unity-specific class patterns", ({ domain }) => {
       // Unity classes are typically in UnityEngine.CoreModule in newer Unity versions
       const coreModule = domain.tryAssembly("UnityEngine.CoreModule");
       const unityEngine = domain.tryAssembly("UnityEngine");
@@ -342,8 +330,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== IMAGE CLASS FINDING TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage should find classes by full name", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should find classes by full name", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -359,8 +346,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage should find classes by namespace and name", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should find classes by namespace and name", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -376,8 +362,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage should handle missing class lookups gracefully", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should handle missing class lookups gracefully", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -406,8 +391,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== IMAGE ENUMERATION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage should enumerate classes correctly", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should enumerate classes correctly", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -432,8 +416,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage should handle enumeration with large class counts", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should handle enumeration with large class counts", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -497,8 +480,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== IMAGE TOSTRING AND SERIALIZATION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage toString should work correctly", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage toString should work correctly", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -512,8 +494,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== SUMMARY AND DESCRIBE TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage.getSummary should return complete summary object", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.getSummary should return complete summary object", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -532,8 +513,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.getSummary should have consistent data", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.getSummary should have consistent data", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -552,8 +532,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.describe should return formatted string", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.describe should return formatted string", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -574,8 +553,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== ACCESSOR PROPERTIES TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage.classCount accessor should return correct count", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.classCount accessor should return correct count", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -588,8 +566,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.namespaces accessor should return array", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.namespaces accessor should return array", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -604,8 +581,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== UTILITY METHODS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage.hasClass should return true for existing class", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.hasClass should return true for existing class", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -618,8 +594,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.hasClass should return false for non-existing class", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.hasClass should return false for non-existing class", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -631,8 +606,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.hasClassByName should work correctly", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.hasClassByName should work correctly", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -645,8 +619,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.namespaceCount should return correct count", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.namespaceCount should return correct count", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -660,8 +633,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.findClasses should filter with predicate", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.findClasses should filter with predicate", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -680,8 +652,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.searchClasses should find by pattern", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.searchClasses should find by pattern", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -700,8 +671,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.searchClasses should be case-insensitive", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.searchClasses should be case-insensitive", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -753,8 +723,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== IMAGE CONSISTENCY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage should provide consistent class access", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should provide consistent class access", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -771,8 +740,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage should maintain class count consistency", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage should maintain class count consistency", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
 
       const image = mscorlib!.image;
@@ -791,8 +759,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== NAMESPACE OPERATIONS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage.namespaces should return array", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.namespaces should return array", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -802,8 +769,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.namespaces should contain System namespace", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.namespaces should contain System namespace", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -814,8 +780,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.namespaces should return sorted unique values", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.namespaces should return sorted unique values", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -834,8 +799,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== TYPE BY TOKEN TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage.getTypeByToken should return class for valid token", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.getTypeByToken should return class for valid token", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -846,8 +810,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.getTypeByToken should work with index mode", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.getTypeByToken should work with index mode", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -866,8 +829,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   // ===== CLASSES BY NAMESPACE TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage.getClassesByNamespace should return array", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.getClassesByNamespace should return array", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -877,8 +839,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.getClassesByNamespace System should have classes", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.getClassesByNamespace System should have classes", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -889,8 +850,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.getClassesByNamespace all classes should have correct namespace", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.getClassesByNamespace all classes should have correct namespace", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -901,24 +861,19 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest(
-      "MonoImage.getClassesByNamespace should return empty for nonexistent namespace",
-      () => {
-        const domain = Mono.domain;
-        const mscorlib = domain.tryAssembly("mscorlib");
-        assertNotNull(mscorlib, "mscorlib should exist");
+    await withDomain("MonoImage.getClassesByNamespace should return empty for nonexistent namespace", ({ domain }) => {
+      const mscorlib = domain.tryAssembly("mscorlib");
+      assertNotNull(mscorlib, "mscorlib should exist");
 
-        const classes = mscorlib!.image.getClassesByNamespace("NonExistentNamespace12345");
-        assert(classes.length === 0, "Should return empty array for nonexistent namespace");
-      },
-    ),
+      const classes = mscorlib!.image.getClassesByNamespace("NonExistentNamespace12345");
+      assert(classes.length === 0, "Should return empty array for nonexistent namespace");
+    }),
   );
 
   // ===== NAMESPACE INTEGRATION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoImage namespace methods should be consistent", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage namespace methods should be consistent", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 
@@ -934,8 +889,7 @@ export async function createMonoImageTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoImage.getTypeByToken should match getClasses", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoImage.getTypeByToken should match getClasses", ({ domain }) => {
       const mscorlib = domain.tryAssembly("mscorlib");
       assertNotNull(mscorlib, "mscorlib should exist");
 

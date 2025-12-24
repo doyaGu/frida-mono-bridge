@@ -9,6 +9,7 @@
  */
 
 import Mono from "../src";
+import { withDomain } from "./test-fixtures";
 import {
   assert,
   assertDomainAvailable,
@@ -18,7 +19,6 @@ import {
   createApiAvailabilityTest,
   createDomainTestAsync,
   createDomainTestEnhanced,
-  createMonoDependentTest,
   createPerformanceTest,
   TestCategory,
   TestResult,
@@ -35,12 +35,9 @@ export async function createMonoDomainTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Domain should be accessible and functional", () => {
+    await withDomain("Domain should be accessible and functional", ({ domain }) => {
       assertPerformWorks("Domain operations should work");
       assertDomainAvailable("Mono.domain should be accessible");
-
-      const domain = Mono.domain;
-      assertNotNull(domain, "Domain should not be null");
 
       // Test domain properties
       assert(typeof domain.id === "number", "Domain should have numeric ID");
@@ -52,7 +49,7 @@ export async function createMonoDomainTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Domain should provide consistent access", () => {
+    withDomain("Domain should provide consistent access", () => {
       const domain1 = Mono.domain;
       const domain2 = Mono.domain;
       const domain3 = Mono.domain;
@@ -1066,7 +1063,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   // Section 1: API Availability Tests (Fast)
   // =====================================================
   results.push(
-    await createMonoDependentTest("Find - Mono.domain helpers exist", () => {
+    await withDomain("Find - Mono.domain helpers exist", () => {
       assert(typeof Mono.domain.tryClass === "function", "Mono.domain.tryClass should be a function");
       assert(typeof Mono.domain.findClasses === "function", "Mono.domain.findClasses should be a function");
       assert(typeof Mono.domain.findMethods === "function", "Mono.domain.findMethods should be a function");
@@ -1079,7 +1076,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   // Section 2: tryClass - Exact Lookup
   // =====================================================
   results.push(
-    await createMonoDependentTest("Find.tryClass - System.String", () => {
+    await withDomain("Find.tryClass - System.String", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.String");
       assertNotNull(klass, "Should find System.String");
       assert(klass!.name === "String", "Name should be String");
@@ -1088,7 +1085,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - System.Int32", () => {
+    await withDomain("Find.tryClass - System.Int32", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.Int32");
       assertNotNull(klass, "Should find System.Int32");
       assert(klass!.name === "Int32", "Name should be Int32");
@@ -1096,7 +1093,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - System.Object", () => {
+    await withDomain("Find.tryClass - System.Object", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.Object");
       assertNotNull(klass, "Should find System.Object");
       assert(klass!.name === "Object", "Name should be Object");
@@ -1104,7 +1101,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - System.Boolean", () => {
+    await withDomain("Find.tryClass - System.Boolean", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.Boolean");
       assertNotNull(klass, "Should find System.Boolean");
       assert(klass!.name === "Boolean", "Name should be Boolean");
@@ -1112,7 +1109,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - System.Double", () => {
+    await withDomain("Find.tryClass - System.Double", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.Double");
       assertNotNull(klass, "Should find System.Double");
       assert(klass!.name === "Double", "Name should be Double");
@@ -1120,7 +1117,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - System.Array", () => {
+    await withDomain("Find.tryClass - System.Array", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.Array");
       assertNotNull(klass, "Should find System.Array");
       assert(klass!.name === "Array", "Name should be Array");
@@ -1128,7 +1125,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - System.Type", () => {
+    await withDomain("Find.tryClass - System.Type", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.Type");
       assertNotNull(klass, "Should find System.Type");
       assert(klass!.name === "Type", "Name should be Type");
@@ -1136,7 +1133,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - System.Exception", () => {
+    await withDomain("Find.tryClass - System.Exception", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.Exception");
       assertNotNull(klass, "Should find System.Exception");
       assert(klass!.name === "Exception", "Name should be Exception");
@@ -1144,7 +1141,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - System.Collections.Generic.List`1", () => {
+    await withDomain("Find.tryClass - System.Collections.Generic.List`1", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.Collections.Generic.List`1");
       assertNotNull(klass, "Should find List<T>");
       assert(klass!.name === "List`1", "Name should be List`1");
@@ -1152,7 +1149,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - System.Collections.Generic.Dictionary`2", () => {
+    await withDomain("Find.tryClass - System.Collections.Generic.Dictionary`2", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.Collections.Generic.Dictionary`2");
       assertNotNull(klass, "Should find Dictionary<K,V>");
       assert(klass!.name === "Dictionary`2", "Name should be Dictionary`2");
@@ -1163,7 +1160,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   // Section 3: Result Validation
   // =====================================================
   results.push(
-    await createMonoDependentTest("Find.tryClass - result has valid methods", () => {
+    await withDomain("Find.tryClass - result has valid methods", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.String");
       assertNotNull(klass, "Should find System.String");
 
@@ -1177,7 +1174,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - result has valid fields", () => {
+    await withDomain("Find.tryClass - result has valid fields", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.String");
       assertNotNull(klass, "Should find System.String");
 
@@ -1190,7 +1187,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - result has valid properties", () => {
+    await withDomain("Find.tryClass - result has valid properties", ({ domain }) => {
       const klass = Mono.domain.tryClass("System.String");
       assertNotNull(klass, "Should find System.String");
 
@@ -1206,7 +1203,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   // Section 4: Unity Classes (if Unity Project)
   // =====================================================
   results.push(
-    await createMonoDependentTest("Find.tryClass - UnityEngine.Object (Unity)", () => {
+    await withDomain("Find.tryClass - UnityEngine.Object (Unity)", ({ domain }) => {
       const klass = Mono.domain.tryClass("UnityEngine.Object");
       if (klass === null) {
         console.log("[SKIP] Not a Unity project");
@@ -1218,7 +1215,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - UnityEngine.GameObject (Unity)", () => {
+    await withDomain("Find.tryClass - UnityEngine.GameObject (Unity)", ({ domain }) => {
       const klass = Mono.domain.tryClass("UnityEngine.GameObject");
       if (klass === null) {
         console.log("[SKIP] Not a Unity project");
@@ -1229,7 +1226,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - UnityEngine.Transform (Unity)", () => {
+    await withDomain("Find.tryClass - UnityEngine.Transform (Unity)", ({ domain }) => {
       const klass = Mono.domain.tryClass("UnityEngine.Transform");
       if (klass === null) {
         console.log("[SKIP] Not a Unity project");
@@ -1240,7 +1237,7 @@ export async function createFindToolTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Find.tryClass - UnityEngine.MonoBehaviour (Unity)", () => {
+    await withDomain("Find.tryClass - UnityEngine.MonoBehaviour (Unity)", ({ domain }) => {
       const klass = Mono.domain.tryClass("UnityEngine.MonoBehaviour");
       if (klass === null) {
         console.log("[SKIP] Not a Unity project");

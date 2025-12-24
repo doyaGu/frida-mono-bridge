@@ -517,3 +517,102 @@ export async function createDomainTestEnhancedAlias(
 ): Promise<TestResult> {
   return createDomainTestAsync(name, testFn, options);
 }
+
+// ============================================================================
+// ERROR HANDLING STRATEGY
+// ============================================================================
+
+/**
+ * Error handling strategy for tests:
+ *
+ * 1. tryXxx() methods: Return null on failure, never throw
+ * 2. xxx() methods: Throw on failure (required access)
+ * 3. Optional features (Unity classes): Return null, log warning
+ * 4. Test failures: Always throw to fail the test
+ */
+
+/**
+ * Handle optional feature access (e.g., Unity-specific classes).
+ * Returns null if not available, logs warning.
+ *
+ * @example
+ * ```typescript
+ * const gameObjectClass = tryOptionalFeature(
+ *   () => domain.tryClass("UnityEngine.GameObject"),
+ *   "UnityEngine.GameObject"
+ * );
+ * if (!gameObjectClass) return; // Skip test
+ * ```
+ */
+export function tryOptionalFeature<T>(
+  accessor: () => T | null,
+  featureName: string,
+  warningMessage?: string,
+): T | null {
+  try {
+    const result = accessor();
+    if (result === null) {
+      console.log(warningMessage || `  - ${featureName} not available (optional)`);
+    }
+    return result;
+  } catch (error) {
+    console.log(warningMessage || `  - ${featureName} not available (optional): ${error}`);
+    return null;
+  }
+}
+
+/**
+ * Handle required feature access.
+ * Throws with descriptive error if not available.
+ *
+ * @example
+ * ```typescript
+ * const stringClass = requireFeature(
+ *   () => domain.tryClass("System.String"),
+ *   "System.String class"
+ * );
+ * // stringClass is guaranteed to be non-null here
+ * ```
+ */
+export function requireFeature<T>(
+  accessor: () => T | null,
+  featureName: string,
+): T {
+  const result = accessor();
+  if (result === null) {
+    throw new Error(`Required feature not available: ${featureName}`);
+  }
+  return result;
+}
+
+/**
+ * Safely invoke a method that might throw managed exceptions.
+ * Returns { success: boolean, result: any, error: any }
+ *
+ * @example
+ * ```typescript
+ * const { success, result, error } = safeInvoke(() => {
+ *   return method.invoke(instance, args);
+ * });
+ *
+ * if (success) {
+ *   assert(result !== null, "Should return value");
+ * } else {
+ *   console.log(`  - Invocation failed (expected): ${error}`);
+ * }
+ * ```
+ */
+export function safeInvoke<T>(
+  invoker: () => T,
+  errorHandler?: (error: any) => void,
+): { success: boolean; result: T | null; error: any } {
+  try {
+    const result = invoker();
+    return { success: true, result, error: null };
+  } catch (error) {
+    if (errorHandler) {
+      errorHandler(error);
+    }
+    return { success: false, result: null, error };
+  }
+}

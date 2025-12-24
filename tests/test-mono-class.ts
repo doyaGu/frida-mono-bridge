@@ -5,6 +5,7 @@
  */
 
 import Mono from "../src";
+import { withAssemblies, withCoreClasses, withDomain } from "./test-fixtures";
 import {
   TestResult,
   assert,
@@ -12,9 +13,9 @@ import {
   assertThrows,
   createErrorHandlingTest,
   createIntegrationTest,
-  createMonoDependentTest,
 } from "./test-framework";
 import { createBasicLookupPerformanceTest, createMethodLookupPerformanceTest } from "./test-utilities";
+import { verifyClassMetadata } from "./test-validators";
 
 export async function createMonoClassTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
@@ -22,23 +23,21 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== CLASS DISCOVERY AND ENUMERATION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should discover system classes", () => {
-      const domain = Mono.domain;
-      assertNotNull(domain, "Domain should be available");
-
-      const stringClass = domain.tryClass("System.String");
-      assertNotNull(stringClass, "String class should be found");
-      assert(stringClass.name === "String", "Class name should be String");
-      assert(stringClass.namespace === "System", "Namespace should be System");
-      assert(stringClass.fullName === "System.String", "Full name should be System.String");
+    await withCoreClasses("MonoClass should discover system classes", ({ stringClass }) => {
+      verifyClassMetadata(stringClass, {
+        name: "String",
+        namespace: "System",
+        fullName: "System.String",
+      });
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should enumerate all classes in assembly", () => {
-      const domain = Mono.domain;
-      const mscorlib = domain.getAssembly("mscorlib");
-      assertNotNull(mscorlib, "mscorlib assembly should be available");
+    await withAssemblies("MonoClass should enumerate all classes in assembly", ({ mscorlib }) => {
+      if (!mscorlib) {
+        console.log("  - mscorlib not available, skipping");
+        return;
+      }
 
       const classes = mscorlib.classes;
       assert(classes.length > 0, "Should find classes in mscorlib");
@@ -63,11 +62,8 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== METHOD LOOKUP AND RESOLUTION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should find methods by name", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
+    await withCoreClasses("MonoClass should find methods by name", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
       assertNotNull(concatMethod, "Should find Concat method with 2 parameters");
       assert(concatMethod.name === "Concat", "Method name should be Concat");
       assert(concatMethod.parameterCount === 2, "Should have 2 parameters");
@@ -75,12 +71,9 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should handle method overloads", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const concat2Params = stringClass!.tryMethod("Concat", 2);
-      const concat3Params = stringClass!.tryMethod("Concat", 3);
+    await withCoreClasses("MonoClass should handle method overloads", ({ stringClass }) => {
+      const concat2Params = stringClass.tryMethod("Concat", 2);
+      const concat3Params = stringClass.tryMethod("Concat", 3);
 
       assertNotNull(concat2Params, "Should find Concat with 2 parameters");
       assertNotNull(concat3Params, "Should find Concat with 3 parameters");
@@ -90,22 +83,16 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should return null for non-existent methods", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const nonExistentMethod = stringClass!.tryMethod("NonExistentMethod");
+    await withCoreClasses("MonoClass should return null for non-existent methods", ({ stringClass }) => {
+      const nonExistentMethod = stringClass.tryMethod("NonExistentMethod");
       assert(nonExistentMethod === null, "Should return null for non-existent method");
     }),
   );
 
   results.push(
-    await createErrorHandlingTest("MonoClass should throw for missing required methods", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
+    await withCoreClasses("MonoClass should throw for missing required methods", ({ stringClass }) => {
       assertThrows(() => {
-        stringClass!.method("NonExistentMethod");
+        stringClass.method("NonExistentMethod");
       }, "Should throw when required method is not found");
     }),
   );
@@ -113,22 +100,16 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== PROPERTY ACCESS AND VALIDATION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should find properties by name", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const lengthProperty = stringClass!.tryProperty("Length");
+    await withCoreClasses("MonoClass should find properties by name", ({ stringClass }) => {
+      const lengthProperty = stringClass.tryProperty("Length");
       assertNotNull(lengthProperty, "Should find Length property");
       assert(lengthProperty.name === "Length", "Property name should be Length");
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should enumerate all properties", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const properties = stringClass!.properties;
+    await withCoreClasses("MonoClass should enumerate all properties", ({ stringClass }) => {
+      const properties = stringClass.properties;
       assert(properties.length > 0, "Should find properties");
 
       const lengthProperty = properties.find((p: any) => p.name === "Length");
@@ -139,19 +120,14 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== INHERITANCE RELATIONSHIPS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should handle inheritance relationships", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-      const objectClass = domain.tryClass("System.Object");
-
-      assert(stringClass!.isSubclassOf(objectClass!), "String should be subclass of Object");
-      assert(objectClass!.isAssignableFrom(stringClass!), "Object should be assignable from String");
+    await withCoreClasses("MonoClass should handle inheritance relationships", ({ stringClass, objectClass }) => {
+      assert(stringClass.isSubclassOf(objectClass), "String should be subclass of Object");
+      assert(objectClass.isAssignableFrom(stringClass), "Object should be assignable from String");
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should handle interface implementation", () => {
-      const domain = Mono.domain;
+    await withCoreClasses("MonoClass should handle interface implementation", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       // Try to find a common interface that String implements
@@ -163,8 +139,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should get parent class", () => {
-      const domain = Mono.domain;
+    await withCoreClasses("MonoClass should get parent class", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const parentClass = stringClass!.parent;
@@ -176,9 +151,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== ABSTRACT CLASS AND INTERFACE HANDLING TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should identify abstract classes", () => {
-      const domain = Mono.domain;
-
+    await withCoreClasses("MonoClass should identify abstract classes", ({ domain }) => {
       // Try to find an abstract class
       const streamClass = domain.tryClass("System.IO.Stream");
       if (streamClass) {
@@ -188,9 +161,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should identify interfaces", () => {
-      const domain = Mono.domain;
-
+    await withCoreClasses("MonoClass should identify interfaces", ({ domain }) => {
       // Try to find an interface
       const disposableInterface = domain.tryClass("System.IDisposable");
       if (disposableInterface) {
@@ -200,22 +171,16 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should identify sealed classes", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      assert(stringClass!.isSealed, "String should be sealed");
+    await withCoreClasses("MonoClass should identify sealed classes", ({ stringClass }) => {
+      assert(stringClass.isSealed, "String should be sealed");
     }),
   );
 
   // ===== CLASS METADATA AND ATTRIBUTES TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should provide class metadata", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const summary = stringClass!.describe();
+    await withCoreClasses("MonoClass should provide class metadata", ({ stringClass }) => {
+      const summary = stringClass.describe();
       assertNotNull(summary, "Class summary should be available");
       assert(summary.name === "String", "Summary name should be String");
       assert(summary.namespace === "System", "Summary namespace should be System");
@@ -225,11 +190,8 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should provide type information", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const type = stringClass!.type;
+    await withCoreClasses("MonoClass should provide type information", ({ stringClass }) => {
+      const type = stringClass.type;
       assertNotNull(type, "Class type should be available");
       const typeName = type.name;
       // Type name may be "String" or "System.String" depending on Mono version
@@ -238,11 +200,8 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should provide type token", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const typeToken = stringClass!.typeToken;
+    await withCoreClasses("MonoClass should provide type token", ({ stringClass }) => {
+      const typeToken = stringClass.typeToken;
       assert(typeof typeToken === "number", "Type token should be a number");
       assert(typeToken > 0, "Type token should be positive");
     }),
@@ -251,13 +210,8 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== CLASS INSTANCE CREATION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should create object instances", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      // String is special - let's try with a simpler class
-      const objectClass = domain.tryClass("System.Object");
-      const obj = objectClass!.alloc();
+    await withCoreClasses("MonoClass should create object instances", ({ objectClass }) => {
+      const obj = objectClass.alloc();
 
       assertNotNull(obj, "Should create object instance");
       assert(obj.class.name === "Object", "Created object should be Object");
@@ -282,11 +236,8 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== CLASS DESCRIPTION AND TOSTRING TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should provide human-readable descriptions", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const description = stringClass!.description;
+    await withCoreClasses("MonoClass should provide human-readable descriptions", ({ stringClass }) => {
+      const description = stringClass.description;
       assertNotNull(description, "Description should be available");
       assert(description.includes("String"), "Description should include class name");
       assert(description.includes("sealed"), "Description should include sealed modifier");
@@ -294,11 +245,8 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass toString should work correctly", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const stringRep = stringClass!.toString();
+    await withCoreClasses("MonoClass toString should work correctly", ({ stringClass }) => {
+      const stringRep = stringClass.toString();
       assertNotNull(stringRep, "toString should return a value");
       assert(stringRep.includes("MonoClass"), "toString should include class type");
     }),
@@ -329,15 +277,12 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should handle circular inheritance gracefully", () => {
-      const domain = Mono.domain;
-      const objectClass = domain.tryClass("System.Object");
-
+    await withCoreClasses("MonoClass should handle circular inheritance gracefully", ({ objectClass }) => {
       // Object should not have a parent (or should be null)
-      const parent = objectClass!.parent;
+      const parent = objectClass.parent;
       if (parent) {
         // If Object has a parent, it shouldn't be itself
-        assert(parent.pointer !== objectClass!.pointer, "Object should not be its own parent");
+        assert(parent.pointer !== objectClass.pointer, "Object should not be its own parent");
       }
     }),
   );
@@ -360,16 +305,13 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== CACHE REFRESH TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should support cache refresh", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const methods1 = stringClass!.methods;
-      const methods2 = stringClass!.methods; // Should use cache
+    await withCoreClasses("MonoClass should support cache refresh", ({ stringClass }) => {
+      const methods1 = stringClass.methods;
+      const methods2 = stringClass.methods; // Should use cache
 
       assert(methods1.length === methods2.length, "Cached methods should have same count");
 
-      const methods3 = stringClass!.methods; // Just access methods again
+      const methods3 = stringClass.methods; // Just access methods again
       assert(methods3.length === methods1.length, "Refreshed methods should have same count");
     }),
   );
@@ -377,9 +319,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== GENERIC TYPE BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should handle generic List<T> type discovery", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoClass should handle generic List<T> type discovery", ({ domain }) => {
       // Try to find generic List type
       const listClass = domain.tryClass("System.Collections.Generic.List`1");
       if (listClass) {
@@ -399,9 +339,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should handle generic Dictionary<K,V> type discovery", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoClass should handle generic Dictionary<K,V> type discovery", ({ domain }) => {
       // Try to find generic Dictionary type
       const dictClass = domain.tryClass("System.Collections.Generic.Dictionary`2");
       if (dictClass) {
@@ -423,9 +361,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== NESTED TYPE BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should enumerate nested types", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoClass should enumerate nested types", ({ domain }) => {
       // Look for a class that typically has nested types
       const environmentClass = domain.tryClass("System.Environment");
       if (environmentClass) {
@@ -443,9 +379,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should handle nested class lookup by name pattern", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoClass should handle nested class lookup by name pattern", ({ domain }) => {
       // Try common nested type patterns
       const assemblyNames = domain.assemblies.map(a => a.name);
       const hasUserAssembly = assemblyNames.some(n => n.includes("Assembly-CSharp") || n.includes("Game"));
@@ -466,9 +400,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== VALUE TYPE BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should identify value types correctly", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoClass should identify value types correctly", ({ domain }) => {
       // Test primitive value types
       const int32Class = domain.tryClass("System.Int32");
       assertNotNull(int32Class, "Int32 should be found");
@@ -495,9 +427,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should identify enum types correctly", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoClass should identify enum types correctly", ({ domain }) => {
       // Test enum types
       const dayOfWeekClass = domain.tryClass("System.DayOfWeek");
       if (dayOfWeekClass) {
@@ -521,9 +451,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== DELEGATE TYPE BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should identify delegate types correctly", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoClass should identify delegate types correctly", ({ domain }) => {
       // Test common delegate types
       const actionClass = domain.tryClass("System.Action");
       if (actionClass) {
@@ -552,10 +480,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== INTERFACE IMPLEMENTATION BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should enumerate implemented interfaces", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
+    await withCoreClasses("MonoClass should enumerate implemented interfaces", ({ stringClass }) => {
       const interfaces = stringClass!.interfaces;
       assert(interfaces.length > 0, "String should implement multiple interfaces");
       console.log(`  - String implements ${interfaces.length} interfaces:`);
@@ -567,8 +492,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should check interface implementation correctly", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoClass should check interface implementation correctly", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
       const listClass = domain.tryClass("System.Collections.Generic.List`1");
 
@@ -596,9 +520,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== TYPE HIERARCHY BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should traverse full type hierarchy", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoClass should traverse full type hierarchy", ({ domain }) => {
       // Find a class with deep hierarchy
       const exceptionClass = domain.tryClass("System.ArgumentException");
       if (exceptionClass) {
@@ -650,10 +572,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== VTABLE BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should get VTable correctly", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
+    await withCoreClasses("MonoClass should get VTable correctly", ({ stringClass }) => {
       try {
         const vtable = stringClass!.getVTable();
         assertNotNull(vtable, "VTable should be available");
@@ -666,10 +585,7 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should ensure initialization before VTable access", () => {
-      const domain = Mono.domain;
-      const objectClass = domain.tryClass("System.Object");
-
+    await withCoreClasses("MonoClass should ensure initialization before VTable access", ({ objectClass }) => {
       // Ensure initialization
       objectClass!.ensureInitialized();
 
@@ -681,25 +597,21 @@ export async function createMonoClassTests(): Promise<TestResult[]> {
   // ===== FLAGS AND ATTRIBUTES BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoClass should correctly identify BeforeFieldInit classes", () => {
-      const domain = Mono.domain;
+    await withCoreClasses(
+      "MonoClass should correctly identify BeforeFieldInit classes",
+      ({ objectClass, stringClass }) => {
+        // Most classes without static constructors have BeforeFieldInit
+        const beforeFieldInit = objectClass!.isBeforeFieldInit;
+        console.log(`  - Object isBeforeFieldInit: ${beforeFieldInit}`);
 
-      // Most classes without static constructors have BeforeFieldInit
-      const objectClass = domain.tryClass("System.Object");
-      const beforeFieldInit = objectClass!.isBeforeFieldInit;
-      console.log(`  - Object isBeforeFieldInit: ${beforeFieldInit}`);
-
-      // String typically has special initialization
-      const stringClass = domain.tryClass("System.String");
-      console.log(`  - String isBeforeFieldInit: ${stringClass!.isBeforeFieldInit}`);
-    }),
+        // String typically has special initialization
+        console.log(`  - String isBeforeFieldInit: ${stringClass!.isBeforeFieldInit}`);
+      },
+    ),
   );
 
   results.push(
-    await createMonoDependentTest("MonoClass should provide complete describe() output", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
+    await withCoreClasses("MonoClass should provide complete describe() output", ({ stringClass }) => {
       const summary = stringClass!.describe();
 
       // Verify all expected fields are present

@@ -11,7 +11,8 @@
 
 import Mono from "../src";
 import type { CustomAttribute } from "../src/model/attribute";
-import { TestResult, assert, createMonoDependentTest } from "./test-framework";
+import { withDomain } from "./test-fixtures";
+import { TestResult, assert } from "./test-framework";
 
 export async function createCustomAttributeTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
@@ -19,8 +20,7 @@ export async function createCustomAttributeTests(): Promise<TestResult[]> {
   // ===== ASSEMBLY TESTS =====
 
   results.push(
-    await createMonoDependentTest("Assembly.customAttributes returns array", () => {
-      const domain = Mono.domain;
+    await withDomain("Assembly.customAttributes returns array", ({ domain }) => {
       const assemblies = domain.assemblies;
       assert(assemblies.length > 0, "No assemblies found");
 
@@ -33,8 +33,7 @@ export async function createCustomAttributeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Assembly.customAttributes attribute structure", () => {
-      const domain = Mono.domain;
+    await withDomain("Assembly.customAttributes attribute structure", ({ domain }) => {
       const assemblies = domain.assemblies;
 
       for (const assembly of assemblies) {
@@ -57,8 +56,7 @@ export async function createCustomAttributeTests(): Promise<TestResult[]> {
   // ===== CLASS TESTS =====
 
   results.push(
-    await createMonoDependentTest("Class.customAttributes returns array", () => {
-      const domain = Mono.domain;
+    await withDomain("Class.customAttributes returns array", ({ domain }) => {
       const assemblies = domain.assemblies;
 
       for (const assembly of assemblies) {
@@ -83,8 +81,7 @@ export async function createCustomAttributeTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Class.customAttributes common Unity attributes", () => {
-      const domain = Mono.domain;
+    await withDomain("Class.customAttributes common Unity attributes", ({ domain }) => {
       const assemblies = domain.assemblies;
       const foundAttributes: string[] = [];
 
@@ -113,8 +110,7 @@ export async function createCustomAttributeTests(): Promise<TestResult[]> {
   // ===== METHOD TESTS =====
 
   results.push(
-    await createMonoDependentTest("Method.customAttributes returns array", () => {
-      const domain = Mono.domain;
+    await withDomain("Method.customAttributes returns array", ({ domain }) => {
       const assemblies = domain.assemblies;
 
       for (const assembly of assemblies) {
@@ -144,8 +140,7 @@ export async function createCustomAttributeTests(): Promise<TestResult[]> {
   // ===== FIELD TESTS =====
 
   results.push(
-    await createMonoDependentTest("Field.customAttributes returns array", () => {
-      const domain = Mono.domain;
+    await withDomain("Field.customAttributes returns array", ({ domain }) => {
       const assemblies = domain.assemblies;
 
       for (const assembly of assemblies) {
@@ -175,8 +170,7 @@ export async function createCustomAttributeTests(): Promise<TestResult[]> {
   // ===== PROPERTY TESTS =====
 
   results.push(
-    await createMonoDependentTest("Property.customAttributes returns array", () => {
-      const domain = Mono.domain;
+    await withDomain("Property.customAttributes returns array", ({ domain }) => {
       const assemblies = domain.assemblies;
 
       for (const assembly of assemblies) {
@@ -206,7 +200,7 @@ export async function createCustomAttributeTests(): Promise<TestResult[]> {
   // ===== API AVAILABILITY TESTS =====
 
   results.push(
-    await createMonoDependentTest("Custom attributes API availability check", () => {
+    await withDomain("Custom attributes API availability check", () => {
       const api = Mono.api;
       const apis = [
         "mono_custom_attrs_from_assembly",
@@ -241,8 +235,7 @@ export async function createCustomAttributeTests(): Promise<TestResult[]> {
   // ===== STATISTICS TEST =====
 
   results.push(
-    await createMonoDependentTest("Collect custom attribute statistics", () => {
-      const domain = Mono.domain;
+    await withDomain("Collect custom attribute statistics", ({ domain }) => {
       const stats = {
         assembliesChecked: 0,
         classesChecked: 0,

@@ -7,10 +7,10 @@
  */
 
 import Mono from "../src";
+import { withDomain } from "./test-fixtures";
 import {
   assert,
   assertNotNull,
-  createMonoDependentTest,
   createSmokeTest,
   createTest,
   TestCategory,
@@ -115,7 +115,7 @@ export async function createCoreInfrastructureTests(): Promise<TestResult> {
 
   // Version Detection Tests (basic version info - detailed tests in test-mono-api.ts)
   await suite.addResultAsync(
-    createMonoDependentTest("Version object should exist and be accessible", () => {
+    withDomain("Version object should exist and be accessible", () => {
       const version = Mono.version;
       assertNotNull(version, "Version should not be null");
       assertNotNull(version.features, "Features should not be null");
@@ -124,7 +124,7 @@ export async function createCoreInfrastructureTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("All feature flags should be defined and boolean", () => {
+    withDomain("All feature flags should be defined and boolean", () => {
       const features = Mono.version.features;
       const featureNames = Object.keys(features);
       assert(featureNames.length > 0, "Should have at least one feature flag");
@@ -140,7 +140,7 @@ export async function createCoreInfrastructureTests(): Promise<TestResult> {
   // Basic API Functionality Tests (excluding detailed tests covered in test-mono-api.ts)
   // V2: Use addResultAsync for async tests
   await suite.addResultAsync(
-    createMonoDependentTest("Modern API features should be available", () => {
+    withDomain("Modern API features should be available", () => {
       assertNotNull(Mono.perform, "Mono.perform should be available");
       assertNotNull(Mono.api, "Mono.api should be available");
       assertNotNull(Mono.domain, "Mono.domain should be available");
@@ -153,9 +153,8 @@ export async function createCoreInfrastructureTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Basic API connectivity should work", () => {
+    withDomain("Basic API connectivity should work", ({ domain }) => {
       // Test basic connectivity without detailed functionality tests
-      const domain = Mono.domain;
       assertNotNull(domain, "Domain should be available");
 
       const api = Mono.api;
@@ -166,11 +165,10 @@ export async function createCoreInfrastructureTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("API should handle basic operations", () => {
+    withDomain("API should handle basic operations", ({ domain }) => {
       // Test that basic operations work without detailed testing
       // V2: Use property-based API (assemblies instead of getAssemblies)
       try {
-        const domain = Mono.domain;
         const assemblies = domain.assemblies;
         assert(Array.isArray(assemblies), "Should get assemblies array");
         console.log("    Basic API operations working");

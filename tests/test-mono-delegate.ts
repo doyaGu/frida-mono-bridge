@@ -20,7 +20,8 @@
  */
 
 import Mono from "../src";
-import { TestResult, assert, assertNotNull, createMonoDependentTest } from "./test-framework";
+import { withDomain } from "./test-fixtures";
+import { TestResult, assert, assertNotNull } from "./test-framework";
 
 export async function createMonoDelegateTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
@@ -29,7 +30,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 1: Basic Delegate Type Discovery
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - Action delegate type exists", () => {
+    await withDomain("MonoDelegate - Action delegate type exists", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "System.Action class should exist");
       assert(actionClass.isDelegate, "Action should be a delegate type");
@@ -37,7 +38,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Action<T> generic delegate exists", () => {
+    await withDomain("MonoDelegate - Action<T> generic delegate exists", () => {
       // Action`1 is the generic version of Action<T>
       const actionT = Mono.domain.tryClass("System.Action`1");
       if (!actionT) {
@@ -49,7 +50,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Func<TResult> delegate exists", () => {
+    await withDomain("MonoDelegate - Func<TResult> delegate exists", () => {
       const funcT = Mono.domain.tryClass("System.Func`1");
       if (!funcT) {
         console.log("[SKIP] Func`1 generic delegate not found");
@@ -60,7 +61,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Predicate<T> delegate exists", () => {
+    await withDomain("MonoDelegate - Predicate<T> delegate exists", () => {
       const predicateT = Mono.domain.tryClass("System.Predicate`1");
       if (!predicateT) {
         console.log("[SKIP] Predicate`1 generic delegate not found");
@@ -71,7 +72,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - EventHandler delegate exists", () => {
+    await withDomain("MonoDelegate - EventHandler delegate exists", () => {
       const eventHandler = Mono.domain.tryClass("System.EventHandler");
       if (!eventHandler) {
         console.log("[SKIP] EventHandler delegate not found");
@@ -85,7 +86,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 2: Delegate Class Structure Check
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - Action has Invoke method", () => {
+    await withDomain("MonoDelegate - Action has Invoke method", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "System.Action class should exist");
 
@@ -95,7 +96,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Action has BeginInvoke/EndInvoke methods", () => {
+    await withDomain("MonoDelegate - Action has BeginInvoke/EndInvoke methods", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "System.Action class should exist");
 
@@ -115,7 +116,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Delegate inherits from MulticastDelegate", () => {
+    await withDomain("MonoDelegate - Delegate inherits from MulticastDelegate", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "System.Action class should exist");
 
@@ -135,7 +136,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 3: Delegate Creation Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate.create() - Create static method delegate", () => {
+    await withDomain("MonoDelegate.create() - Create static method delegate", () => {
       // Use String.IsNullOrEmpty as static method delegate target
       const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
@@ -160,7 +161,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Get Invoke method", () => {
+    await withDomain("MonoDelegate - Get Invoke method", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "System.Action class should exist");
 
@@ -186,7 +187,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 4: Using Runtime Delegate Instances
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - Get delegate instance from field", () => {
+    await withDomain("MonoDelegate - Get delegate instance from field", () => {
       // Look for classes that might contain delegates (like Unity's event system)
       const appDomainClass = Mono.domain.tryClass("System.AppDomain");
       if (!appDomainClass) {
@@ -207,7 +208,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Delegate type detection", () => {
+    await withDomain("MonoDelegate - Delegate type detection", () => {
       // Test if various types are correctly identified as delegates
       const testCases = [
         { name: "System.Action", isDelegate: true },
@@ -230,14 +231,14 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 5: Delegate Thunk Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - getDelegateThunk API exists", () => {
+    await withDomain("MonoDelegate - getDelegateThunk API exists", () => {
       // Verify API has getDelegateThunk method
       assert(typeof Mono.api.getDelegateThunk === "function", "Mono.api.getDelegateThunk should be a function");
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - getDelegateThunk return structure", () => {
+    await withDomain("MonoDelegate - getDelegateThunk return structure", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "System.Action class should exist");
 
@@ -266,7 +267,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 6: Comparison Delegate Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - Comparison<T> delegate exists", () => {
+    await withDomain("MonoDelegate - Comparison<T> delegate exists", () => {
       const comparisonT = Mono.domain.tryClass("System.Comparison`1");
       if (!comparisonT) {
         console.log("[SKIP] Comparison`1 generic delegate not found");
@@ -289,7 +290,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 7: Converter Delegate Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - Converter<TInput, TOutput> delegate exists", () => {
+    await withDomain("MonoDelegate - Converter<TInput, TOutput> delegate exists", () => {
       const converterT = Mono.domain.tryClass("System.Converter`2");
       if (!converterT) {
         console.log("[SKIP] Converter`2 generic delegate not found");
@@ -303,7 +304,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 8: AsyncCallback Delegate Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - AsyncCallback delegate exists", () => {
+    await withDomain("MonoDelegate - AsyncCallback delegate exists", () => {
       const asyncCallback = Mono.domain.tryClass("System.AsyncCallback");
       if (!asyncCallback) {
         console.log("[SKIP] AsyncCallback delegate not found");
@@ -321,7 +322,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 9: Delegate Method Signature Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - Action<T> has correct Invoke signature", () => {
+    await withDomain("MonoDelegate - Action<T> has correct Invoke signature", () => {
       const actionT = Mono.domain.tryClass("System.Action`1");
       if (!actionT) {
         console.log("[SKIP] Action`1 not found");
@@ -349,7 +350,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Func<TResult> has correct Invoke signature", () => {
+    await withDomain("MonoDelegate - Func<TResult> has correct Invoke signature", () => {
       const funcT = Mono.domain.tryClass("System.Func`1");
       if (!funcT) {
         console.log("[SKIP] Func`1 not found");
@@ -372,7 +373,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Func<T, TResult> has correct Invoke signature", () => {
+    await withDomain("MonoDelegate - Func<T, TResult> has correct Invoke signature", () => {
       const funcTT = Mono.domain.tryClass("System.Func`2");
       if (!funcTT) {
         console.log("[SKIP] Func`2 not found");
@@ -389,7 +390,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 10: MulticastDelegate Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - MulticastDelegate class exists", () => {
+    await withDomain("MonoDelegate - MulticastDelegate class exists", () => {
       const multicastDelegate = Mono.domain.tryClass("System.MulticastDelegate");
       assertNotNull(multicastDelegate, "System.MulticastDelegate class should exist");
 
@@ -402,7 +403,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Delegate class base properties", () => {
+    await withDomain("MonoDelegate - Delegate class base properties", () => {
       const delegateClass = Mono.domain.tryClass("System.Delegate");
       assertNotNull(delegateClass, "System.Delegate class should exist");
 
@@ -420,7 +421,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 11: Unity-Specific Delegate Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - UnityAction delegate (if available)", () => {
+    await withDomain("MonoDelegate - UnityAction delegate (if available)", () => {
       const unityAction = Mono.domain.tryClass("UnityEngine.Events.UnityAction");
       if (!unityAction) {
         console.log("[SKIP] UnityAction not found (may not be a Unity project)");
@@ -435,7 +436,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Find all delegate types in UnityEngine", () => {
+    await withDomain("MonoDelegate - Find all delegate types in UnityEngine", () => {
       const unityClasses = Mono.domain.findClasses("UnityEngine.*", { searchNamespace: true });
 
       if (unityClasses.length === 0) {
@@ -457,7 +458,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 12: Event Handler Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - EventHandler signature", () => {
+    await withDomain("MonoDelegate - EventHandler signature", () => {
       const eventHandler = Mono.domain.tryClass("System.EventHandler");
       if (!eventHandler) {
         console.log("[SKIP] EventHandler not found");
@@ -476,7 +477,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - EventHandler<TEventArgs> exists", () => {
+    await withDomain("MonoDelegate - EventHandler<TEventArgs> exists", () => {
       const eventHandlerT = Mono.domain.tryClass("System.EventHandler`1");
       if (!eventHandlerT) {
         console.log("[SKIP] EventHandler`1 not found");
@@ -495,7 +496,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 13: Edge Cases and Error Handling
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - Non-delegate class isDelegate returns false", () => {
+    await withDomain("MonoDelegate - Non-delegate class isDelegate returns false", () => {
       const stringClass = Mono.domain.tryClass("System.String");
       assertNotNull(stringClass, "String class should exist");
 
@@ -504,7 +505,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Value type isDelegate returns false", () => {
+    await withDomain("MonoDelegate - Value type isDelegate returns false", () => {
       const intClass = Mono.domain.tryClass("System.Int32");
       assertNotNull(intClass, "Int32 class should exist");
 
@@ -513,7 +514,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Interface isDelegate returns false", () => {
+    await withDomain("MonoDelegate - Interface isDelegate returns false", () => {
       const iComparable = Mono.domain.tryClass("System.IComparable");
       if (!iComparable) {
         console.log("[SKIP] IComparable not found");
@@ -528,7 +529,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 14: Performance Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - isDelegate performance", () => {
+    await withDomain("MonoDelegate - isDelegate performance", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
@@ -548,7 +549,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Delegate type enumeration performance", () => {
+    await withDomain("MonoDelegate - Delegate type enumeration performance", () => {
       const startTime = Date.now();
 
       // Find all delegate types in mscorlib
@@ -564,7 +565,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 15: Delegate Methods Enumeration
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - Enumerate all methods of Action", () => {
+    await withDomain("MonoDelegate - Enumerate all methods of Action", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
@@ -579,7 +580,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Delegate method attributes", () => {
+    await withDomain("MonoDelegate - Delegate method attributes", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
@@ -603,7 +604,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 16: ABI Validation Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - validateAbi returns expected signature for Action", () => {
+    await withDomain("MonoDelegate - validateAbi returns expected signature for Action", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
@@ -622,7 +623,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - getExpectedNativeSignature returns correct types", () => {
+    await withDomain("MonoDelegate - getExpectedNativeSignature returns correct types", () => {
       // This test validates the signature extraction logic
       const funcClass = Mono.domain.tryClass("System.Func`1");
       if (!funcClass) {
@@ -644,7 +645,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - ABI validation detects wrong argument count", () => {
+    await withDomain("MonoDelegate - ABI validation detects wrong argument count", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
@@ -665,7 +666,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - Predicate<T> has correct parameter structure", () => {
+    await withDomain("MonoDelegate - Predicate<T> has correct parameter structure", () => {
       const predicateClass = Mono.domain.tryClass("System.Predicate`1");
       if (!predicateClass) {
         console.log("[SKIP] Predicate`1 not available");
@@ -689,7 +690,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - CompileNativeOptions interface exists", () => {
+    await withDomain("MonoDelegate - CompileNativeOptions interface exists", () => {
       // This is a type-level test to ensure the interface is exported
       // In runtime, we verify the options work
 
@@ -703,7 +704,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - AbiValidationResult structure is correct", () => {
+    await withDomain("MonoDelegate - AbiValidationResult structure is correct", () => {
       // Verify the ABI validation result structure
       // This ensures the validation return type is properly structured
 
@@ -716,7 +717,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // Section 17: Multicast Delegate Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("MonoDelegate - getInvocationList exists", () => {
+    await withDomain("MonoDelegate - getInvocationList exists", () => {
       // GetInvocationList is defined on System.Delegate base class
       const delegateClass = Mono.domain.tryClass("System.Delegate");
       assertNotNull(delegateClass, "Delegate class should exist");
@@ -729,7 +730,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - isMulticast method exists", () => {
+    await withDomain("MonoDelegate - isMulticast method exists", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
@@ -742,7 +743,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - getInvocationCount returns positive number", () => {
+    await withDomain("MonoDelegate - getInvocationCount returns positive number", () => {
       // For this test we just verify the API exists and returns sensible values
       // GetInvocationList is defined on System.Delegate base class
       const delegateClass = Mono.domain.tryClass("System.Delegate");
@@ -767,7 +768,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   // =====================================================
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - accessor properties exist", () => {
+    await withDomain("MonoDelegate - accessor properties exist", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
@@ -789,7 +790,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - getReturnType returns correct type", () => {
+    await withDomain("MonoDelegate - getReturnType returns correct type", () => {
       // Action returns void
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
@@ -808,7 +809,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - getParameterTypes returns correct types", () => {
+    await withDomain("MonoDelegate - getParameterTypes returns correct types", () => {
       // Action<T> has 1 parameter
       const actionT = Mono.domain.tryClass("System.Action`1");
       if (!actionT) {
@@ -827,7 +828,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - getParameterCount returns correct count", () => {
+    await withDomain("MonoDelegate - getParameterCount returns correct count", () => {
       // Test with various delegate types
       const testCases = [
         { name: "System.Action", expectedParams: 0 },
@@ -857,7 +858,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - getExpectedNativeSignature returns correct structure", () => {
+    await withDomain("MonoDelegate - getExpectedNativeSignature returns correct structure", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
@@ -885,7 +886,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - getSummary interface validation", () => {
+    await withDomain("MonoDelegate - getSummary interface validation", () => {
       // Verify the MonoDelegateSummary interface properties exist
       // by checking delegate class metadata
       const actionClass = Mono.domain.tryClass("System.Action");
@@ -908,7 +909,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - describe format validation", () => {
+    await withDomain("MonoDelegate - describe format validation", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
@@ -931,7 +932,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - getTargetInfo structure validation", () => {
+    await withDomain("MonoDelegate - getTargetInfo structure validation", () => {
       // DelegateTargetInfo should have: hasTarget, target, method
       const delegateClass = Mono.domain.tryClass("System.Delegate");
       assertNotNull(delegateClass, "Delegate class should exist");
@@ -957,7 +958,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - toString format validation", () => {
+    await withDomain("MonoDelegate - toString format validation", () => {
       const actionClass = Mono.domain.tryClass("System.Action");
       assertNotNull(actionClass, "Action class should exist");
 
@@ -974,7 +975,7 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoDelegate - hasTarget method validation", () => {
+    await withDomain("MonoDelegate - hasTarget method validation", () => {
       // Static method delegates should not have target
       // Instance method delegates should have target
 

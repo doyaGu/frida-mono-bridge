@@ -15,6 +15,7 @@ import {
   unwrapInstanceRequired,
 } from "../src/utils/memory";
 import { readUtf16String, readUtf8String, safeStringify } from "../src/utils/string";
+import { withDomain } from "./test-fixtures";
 import {
   assert,
   assertApiAvailable,
@@ -23,7 +24,6 @@ import {
   createDomainTestAsync,
   createErrorHandlingTest,
   createIntegrationTest,
-  createMonoDependentTest,
   createNestedPerformTest,
   createSmokeTest,
   createStandaloneTest,
@@ -105,13 +105,13 @@ export async function createIntegrationTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.perform should work for integration tests", () => {
+    withDomain("Mono.perform should work for integration tests", () => {
       assertPerformWorks("Mono.perform() should work for integration tests");
     }),
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should access API for integration operations", () => {
+    withDomain("Should access API for integration operations", () => {
       assertApiAvailable("Mono.api should be accessible for integration operations");
       console.log("    API is accessible for integration tests");
     }),
@@ -119,7 +119,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
 
   // Pointer Utility Tests
   await suite.addResultAsync(
-    createMonoDependentTest("pointerIsNull handles various pointer types", () => {
+    withDomain("pointerIsNull handles various pointer types", () => {
       assert(pointerIsNull(null) === true, "Should return true for null");
       assert(pointerIsNull(0) === true, "Should return true for 0");
 
@@ -130,7 +130,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("pointerIsNull handles NULL pointer", () => {
+    withDomain("pointerIsNull handles NULL pointer", () => {
       const nullPtr: NativePointer = ptr(0);
       const result = pointerIsNull(nullPtr);
       assert(result === true, "Should return true for NULL");
@@ -139,7 +139,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("ensurePointer throws validation error for invalid input", () => {
+    withDomain("ensurePointer throws validation error for invalid input", () => {
       let caught = false;
       try {
         ensurePointer(null, "Test pointer");
@@ -153,7 +153,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
 
   // String Utility Tests
   await suite.addResultAsync(
-    createMonoDependentTest("readUtf8String reads allocated UTF-8 buffer", () => {
+    withDomain("readUtf8String reads allocated UTF-8 buffer", () => {
       const text = "Hello Mono";
       const pointer = Memory.allocUtf8String(text);
       const result = readUtf8String(pointer);
@@ -162,7 +162,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("readUtf16String reads allocated UTF-16 buffer", () => {
+    withDomain("readUtf16String reads allocated UTF-16 buffer", () => {
       const text = "Unicode test";
       const pointer = Memory.allocUtf16String(text);
       const result = readUtf16String(pointer);
@@ -171,7 +171,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("readUtf*String returns empty for null pointer", () => {
+    withDomain("readUtf*String returns empty for null pointer", () => {
       const nullPtr: NativePointer = ptr(0);
       assert(readUtf8String(nullPtr) === "", "UTF-8 reader should return empty string for null pointer");
       assert(readUtf16String(nullPtr) === "", "UTF-16 reader should return empty string for null pointer");
@@ -180,8 +180,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
 
   // Instance Unwrap Tests
   await suite.addResultAsync(
-    createMonoDependentTest("unwrapInstance handles Mono handles", () => {
-      const domain = Mono.domain;
+    withDomain("unwrapInstance handles Mono handles", ({ domain }) => {
       const pointer = unwrapInstance(domain);
       assert(
         pointer !== null && typeof pointer.isNull === "function" && pointer.isNull() === false,
@@ -191,7 +190,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("unwrapInstance handles raw pointer holders", () => {
+    withDomain("unwrapInstance handles raw pointer holders", () => {
       const pointerValue = Mono.api.stringNew("holder instance");
       const holder = { handle: pointerValue };
       const extracted = unwrapInstance(holder);
@@ -200,7 +199,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("unwrapInstanceRequired throws for invalid instance", () => {
+    withDomain("unwrapInstanceRequired throws for invalid instance", () => {
       try {
         unwrapInstanceRequired(null, "test context");
         assert(false, "Should throw when instance is invalid");
@@ -212,7 +211,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
 
   // Exception Error Tests
   await suite.addResultAsync(
-    createMonoDependentTest("MonoManagedExceptionError stores exception info", () => {
+    withDomain("MonoManagedExceptionError stores exception info", () => {
       try {
         const managedError = captureManagedSubstringException();
         const mirrored = new MonoManagedExceptionError(
@@ -245,7 +244,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Memory utilities should work correctly", () => {
+    withDomain("Memory utilities should work correctly", () => {
       // Test pointerIsNull function
       assert(pointerIsNull(null), "Should detect null pointer");
       assert(pointerIsNull(undefined), "Should detect undefined pointer");
@@ -264,7 +263,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("String utilities should work correctly", () => {
+    withDomain("String utilities should work correctly", () => {
       try {
         // Test string creation and reading using existing working methods
         const testString = Mono.api.stringNew("Hello, World!");
@@ -313,7 +312,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("isNativePointer should work correctly", () => {
+    withDomain("isNativePointer should work correctly", () => {
       // Test isNativePointer function
       const pointer = Mono.api.getRootDomain();
       assert(isNativePointer(pointer), "Should detect NativePointer correctly");
@@ -370,7 +369,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Consolidated modules should integrate correctly", () => {
+    withDomain("Consolidated modules should integrate correctly", () => {
       // Test that memory and string utilities work together
       const testString = Mono.api.stringNew("Integration Test");
       const isValid = isValidPointer(testString);
@@ -388,7 +387,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
 
   // Basic fluent API availability
   await suite.addResultAsync(
-    createMonoDependentTest("Mono namespace should be available", () => {
+    withDomain("Mono namespace should be available", () => {
       assertApiAvailable("Mono.api should be accessible");
       assertDomainAvailable("Mono.domain should be accessible");
     }),
@@ -396,8 +395,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
 
   // Test property accessors
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.domain property should work", () => {
-      const domain = Mono.domain;
+    withDomain("Mono.domain property should work", ({ domain }) => {
       assert(domain !== null, "Domain should be accessible");
       assert(typeof domain.assemblies !== "undefined", "Domain should have assemblies property");
       assert(typeof domain.assembly === "function", "Domain should have assembly method");
@@ -406,7 +404,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.api property should work", () => {
+    withDomain("Mono.api property should work", () => {
       const api = Mono.api;
       assert(api !== null, "API should be accessible");
       assert(typeof api.hasExport === "function", "API should have hasExport method");
@@ -415,7 +413,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.version property should work", () => {
+    withDomain("Mono.version property should work", () => {
       const version = Mono.version;
       assert(version !== null, "Version should be accessible");
       assert(typeof version.features === "object", "Version should have features property");
@@ -427,7 +425,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.module property should work", () => {
+    withDomain("Mono.module property should work", () => {
       const module = Mono.module;
       assert(module !== null, "Module should be accessible");
       assert(typeof module.name === "string", "Module should have name property");
@@ -436,7 +434,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.gc utilities should work", () => {
+    withDomain("Mono.gc utilities should work", () => {
       const gc = Mono.gc;
       assert(gc !== null, "GC utilities should be accessible");
       assert(typeof gc.collect === "function", "GC should have collect method");
@@ -446,17 +444,17 @@ export async function createIntegrationTests(): Promise<TestResult> {
 
   // Test fluent API utilities
   await suite.addResultAsync(
-    createMonoDependentTest("MonoDomain search helpers should work", () => {
-      const stringClass = Mono.domain.tryClass("System.String");
+    withDomain("MonoDomain search helpers should work", ({ domain }) => {
+      const stringClass = domain.tryClass("System.String");
       assert(stringClass !== null, "Should find System.String via Mono.domain.tryClass");
 
-      const methods = Mono.domain.findMethods("System.String.*", { limit: 5 });
+      const methods = domain.findMethods("System.String.*", { limit: 5 });
       assert(Array.isArray(methods), "findMethods should return an array");
     }),
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.trace utilities should work", () => {
+    withDomain("Mono.trace utilities should work", () => {
       const trace = Mono.trace;
       assert(trace !== null, "Trace utilities should be accessible");
       assert(typeof trace.method === "function", "Trace should have method method");
@@ -465,8 +463,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
 
   // Test fluent API chaining
   await suite.addResultAsync(
-    createMonoDependentTest("Fluent API should support chaining", () => {
-      const domain = Mono.domain;
+    withDomain("Fluent API should support chaining", ({ domain }) => {
       const assemblies = domain.assemblies;
       assert(Array.isArray(assemblies), "Should get assemblies array");
 
@@ -483,9 +480,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
 
   // Test domain operations
   await suite.addResultAsync(
-    createMonoDependentTest("Domain.tryAssembly() should find assemblies", () => {
-      const domain = Mono.domain;
-
+    withDomain("Domain.tryAssembly() should find assemblies", ({ domain }) => {
       // Try to find common assemblies
       const mscorlib = domain.tryAssembly("mscorlib");
       if (mscorlib) {
@@ -506,9 +501,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Domain.tryClass() should find classes across assemblies", () => {
-      const domain = Mono.domain;
-
+    withDomain("Domain.tryClass() should find classes across assemblies", ({ domain }) => {
       // Try to find common classes
       const stringClass = domain.tryClass("System.String");
       if (stringClass) {
@@ -530,8 +523,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
 
   // Test assembly operations
   await suite.addResultAsync(
-    createMonoDependentTest("Assembly.image property should work", () => {
-      const domain = Mono.domain;
+    withDomain("Assembly.image property should work", ({ domain }) => {
       const assemblies = domain.assemblies;
 
       if (assemblies.length > 0) {
@@ -546,8 +538,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
 
   // Test advanced fluent operations
   await suite.addResultAsync(
-    createMonoDependentTest("Fluent API should support complex operations", () => {
-      const domain = Mono.domain;
+    withDomain("Fluent API should support complex operations", ({ domain }) => {
       const assemblies = domain.assemblies;
 
       if (assemblies.length > 0) {
@@ -575,7 +566,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Fluent API should be performant", () => {
+    withDomain("Fluent API should be performant", () => {
       const startTime = Date.now();
 
       // Perform multiple operations
@@ -594,7 +585,7 @@ export async function createIntegrationTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Fluent API should maintain consistency", () => {
+    withDomain("Fluent API should maintain consistency", () => {
       // Test that repeated calls return consistent results
       const domain1 = Mono.domain;
       const domain2 = Mono.domain;

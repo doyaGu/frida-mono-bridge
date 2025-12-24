@@ -4,9 +4,10 @@
  */
 
 import Mono from "../src";
-import { MonoDefines, MonoEnums } from "../src/runtime/enums";
 import { MonoTypeKind } from "../src/model/type";
+import { MonoDefines, MonoEnums } from "../src/runtime/enums";
 import { Logger } from "../src/utils/log";
+import { withDomain } from "./test-fixtures";
 import {
   assert,
   assertApiAvailable,
@@ -16,7 +17,6 @@ import {
   createDomainTestEnhanced,
   createErrorHandlingTest,
   createIntegrationTest,
-  createMonoDependentTest,
   createNestedPerformTest,
   createSmokeTest,
   createStandaloneTest,
@@ -38,13 +38,13 @@ export async function createSupportingTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.perform should work for definition tests", () => {
+    withDomain("Mono.perform should work for definition tests", () => {
       assertPerformWorks("Mono.perform() should work for definition tests");
     }),
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("MonoEnums should expose common enumerations", () => {
+    withDomain("MonoEnums should expose common enumerations", () => {
       assert(MonoEnums.MonoExceptionEnum.MONO_EXCEPTION_CLAUSE_NONE === 0, "Exception enum should include NONE");
       assert(MonoEnums.MonoCallConvention.MONO_CALL_STDCALL === 2, "Call convention enum should match header value");
       assert(MonoEnums.MonoMarshalNative.MONO_NATIVE_UTF8STR === 0x30, "Marshal native enum should include UTF8STR");
@@ -53,7 +53,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("MonoType values should be consistent", () => {
+    withDomain("MonoType values should be consistent", () => {
       const monoTypeEnum = MonoEnums.MonoTypeEnum;
       assert(monoTypeEnum.MONO_TYPE_STRING === MonoTypeKind.String, "String type value should match MonoTypeKind");
       assert(monoTypeEnum.MONO_TYPE_ENUM === MonoTypeKind.Enum, "Enum type value should match MonoTypeKind");
@@ -70,7 +70,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("MonoDefines should expose numeric constants", () => {
+    withDomain("MonoDefines should expose numeric constants", () => {
       assert(MonoDefines.MONO_PROFILER_API_VERSION === 3, "Profiler API version should be available");
       assert(MonoDefines.MONO_DEBUGGER_MAJOR_VERSION >= 0, "Debugger major version should be numeric");
       console.log("    Basic define values are correct");
@@ -78,7 +78,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test exception enumeration values", () => {
+    withDomain("Should test exception enumeration values", () => {
       const exceptionEnum = MonoEnums.MonoExceptionEnum;
 
       // Test common exception clause types
@@ -92,7 +92,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test call convention enumeration", () => {
+    withDomain("Should test call convention enumeration", () => {
       const callConvEnum = MonoEnums.MonoCallConvention;
 
       // Test calling conventions
@@ -107,7 +107,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test marshal native enumeration", () => {
+    withDomain("Should test marshal native enumeration", () => {
       const marshalEnum = MonoEnums.MonoMarshalNative;
 
       // Test marshal native types (using only the ones that actually exist)
@@ -134,7 +134,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test profiler and debugger defines", () => {
+    withDomain("Should test profiler and debugger defines", () => {
       // Test profiler defines
       assert(typeof MonoDefines.MONO_PROFILER_API_VERSION === "number", "Profiler API version should be numeric");
       assert(MonoDefines.MONO_PROFILER_API_VERSION > 0, "Profiler API version should be positive");
@@ -153,7 +153,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test definition value ranges and validity", () => {
+    withDomain("Should test definition value ranges and validity", () => {
       // Test that enum values are in expected ranges
       const callConvEnum = MonoEnums.MonoCallConvention;
       const callConvValues = Object.values(callConvEnum);
@@ -196,13 +196,13 @@ export async function createSupportingTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.perform should work for metadata collection tests", () => {
+    withDomain("Mono.perform should work for metadata collection tests", () => {
       assertPerformWorks("Mono.perform() should work for metadata collection tests");
     }),
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should access domain for metadata collection", () => {
+    withDomain("Should access domain for metadata collection", () => {
       assertDomainAvailable("Mono.domain should be accessible for metadata operations");
       assertApiAvailable("Mono.api should be accessible for metadata operations");
 
@@ -215,8 +215,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should collect assembly metadata through domain", () => {
-      const domain = Mono.domain;
+    withDomain("Should collect assembly metadata through domain", ({ domain }) => {
       const assemblies = domain.assemblies;
 
       if (assemblies.length > 0) {
@@ -242,8 +241,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should collect class metadata through images", () => {
-      const domain = Mono.domain;
+    withDomain("Should collect class metadata through images", ({ domain }) => {
       const assemblies = domain.assemblies;
 
       if (assemblies.length > 0) {
@@ -284,8 +282,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should group classes by namespace", () => {
-      const domain = Mono.domain;
+    withDomain("Should group classes by namespace", ({ domain }) => {
       const assemblies = domain.assemblies;
 
       if (assemblies.length > 0) {
@@ -330,8 +327,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test metadata filtering and sorting", () => {
-      const domain = Mono.domain;
+    withDomain("Should test metadata filtering and sorting", ({ domain }) => {
       const assemblies = domain.assemblies;
 
       if (assemblies.length > 0) {
@@ -359,9 +355,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Should test metadata performance and caching", () => {
-      const domain = Mono.domain;
-
+    withDomain("Should test metadata performance and caching", ({ domain }) => {
       // Test performance of repeated metadata access
       const startTime = Date.now();
 
@@ -432,13 +426,13 @@ export async function createSupportingTests(): Promise<TestResult> {
   // ============================================================================
 
   await suite.addResultAsync(
-    createMonoDependentTest("Mono.perform should work for logger tests", () => {
+    withDomain("Mono.perform should work for logger tests", () => {
       assertPerformWorks("Mono.perform() should work for logger tests");
     }),
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Logger can be imported and used directly", () => {
+    withDomain("Logger can be imported and used directly", () => {
       const logger = new Logger({ tag: "Test" });
       assert(typeof logger.info === "function", "info method should exist");
       assert(typeof logger.warn === "function", "warn method should exist");
@@ -448,7 +442,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Logger methods should not throw", () => {
+    withDomain("Logger methods should not throw", () => {
       const logger = new Logger({ tag: "MethodsTest" });
       // These should not throw
       logger.info("Test info message");
@@ -459,7 +453,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Logger can be created with custom tag", () => {
+    withDomain("Logger can be created with custom tag", () => {
       const customLogger = new Logger({ tag: "CustomTag" });
       assert(typeof customLogger.info === "function", "Custom logger should have info method");
       customLogger.info("Custom tagged message");
@@ -467,7 +461,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Logger can be created with custom level", () => {
+    withDomain("Logger can be created with custom level", () => {
       const debugLogger = new Logger({ level: "debug", tag: "DebugLogger" });
       debugLogger.debug("Debug level message");
       debugLogger.info("Info level message");
@@ -478,7 +472,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Logger respects log levels", () => {
+    withDomain("Logger respects log levels", () => {
       // Error level logger should only show error messages
       const errorLogger = new Logger({ level: "error" });
       errorLogger.debug("Should not appear"); // Below threshold
@@ -489,14 +483,14 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Logger can log multi-line messages", () => {
+    withDomain("Logger can log multi-line messages", () => {
       const logger = new Logger({ tag: "MultiLine" });
       logger.info("Line 1\nLine 2\nLine 3");
     }),
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Logger can log special characters", () => {
+    withDomain("Logger can log special characters", () => {
       const logger = new Logger({ tag: "SpecialChars" });
       logger.info("Special: !@#$%^&*()[]{}");
       logger.info("Unicode: 你好世界");
@@ -504,7 +498,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Logger can log empty strings", () => {
+    withDomain("Logger can log empty strings", () => {
       const logger = new Logger({ tag: "Empty" });
       logger.info("");
       logger.debug("");
@@ -512,7 +506,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Multiple loggers can coexist", () => {
+    withDomain("Multiple loggers can coexist", () => {
       const logger1 = new Logger({ tag: "Logger1" });
       const logger2 = new Logger({ tag: "Logger2" });
       const logger3 = new Logger({ tag: "Logger3", level: "debug" });
@@ -526,7 +520,7 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Logger handles very long messages", () => {
+    withDomain("Logger handles very long messages", () => {
       const logger = new Logger({ tag: "LongMessage" });
       const longMessage = "A".repeat(1000);
       logger.info(longMessage);
@@ -534,10 +528,9 @@ export async function createSupportingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Logger works with Mono domain operations", () => {
+    withDomain("Logger works with Mono domain operations", ({ domain }) => {
       const logger = new Logger({ tag: "DomainTest" });
 
-      const domain = Mono.domain;
       logger.info(`Domain available: ${domain !== null}`);
 
       const api = Mono.api;

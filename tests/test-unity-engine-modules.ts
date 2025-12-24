@@ -5,13 +5,13 @@
  */
 
 import Mono from "../src";
+import { withDomain } from "./test-fixtures";
 import {
   assert,
   assertDomainAvailable,
   assertNotNull,
   createErrorHandlingTest,
   createIntegrationTest,
-  createMonoDependentTest,
   createPerformanceTest,
   createSmokeTest,
   TestCategory,
@@ -29,10 +29,8 @@ export async function createUnityEngineModulesTests(): Promise<TestResult> {
 
   // UnityEngine.CoreModule availability
   await suite.addResultAsync(
-    createMonoDependentTest("UnityEngine.CoreModule assembly should be available", () => {
+    withDomain("UnityEngine.CoreModule assembly should be available", ({ domain }) => {
       assertDomainAvailable("Domain should be available for Engine module tests");
-
-      const domain = Mono.domain;
       const coreModule = domain.tryAssembly("UnityEngine.CoreModule");
 
       assertNotNull(coreModule, "UnityEngine.CoreModule assembly should be found");
@@ -58,8 +56,7 @@ export async function createUnityEngineModulesTests(): Promise<TestResult> {
 
   // Vector3 operations - using tryMethod/tryProperty for safe lookups
   await suite.addResultAsync(
-    createMonoDependentTest("Vector3 operations should be available", () => {
-      const domain = Mono.domain;
+    withDomain("Vector3 operations should be available", ({ domain }) => {
       const vector3Class = domain.tryClass("UnityEngine.Vector3");
 
       if (!vector3Class) {
@@ -158,8 +155,7 @@ export async function createUnityEngineModulesTests(): Promise<TestResult> {
 
   // Quaternion operations
   await suite.addResultAsync(
-    createMonoDependentTest("Quaternion operations should be available", () => {
-      const domain = Mono.domain;
+    withDomain("Quaternion operations should be available", ({ domain }) => {
       const quaternionClass = domain.tryClass("UnityEngine.Quaternion");
 
       if (!quaternionClass) {
@@ -199,8 +195,7 @@ export async function createUnityEngineModulesTests(): Promise<TestResult> {
 
   // Color operations
   await suite.addResultAsync(
-    createMonoDependentTest("Color operations should be available", () => {
-      const domain = Mono.domain;
+    withDomain("Color operations should be available", ({ domain }) => {
       const colorClass = domain.tryClass("UnityEngine.Color");
 
       if (!colorClass) {
@@ -238,8 +233,7 @@ export async function createUnityEngineModulesTests(): Promise<TestResult> {
 
   // Time operations
   await suite.addResultAsync(
-    createMonoDependentTest("Time operations should be available", () => {
-      const domain = Mono.domain;
+    withDomain("Time operations should be available", ({ domain }) => {
       const timeClass = domain.tryClass("UnityEngine.Time");
 
       if (!timeClass) {
@@ -299,8 +293,7 @@ export async function createUnityEngineModulesTests(): Promise<TestResult> {
 
   // Input operations
   await suite.addResultAsync(
-    createMonoDependentTest("Input operations should be available", () => {
-      const domain = Mono.domain;
+    withDomain("Input operations should be available", ({ domain }) => {
       const inputClass = domain.tryClass("UnityEngine.Input");
 
       if (!inputClass) {
@@ -333,8 +326,7 @@ export async function createUnityEngineModulesTests(): Promise<TestResult> {
 
   // Math operations
   await suite.addResultAsync(
-    createMonoDependentTest("Mathf operations should be available", () => {
-      const domain = Mono.domain;
+    withDomain("Mathf operations should be available", ({ domain }) => {
       const mathfClass = domain.tryClass("UnityEngine.Mathf");
 
       if (!mathfClass) {
@@ -400,8 +392,7 @@ export async function createUnityEngineModulesTests(): Promise<TestResult> {
 
   // Random operations
   await suite.addResultAsync(
-    createMonoDependentTest("Random operations should be available", () => {
-      const domain = Mono.domain;
+    withDomain("Random operations should be available", ({ domain }) => {
       const randomClass = domain.tryClass("UnityEngine.Random");
 
       if (!randomClass) {
@@ -464,8 +455,7 @@ export async function createUnityEngineModulesTests(): Promise<TestResult> {
 
   // Physics operations
   await suite.addResultAsync(
-    createMonoDependentTest("Physics operations should be available", () => {
-      const domain = Mono.domain;
+    withDomain("Physics operations should be available", ({ domain }) => {
       const physicsClass = domain.tryClass("UnityEngine.Physics");
 
       if (!physicsClass) {
@@ -490,8 +480,7 @@ export async function createUnityEngineModulesTests(): Promise<TestResult> {
 
   // Application operations
   await suite.addResultAsync(
-    createMonoDependentTest("Application operations should be available", () => {
-      const domain = Mono.domain;
+    withDomain("Application operations should be available", ({ domain }) => {
       const applicationClass = domain.tryClass("UnityEngine.Application");
 
       if (!applicationClass) {

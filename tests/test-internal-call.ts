@@ -14,7 +14,8 @@
  */
 
 import Mono from "../src";
-import { TestResult, assert, assertNotNull, createMonoDependentTest } from "./test-framework";
+import { withDomain } from "./test-fixtures";
+import { TestResult, assert, assertNotNull } from "./test-framework";
 
 export async function createInternalCallTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
@@ -23,7 +24,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 1: Basic Registration Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("InternalCall - basic registration with registrar", () => {
+    await withDomain("InternalCall - basic registration with registrar", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::TestMethod_" + Date.now();
 
@@ -44,7 +45,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - tryRegister successful registration", () => {
+    await withDomain("InternalCall - tryRegister successful registration", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::TryMethod_" + Date.now();
 
@@ -58,7 +59,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - register callback with return value", () => {
+    await withDomain("InternalCall - register callback with return value", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::ReturnsInt_" + Date.now();
 
@@ -70,7 +71,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - register callback with parameters", () => {
+    await withDomain("InternalCall - register callback with parameters", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::WithParams_" + Date.now();
 
@@ -82,7 +83,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - register callback with pointer parameters", () => {
+    await withDomain("InternalCall - register callback with pointer parameters", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::WithPointer_" + Date.now();
 
@@ -97,7 +98,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 2: Registry Query Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("InternalCall - has() returns false for unregistered", () => {
+    await withDomain("InternalCall - has() returns false for unregistered", () => {
       Mono.icall.clear();
       const fakeName = "NonExistent.Class::Method_" + Date.now();
 
@@ -108,7 +109,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - get() returns info for registered", () => {
+    await withDomain("InternalCall - get() returns info for registered", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::InfoTest_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -127,7 +128,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - get() returns undefined for unregistered", () => {
+    await withDomain("InternalCall - get() returns undefined for unregistered", () => {
       Mono.icall.clear();
       const fakeName = "NonExistent.Class::Method_" + Date.now();
 
@@ -138,7 +139,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - getAll() returns array", () => {
+    await withDomain("InternalCall - getAll() returns array", () => {
       Mono.icall.clear();
 
       const allCalls = Mono.icall.getAll();
@@ -158,7 +159,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - count property returns count", () => {
+    await withDomain("InternalCall - count property returns count", () => {
       Mono.icall.clear();
       const countBefore = Mono.icall.count;
 
@@ -175,7 +176,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - names property returns name array", () => {
+    await withDomain("InternalCall - names property returns name array", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::NamesTest_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -190,7 +191,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - getSummary() returns complete summary", () => {
+    await withDomain("InternalCall - getSummary() returns complete summary", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::SummaryTest_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -210,7 +211,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 3: Duplicate Policy Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("InternalCall - DuplicatePolicy.Throw on different pointer", () => {
+    await withDomain("InternalCall - DuplicatePolicy.Throw on different pointer", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::DupThrow_" + Date.now();
 
@@ -234,7 +235,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - DuplicatePolicy.Throw idempotent with same pointer", () => {
+    await withDomain("InternalCall - DuplicatePolicy.Throw idempotent with same pointer", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::DupSame_" + Date.now();
 
@@ -250,7 +251,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - DuplicatePolicy.Skip silently ignores duplicate", () => {
+    await withDomain("InternalCall - DuplicatePolicy.Skip silently ignores duplicate", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::DupSkip_" + Date.now();
 
@@ -274,7 +275,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - DuplicatePolicy.Overwrite replaces callback", () => {
+    await withDomain("InternalCall - DuplicatePolicy.Overwrite replaces callback", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::DupOverwrite_" + Date.now();
 
@@ -300,7 +301,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 4: Keep-Alive Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("InternalCall - default keepAlive true for NativeCallback", () => {
+    await withDomain("InternalCall - default keepAlive true for NativeCallback", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::KeepAliveDefault_" + Date.now();
 
@@ -316,7 +317,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - explicit keepAlive false", () => {
+    await withDomain("InternalCall - explicit keepAlive false", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::KeepAliveFalse_" + Date.now();
 
@@ -332,7 +333,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - explicit keepAlive true", () => {
+    await withDomain("InternalCall - explicit keepAlive true", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::KeepAliveTrue_" + Date.now();
 
@@ -351,7 +352,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 5: Batch Registration Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("InternalCall - registerAll with multiple definitions", () => {
+    await withDomain("InternalCall - registerAll with multiple definitions", () => {
       Mono.icall.clear();
       const baseName = "TestNamespace.TestClass::Batch_" + Date.now();
 
@@ -373,7 +374,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - registerAll with shared options", () => {
+    await withDomain("InternalCall - registerAll with shared options", () => {
       Mono.icall.clear();
       const baseName = "TestNamespace.TestClass::BatchOpts_" + Date.now();
 
@@ -397,7 +398,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - tryRegisterAll returns success count", () => {
+    await withDomain("InternalCall - tryRegisterAll returns success count", () => {
       Mono.icall.clear();
 
       const baseName = "TestNamespace.TestClass::TryBatch_" + Date.now();
@@ -417,7 +418,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - tryRegisterAll partial success with invalid", () => {
+    await withDomain("InternalCall - tryRegisterAll partial success with invalid", () => {
       Mono.icall.clear();
 
       const baseName = "TestNamespace.TestClass::TryBatchPartial_" + Date.now();
@@ -439,7 +440,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 6: Error Handling Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("InternalCall - register throws on empty name", () => {
+    await withDomain("InternalCall - register throws on empty name", () => {
       Mono.icall.clear();
       const callback = new NativeCallback(() => {}, "void", []);
 
@@ -455,7 +456,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - register throws on whitespace-only name", () => {
+    await withDomain("InternalCall - register throws on whitespace-only name", () => {
       Mono.icall.clear();
       const callback = new NativeCallback(() => {}, "void", []);
 
@@ -471,7 +472,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - register throws on null callback", () => {
+    await withDomain("InternalCall - register throws on null callback", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::NullCallback_" + Date.now();
 
@@ -487,7 +488,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - tryRegister returns false on empty name", () => {
+    await withDomain("InternalCall - tryRegister returns false on empty name", () => {
       Mono.icall.clear();
       const callback = new NativeCallback(() => {}, "void", []);
 
@@ -498,7 +499,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - tryRegister returns false on null callback", () => {
+    await withDomain("InternalCall - tryRegister returns false on null callback", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::TryNullCallback_" + Date.now();
 
@@ -509,7 +510,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - validateCallback option can disable null check", () => {
+    await withDomain("InternalCall - validateCallback option can disable null check", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::NoValidation_" + Date.now();
 
@@ -524,7 +525,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 7: Feature Support Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("InternalCall - isSupported returns boolean", () => {
+    await withDomain("InternalCall - isSupported returns boolean", () => {
       const supported = Mono.icall.isSupported;
 
       assert(typeof supported === "boolean", "isSupported should return boolean");
@@ -534,7 +535,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - ensureSupported does not throw when supported", () => {
+    await withDomain("InternalCall - ensureSupported does not throw when supported", () => {
       // Should not throw
       Mono.icall.requireSupported();
 
@@ -546,7 +547,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 8: Registrar Behavior Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("InternalCall - facade registrar tracks globally", () => {
+    await withDomain("InternalCall - facade registrar tracks globally", () => {
       Mono.icall.clear();
 
       const testName1 = "TestNamespace.TestClass::Tracked1_" + Date.now();
@@ -564,7 +565,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - clear() resets local tracking only", () => {
+    await withDomain("InternalCall - clear() resets local tracking only", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::Clear_" + Date.now();
 
@@ -584,7 +585,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 9: Name Format Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("InternalCall - accept fully qualified name format", () => {
+    await withDomain("InternalCall - accept fully qualified name format", () => {
       Mono.icall.clear();
       const testName = "MyNamespace.MyClass::MyMethod_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -596,7 +597,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - accept nested namespace format", () => {
+    await withDomain("InternalCall - accept nested namespace format", () => {
       Mono.icall.clear();
       const testName = "Outer.Inner.Deep.MyClass::MyMethod_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -608,7 +609,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - accept Unity-style format", () => {
+    await withDomain("InternalCall - accept Unity-style format", () => {
       Mono.icall.clear();
       const testName = "UnityEngine.GameObject::Internal_Instantiate_" + Date.now();
       const callback = new NativeCallback((ptr: NativePointer) => ptr, "pointer", ["pointer"]);
@@ -620,7 +621,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - accept generic type markers", () => {
+    await withDomain("InternalCall - accept generic type markers", () => {
       Mono.icall.clear();
       const testName = "Test.GenericClass`1::Method_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -635,7 +636,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 10: Callback Signature Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("InternalCall - register void callback", () => {
+    await withDomain("InternalCall - register void callback", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::VoidCallback_" + Date.now();
 
@@ -647,7 +648,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - register int return callback", () => {
+    await withDomain("InternalCall - register int return callback", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::IntReturn_" + Date.now();
 
@@ -659,7 +660,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - register pointer return callback", () => {
+    await withDomain("InternalCall - register pointer return callback", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::PointerReturn_" + Date.now();
 
@@ -671,7 +672,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - register float return callback", () => {
+    await withDomain("InternalCall - register float return callback", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::FloatReturn_" + Date.now();
 
@@ -683,7 +684,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - register multi-parameter callback", () => {
+    await withDomain("InternalCall - register multi-parameter callback", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::MultiParam_" + Date.now();
 
@@ -703,7 +704,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 11: Integration Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("InternalCall - registry persists across queries", () => {
+    await withDomain("InternalCall - registry persists across queries", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::Persist_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -721,7 +722,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - getAll() consistency", () => {
+    await withDomain("InternalCall - getAll() consistency", () => {
       Mono.icall.clear();
 
       const allCalls1 = Mono.icall.getAll();
@@ -740,7 +741,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - count matches array length", () => {
+    await withDomain("InternalCall - count matches array length", () => {
       Mono.icall.clear();
 
       const count = Mono.icall.count;
@@ -751,7 +752,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - names matches getAll names", () => {
+    await withDomain("InternalCall - names matches getAll names", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.TestClass::NamesMatch_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -773,7 +774,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 12: Edge Cases
   // =====================================================
   results.push(
-    await createMonoDependentTest("InternalCall - handle very long method name", () => {
+    await withDomain("InternalCall - handle very long method name", () => {
       Mono.icall.clear();
       const longName = "Test.Class::" + "A".repeat(200) + "_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -785,7 +786,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - handle special characters in name", () => {
+    await withDomain("InternalCall - handle special characters in name", () => {
       Mono.icall.clear();
       const testName = "Test.Class::Method$With<Special>Chars_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -796,7 +797,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("InternalCall - timestamp ordering", () => {
+    await withDomain("InternalCall - timestamp ordering", () => {
       Mono.icall.clear();
       const testName1 = "TestNamespace.TestClass::First_" + Date.now();
       const testName2 = "TestNamespace.TestClass::Second_" + Date.now();
@@ -824,7 +825,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 13: Facade Availability Tests
   // =====================================================
   results.push(
-    await createMonoDependentTest("Mono.icall - facade surface smoke test", () => {
+    await withDomain("Mono.icall - facade surface smoke test", () => {
       Mono.icall.clear();
       assert(typeof Mono.icall.isSupported === "boolean", "Mono.icall.isSupported should be boolean");
       assert(typeof Mono.icall.register === "function", "Mono.icall.register should be a function");
@@ -838,7 +839,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   // SECTION 14: Mono.icall Facade Tests (V2 Style)
   // =====================================================
   results.push(
-    await createMonoDependentTest("Mono.icall - isSupported property", () => {
+    await withDomain("Mono.icall - isSupported property", () => {
       Mono.icall.clear();
       const isSupported = Mono.icall.isSupported;
       assert(typeof isSupported === "boolean", "isSupported should be a boolean");
@@ -848,7 +849,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Mono.icall - requireSupported() does not throw when supported", () => {
+    await withDomain("Mono.icall - requireSupported() does not throw when supported", () => {
       Mono.icall.clear();
       // Should not throw if internal calls are supported
       let threw = false;
@@ -862,7 +863,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Mono.icall - register via facade", () => {
+    await withDomain("Mono.icall - register via facade", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.FacadeTest::RegisterViaFacade_" + Date.now();
       const callback = new NativeCallback(
@@ -882,7 +883,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Mono.icall - tryRegister via facade", () => {
+    await withDomain("Mono.icall - tryRegister via facade", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.FacadeTest::TryRegisterViaFacade_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -895,7 +896,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Mono.icall - get() and getAll() via facade", () => {
+    await withDomain("Mono.icall - get() and getAll() via facade", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.FacadeTest::QueryViaFacade_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -916,7 +917,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Mono.icall - count and names via facade", () => {
+    await withDomain("Mono.icall - count and names via facade", () => {
       Mono.icall.clear();
       const countBefore = Mono.icall.count;
       const testName = "TestNamespace.FacadeTest::CountNames_" + Date.now();
@@ -934,7 +935,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Mono.icall - getSummary() via facade", () => {
+    await withDomain("Mono.icall - getSummary() via facade", () => {
       Mono.icall.clear();
       const summary = Mono.icall.getSummary();
 
@@ -945,7 +946,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Mono.icall - DuplicatePolicy via facade", () => {
+    await withDomain("Mono.icall - DuplicatePolicy via facade", () => {
       Mono.icall.clear();
       // Test that DuplicatePolicy is accessible via facade
       const dp = Mono.icall.DuplicatePolicy;
@@ -957,7 +958,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Mono.icall - registerAll via facade", () => {
+    await withDomain("Mono.icall - registerAll via facade", () => {
       Mono.icall.clear();
       const baseName = "TestNamespace.FacadeTest::BatchReg_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -977,7 +978,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Mono.icall - tryRegisterAll via facade", () => {
+    await withDomain("Mono.icall - tryRegisterAll via facade", () => {
       Mono.icall.clear();
       const baseName = "TestNamespace.FacadeTest::TryBatchReg_" + Date.now();
       const callback = new NativeCallback(() => {}, "void", []);
@@ -996,7 +997,7 @@ export async function createInternalCallTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("Mono.icall - register with DuplicatePolicy.Skip via facade", () => {
+    await withDomain("Mono.icall - register with DuplicatePolicy.Skip via facade", () => {
       Mono.icall.clear();
       const testName = "TestNamespace.FacadeTest::DupSkipFacade_" + Date.now();
       const callback1 = new NativeCallback(() => {}, "void", []);

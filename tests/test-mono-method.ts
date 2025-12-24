@@ -5,15 +5,10 @@
  */
 
 import Mono from "../src";
-import {
-  TestResult,
-  assert,
-  assertNotNull,
-  assertThrows,
-  createErrorHandlingTest,
-  createMonoDependentTest,
-} from "./test-framework";
+import { withCoreClasses, withDomain } from "./test-fixtures";
+import { TestResult, assert, assertNotNull, assertThrows, createErrorHandlingTest } from "./test-framework";
 import { createBasicLookupPerformanceTest, createMethodLookupPerformanceTest } from "./test-utilities";
+import { verifyMethodDescribe } from "./test-validators";
 
 export async function createMonoMethodTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
@@ -21,12 +16,8 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== METHOD SIGNATURE RESOLUTION AND PARAMETER HANDLING TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should resolve method signatures correctly", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-      assertNotNull(stringClass, "String class should be available");
-
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
+    await withCoreClasses("MonoMethod should resolve method signatures correctly", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
       assertNotNull(concatMethod, "Concat method should be found");
 
       const signature = concatMethod.signature;
@@ -46,12 +37,10 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle parameter information", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const parameters = concatMethod!.parameters;
+    await withCoreClasses("MonoMethod should handle parameter information", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
+      assertNotNull(concatMethod, "Concat method should be found");
+      const parameters = concatMethod.parameters;
 
       assert(parameters.length === 2, "Should have 2 parameters");
 
@@ -64,12 +53,10 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle calling conventions", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const callConvention = concatMethod!.callConvention;
+    await withCoreClasses("MonoMethod should handle calling conventions", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
+      assertNotNull(concatMethod, "Concat method should be found");
+      const callConvention = concatMethod.callConvention;
 
       assert(typeof callConvention === "number", "Call convention should be a number");
     }),
@@ -78,11 +65,8 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== METHOD INVOCATION WITH VARIOUS PARAMETER TYPES TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should invoke with string parameters", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
+    await withCoreClasses("MonoMethod should invoke with string parameters", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
       assertNotNull(concatMethod, "Concat method should be found");
 
       // Create test strings
@@ -103,32 +87,24 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should invoke with primitive parameters", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
+    await withCoreClasses("MonoMethod should invoke with primitive parameters", ({ int32Class }) => {
+      const parseMethod = int32Class.tryMethod("Parse", 1);
+      if (parseMethod) {
+        const str = Mono.api.stringNew("42");
 
-      if (int32Class) {
-        const parseMethod = int32Class.tryMethod("Parse", 1);
-        if (parseMethod) {
-          const str = Mono.api.stringNew("42");
-
-          try {
-            const result = parseMethod.invoke(null, [str]);
-            assertNotNull(result, "Parse should return a result");
-          } catch (error) {
-            console.log(`  - Int32.Parse test failed: ${error}`);
-          }
+        try {
+          const result = parseMethod.invoke(null, [str]);
+          assertNotNull(result, "Parse should return a result");
+        } catch (error) {
+          console.log(`  - Int32.Parse test failed: ${error}`);
         }
       }
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle null parameters", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const isNullOrEmptyMethod = stringClass!.tryMethod("IsNullOrEmpty", 1);
+    await withCoreClasses("MonoMethod should handle null parameters", ({ stringClass }) => {
+      const isNullOrEmptyMethod = stringClass.tryMethod("IsNullOrEmpty", 1);
       if (isNullOrEmptyMethod) {
         try {
           const result = isNullOrEmptyMethod.invoke(null, [null]);
@@ -143,13 +119,10 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== OVERLOADED METHOD RESOLUTION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should resolve overloads correctly", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const concat2Params = stringClass!.tryMethod("Concat", 2);
-      const concat3Params = stringClass!.tryMethod("Concat", 3);
-      const concat4Params = stringClass!.tryMethod("Concat", 4);
+    await withCoreClasses("MonoMethod should resolve overloads correctly", ({ stringClass }) => {
+      const concat2Params = stringClass.tryMethod("Concat", 2);
+      const concat3Params = stringClass.tryMethod("Concat", 3);
+      const concat4Params = stringClass.tryMethod("Concat", 4);
 
       assertNotNull(concat2Params, "Should find Concat with 2 parameters");
       assertNotNull(concat3Params, "Should find Concat with 3 parameters");
@@ -161,16 +134,13 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle overload parameter count matching", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
+    await withCoreClasses("MonoMethod should handle overload parameter count matching", ({ stringClass }) => {
       // Test with exact parameter count
-      const exactMethod = stringClass!.tryMethod("Concat", 2);
+      const exactMethod = stringClass.tryMethod("Concat", 2);
       assertNotNull(exactMethod, "Should find method with exact parameter count");
 
       // Test with wrong parameter count
-      const wrongMethod = stringClass!.tryMethod("Concat", 99);
+      const wrongMethod = stringClass.tryMethod("Concat", 99);
       assert(wrongMethod === null, "Should not find method with wrong parameter count");
     }),
   );
@@ -178,8 +148,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== GENERIC METHOD HANDLING TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should identify generic methods", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should identify generic methods", ({ domain }) => {
       const arrayClass = domain.tryClass("System.Array");
 
       if (arrayClass) {
@@ -198,14 +167,12 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== STATIC VS INSTANCE METHOD OPERATIONS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should identify static methods correctly", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
+    await withCoreClasses("MonoMethod should identify static methods correctly", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
+      assertNotNull(concatMethod, "Concat method should be found");
+      assert(concatMethod.isStatic, "Concat should be static");
 
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
-      assert(concatMethod!.isStatic, "Concat should be static");
-
-      const getLengthMethod = stringClass!.tryMethod("get_Length");
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       if (getLengthMethod) {
         assert(!getLengthMethod.isStatic, "get_Length should be instance method");
       }
@@ -213,11 +180,8 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle instance method invocation", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const getLengthMethod = stringClass!.tryMethod("get_Length");
+    await withCoreClasses("MonoMethod should handle instance method invocation", ({ stringClass }) => {
+      const getLengthMethod = stringClass.tryMethod("get_Length");
       if (getLengthMethod) {
         const testString = Mono.api.stringNew("Hello");
 
@@ -232,16 +196,14 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle static method invocation", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
+    await withCoreClasses("MonoMethod should handle static method invocation", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
+      assertNotNull(concatMethod, "Concat method should be found");
 
       try {
         const str1 = Mono.api.stringNew("Hello");
         const str2 = Mono.api.stringNew(" World");
-        const result = concatMethod!.invoke(null, [str1, str2]);
+        const result = concatMethod.invoke(null, [str1, str2]);
         assertNotNull(result, "Static method should return result");
       } catch (error) {
         console.log(`  - Static method test failed: ${error}`);
@@ -252,11 +214,8 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== METHOD RETURN VALUE PROCESSING TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should process return values correctly", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
+    await withCoreClasses("MonoMethod should process return values correctly", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
       assertNotNull(concatMethod, "Concat method should be found");
       const returnType = concatMethod.returnType;
 
@@ -277,24 +236,19 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle void return types", () => {
-      const domain = Mono.domain;
-      const objectClass = domain.tryClass("System.Object");
-
-      if (objectClass) {
-        // Look for a method that might return void
-        const methods = objectClass.methods;
-        const voidMethod = methods.find(m => {
-          try {
-            return m.returnType.name === "Void";
-          } catch {
-            return false;
-          }
-        });
-
-        if (voidMethod) {
-          console.log(`  - Found void method: ${voidMethod.name}`);
+    await withCoreClasses("MonoMethod should handle void return types", ({ objectClass }) => {
+      // Look for a method that might return void
+      const methods = objectClass.methods;
+      const voidMethod = methods.find(m => {
+        try {
+          return m.returnType.name === "Void";
+        } catch {
+          return false;
         }
+      });
+
+      if (voidMethod) {
+        console.log(`  - Found void method: ${voidMethod.name}`);
       }
     }),
   );
@@ -302,31 +256,23 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== METHOD ATTRIBUTES AND METADATA TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should provide method metadata", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
+    await withCoreClasses("MonoMethod should provide method metadata", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
+      assertNotNull(concatMethod, "Concat method should be found");
 
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const summary = concatMethod!.describe();
+      verifyMethodDescribe(concatMethod);
 
-      assertNotNull(summary, "Method summary should be available");
+      const summary = concatMethod.describe();
       assert(summary.name === "Concat", "Summary name should be Concat");
       assert(summary.declaringType === "System.String", "Declaring type should be String");
-      assert(typeof summary.attributes === "number", "Attributes should be a number");
-      assert(Array.isArray(summary.attributeNames), "Attribute names should be an array");
-      assert(typeof summary.isStatic === "boolean", "IsStatic should be boolean");
-      assert(typeof summary.isVirtual === "boolean", "IsVirtual should be boolean");
-      assert(typeof summary.isAbstract === "boolean", "IsAbstract should be boolean");
     }),
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should provide accessibility information", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const accessibility = concatMethod!.accessibility;
+    await withCoreClasses("MonoMethod should provide accessibility information", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
+      assertNotNull(concatMethod, "Concat method should be found");
+      const accessibility = concatMethod.accessibility;
 
       assertNotNull(accessibility, "Accessibility should be available");
       assert(typeof accessibility === "string", "Accessibility should be a string");
@@ -334,13 +280,11 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should provide full name with signature", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const fullName = concatMethod!.getFullName(true);
-      const nameOnly = concatMethod!.getFullName(false);
+    await withCoreClasses("MonoMethod should provide full name with signature", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
+      assertNotNull(concatMethod, "Concat method should be found");
+      const fullName = concatMethod.getFullName(true);
+      const nameOnly = concatMethod.getFullName(false);
 
       assertNotNull(fullName, "Full name with signature should be available");
       assertNotNull(nameOnly, "Name only should be available");
@@ -351,12 +295,10 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== METHOD VALIDATION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should validate arguments", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const validation = concatMethod!.validateArguments(["Hello", "World"]);
+    await withCoreClasses("MonoMethod should validate arguments", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
+      assertNotNull(concatMethod, "Concat method should be found");
+      const validation = concatMethod.validateArguments(["Hello", "World"]);
 
       assert(validation.isValid === true, "Valid arguments should pass validation");
       assert(validation.errors.length === 0, "Valid arguments should have no errors");
@@ -364,12 +306,10 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should detect invalid argument count", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const concatMethod = stringClass!.tryMethod("Concat", 2);
-      const validation = concatMethod!.validateArguments(["Only one arg"]);
+    await withCoreClasses("MonoMethod should detect invalid argument count", ({ stringClass }) => {
+      const concatMethod = stringClass.tryMethod("Concat", 2);
+      assertNotNull(concatMethod, "Concat method should be found");
+      const validation = concatMethod.validateArguments(["Only one arg"]);
 
       assert(validation.isValid === false, "Wrong argument count should fail validation");
       assert(validation.errors.length > 0, "Should have validation errors");
@@ -377,15 +317,13 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should validate accessibility", () => {
-      const domain = Mono.domain;
-      const stringClass = domain.tryClass("System.String");
-
-      const staticMethod = stringClass!.tryMethod("Concat", 2);
-      const staticValidation = staticMethod!.validateAccessibility({ isStatic: true });
+    await withCoreClasses("MonoMethod should validate accessibility", ({ stringClass }) => {
+      const staticMethod = stringClass.tryMethod("Concat", 2);
+      assertNotNull(staticMethod, "Concat method should be found");
+      const staticValidation = staticMethod.validateAccessibility({ isStatic: true });
       assert(staticValidation.isValid === true, "Static method should be callable in static context");
 
-      const instanceValidation = staticMethod!.validateAccessibility({ isStatic: false });
+      const instanceValidation = staticMethod.validateAccessibility({ isStatic: false });
       assert(instanceValidation.isValid === false, "Static method should not be callable in instance context");
     }),
   );
@@ -437,8 +375,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle invocation with wrong parameters", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should handle invocation with wrong parameters", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
@@ -459,8 +396,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== METHOD DESCRIPTION TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should provide human-readable descriptions", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should provide human-readable descriptions", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
@@ -473,8 +409,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod toString should work correctly", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod toString should work correctly", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
@@ -488,8 +423,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== METHOD TOKEN TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should provide method tokens", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should provide method tokens", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
@@ -503,8 +437,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== DECLARING CLASS TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should provide declaring class information", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should provide declaring class information", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
@@ -519,8 +452,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== OUT/REF PARAMETER BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should identify out parameters", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should identify out parameters", ({ domain }) => {
       const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
@@ -544,9 +476,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle ref parameters", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoMethod should handle ref parameters", ({ domain }) => {
       // Look for Interlocked.Exchange which uses ref parameters
       const interlockedClass = domain.tryClass("System.Threading.Interlocked");
       if (interlockedClass) {
@@ -567,8 +497,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== RETURN TYPE BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle void return type", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should handle void return type", ({ domain }) => {
       const objectClass = domain.tryClass("System.Object");
 
       // Look for methods that return void
@@ -593,9 +522,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle all primitive return types", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoMethod should handle all primitive return types", ({ domain }) => {
       // Test methods that return different primitive types
       const primitiveTypes = ["Int32", "Int64", "Single", "Double", "Boolean", "Char", "Byte"];
 
@@ -615,8 +542,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle array return types", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should handle array return types", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       // String.Split returns string[]
@@ -636,8 +562,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== GENERIC METHOD BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle generic method signatures", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should handle generic method signatures", ({ domain }) => {
       const arrayClass = domain.tryClass("System.Array");
 
       if (arrayClass) {
@@ -657,8 +582,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should enumerate methods from generic class", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should enumerate methods from generic class", ({ domain }) => {
       const listClass = domain.tryClass("System.Collections.Generic.List`1");
 
       if (listClass) {
@@ -678,8 +602,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== CONSTRUCTOR BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should identify constructors", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should identify constructors", ({ domain }) => {
       const exceptionClass = domain.tryClass("System.Exception");
 
       if (exceptionClass) {
@@ -705,9 +628,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should identify static constructors", () => {
-      const domain = Mono.domain;
-
+    await withDomain("MonoMethod should identify static constructors", ({ domain }) => {
       // Look for classes with static constructors
       const assemblies = domain.assemblies;
       let foundStaticCtor = false;
@@ -740,8 +661,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== VIRTUAL METHOD BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should identify virtual methods", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should identify virtual methods", ({ domain }) => {
       const objectClass = domain.tryClass("System.Object");
 
       // GetHashCode is virtual
@@ -761,8 +681,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should identify abstract methods", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should identify abstract methods", ({ domain }) => {
       const streamClass = domain.tryClass("System.IO.Stream");
 
       if (streamClass) {
@@ -782,8 +701,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== METHOD FLAGS BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should provide complete flags information", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should provide complete flags information", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
@@ -806,8 +724,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should identify method accessibility levels", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should identify method accessibility levels", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const methods = stringClass!.methods;
@@ -833,8 +750,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== EXCEPTION HANDLING BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should capture managed exceptions during invocation", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should capture managed exceptions during invocation", ({ domain }) => {
       const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
@@ -862,8 +778,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle throwOnManagedException option", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should handle throwOnManagedException option", ({ domain }) => {
       const int32Class = domain.tryClass("System.Int32");
 
       if (int32Class) {
@@ -886,8 +801,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== INSTANCE VS STATIC INVOCATION BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should reject instance invocation on static method", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should reject instance invocation on static method", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       // Concat is static
@@ -909,8 +823,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should require instance for instance methods", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should require instance for instance methods", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       // get_Length is an instance method
@@ -944,8 +857,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // This test is disabled until the API is exported as a value
   /*
   results.push(
-    await createMonoDependentTest("MonoMethod should find method by descriptor using static find()", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should find method by descriptor using static find()", ({ domain }) => {
       const mscorlib = domain.getAssembly("mscorlib");
 
       if (mscorlib) {
@@ -968,8 +880,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== PARAMETER COUNT BOUNDARY TESTS =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle methods with many parameters", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should handle methods with many parameters", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       // Look for method with most parameters
@@ -995,8 +906,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod should handle methods with no parameters", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod should handle methods with no parameters", ({ domain }) => {
       const objectClass = domain.tryClass("System.Object");
 
       const getTypeMethod = objectClass!.tryMethod("GetType", 0);
@@ -1011,8 +921,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // ===== COMPLETE DESCRIBE OUTPUT BOUNDARY TEST =====
 
   results.push(
-    await createMonoDependentTest("MonoMethod describe() should provide complete information", () => {
-      const domain = Mono.domain;
+    await withDomain("MonoMethod describe() should provide complete information", ({ domain }) => {
       const stringClass = domain.tryClass("System.String");
 
       const concatMethod = stringClass!.tryMethod("Concat", 2);
@@ -1051,7 +960,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   // =====================================================
 
   results.push(
-    await createMonoDependentTest("MonoMethod - InvokeOptions returnBigInt exists", () => {
+    await withDomain("MonoMethod - InvokeOptions returnBigInt exists", () => {
       Mono.perform(() => {
         const stringClass = Mono.domain.tryClass("System.String");
         assertNotNull(stringClass, "String class should exist");
@@ -1070,7 +979,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod - call with returnBigInt option for Int32", () => {
+    await withDomain("MonoMethod - call with returnBigInt option for Int32", () => {
       Mono.perform(() => {
         const stringClass = Mono.domain.tryClass("System.String");
         assertNotNull(stringClass, "String class should exist");
@@ -1091,7 +1000,7 @@ export async function createMonoMethodTests(): Promise<TestResult[]> {
   );
 
   results.push(
-    await createMonoDependentTest("MonoMethod - callWithInfo returns proper result", () => {
+    await withDomain("MonoMethod - callWithInfo returns proper result", () => {
       Mono.perform(() => {
         const stringClass = Mono.domain.tryClass("System.String");
         assertNotNull(stringClass, "String class should exist");

@@ -11,13 +11,13 @@
  */
 
 import Mono from "../src";
+import { withUnity } from "./test-fixtures";
 import {
   assert,
   assertDomainAvailable,
   assertNotNull,
   createErrorHandlingTest,
   createIntegrationTest,
-  createMonoDependentTest,
   createPerformanceTest,
   createSmokeTest,
   TestCategory,
@@ -64,10 +64,8 @@ export async function createUnityGameObjectTests(): Promise<TestResult> {
 
   // Basic GameObject class availability (metadata + assembly)
   await suite.addResultAsync(
-    createMonoDependentTest("UnityEngine.GameObject class should be accessible", () => {
+    withUnity("UnityEngine.GameObject class should be accessible", ({ gameObjectClass }) => {
       assertDomainAvailable("Domain should be available for GameObject tests");
-      const domain = Mono.domain;
-      const gameObjectClass = domain.tryClass("UnityEngine.GameObject");
       assertNotNull(gameObjectClass, "UnityEngine.GameObject class should be found");
 
       if (gameObjectClass) {
@@ -80,9 +78,7 @@ export async function createUnityGameObjectTests(): Promise<TestResult> {
 
   // Static API surface (method existence only; no throwing on missing)
   await suite.addResultAsync(
-    createMonoDependentTest("GameObject static APIs should be available", () => {
-      const domain = Mono.domain;
-      const gameObjectClass = domain.tryClass("UnityEngine.GameObject");
+    withUnity("GameObject static APIs should be available", ({ gameObjectClass }) => {
       assertNotNull(gameObjectClass, "GameObject class should be available");
       if (!gameObjectClass) return;
 
@@ -100,9 +96,7 @@ export async function createUnityGameObjectTests(): Promise<TestResult> {
 
   // Constructors and core instance methods
   await suite.addResultAsync(
-    createMonoDependentTest("GameObject constructors and core instance methods should exist", () => {
-      const domain = Mono.domain;
-      const gameObjectClass = domain.tryClass("UnityEngine.GameObject");
+    withUnity("GameObject constructors and core instance methods should exist", ({ gameObjectClass }) => {
       assertNotNull(gameObjectClass, "GameObject class should be available");
       if (!gameObjectClass) return;
 
@@ -129,34 +123,31 @@ export async function createUnityGameObjectTests(): Promise<TestResult> {
 
   // Transform presence (metadata)
   await suite.addResultAsync(
-    createMonoDependentTest("GameObject transform and Transform position APIs should exist", () => {
-      const domain = Mono.domain;
-      const gameObjectClass = domain.tryClass("UnityEngine.GameObject");
-      assertNotNull(gameObjectClass, "GameObject class should be available");
-      if (!gameObjectClass) return;
+    withUnity(
+      "GameObject transform and Transform position APIs should exist",
+      ({ gameObjectClass, transformClass }) => {
+        assertNotNull(gameObjectClass, "GameObject class should be available");
+        if (!gameObjectClass) return;
 
-      const getTransform = gameObjectClass.tryMethod("get_transform", 0);
-      assert(!!getTransform, "GameObject.get_transform should exist");
-      console.log(`    get_transform: ${getTransform ? "Available" : "Not available"}`);
+        const getTransform = gameObjectClass.tryMethod("get_transform", 0);
+        assert(!!getTransform, "GameObject.get_transform should exist");
+        console.log(`    get_transform: ${getTransform ? "Available" : "Not available"}`);
 
-      const transformClass = domain.tryClass("UnityEngine.Transform");
-      assertNotNull(transformClass, "UnityEngine.Transform class should be found");
-      if (!transformClass) return;
+        assertNotNull(transformClass, "UnityEngine.Transform class should be found");
+        if (!transformClass) return;
 
-      const getPosition = transformClass.tryMethod("get_position", 0);
-      const setPosition = transformClass.tryMethod("set_position", 1);
-      console.log(`    Transform.get_position/set_position: ${getPosition && setPosition ? "Available" : "Partial"}`);
-      assert(!!getPosition, "Transform.get_position should exist");
-    }),
+        const getPosition = transformClass.tryMethod("get_position", 0);
+        const setPosition = transformClass.tryMethod("set_position", 1);
+        console.log(`    Transform.get_position/set_position: ${getPosition && setPosition ? "Available" : "Partial"}`);
+        assert(!!getPosition, "Transform.get_position should exist");
+      },
+    ),
   );
 
   // Safe GameObject.Find operation (runtime invocation)
   await suite.addResultAsync(
-    createMonoDependentTest("GameObject.Find should work safely", () => {
+    withUnity("GameObject.Find should work safely", ({ gameObjectClass }) => {
       try {
-        const domain = Mono.domain;
-        const gameObjectClass = domain.tryClass("UnityEngine.GameObject");
-
         if (!gameObjectClass) {
           console.log("    (Skipped: GameObject class not available)");
           return;
@@ -212,9 +203,7 @@ export async function createUnityGameObjectTests(): Promise<TestResult> {
   // Meaningful: create a temporary managed GameObject and exercise basic instance behavior.
   // This is best-effort; some Unity builds may require main-thread for engine object creation.
   await suite.addResultAsync(
-    createMonoDependentTest("GameObject create + name + activeSelf roundtrip (best-effort)", () => {
-      const domain = Mono.domain;
-      const gameObjectClass = domain.tryClass("UnityEngine.GameObject");
+    withUnity("GameObject create + name + activeSelf roundtrip (best-effort)", ({ gameObjectClass }) => {
       assertNotNull(gameObjectClass, "GameObject class should be available");
       if (!gameObjectClass) return;
 
@@ -345,9 +334,7 @@ export async function createUnityGameObjectTests(): Promise<TestResult> {
 
   // GameObject property metadata access (no engine invocation)
   await suite.addResultAsync(
-    createMonoDependentTest("GameObject properties should be accessible (metadata)", () => {
-      const domain = Mono.domain;
-      const gameObjectClass = domain.tryClass("UnityEngine.GameObject");
+    withUnity("GameObject properties should be accessible (metadata)", ({ gameObjectClass }) => {
       assertNotNull(gameObjectClass, "GameObject class should be available");
       if (!gameObjectClass) return;
 

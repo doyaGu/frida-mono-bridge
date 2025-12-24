@@ -18,10 +18,10 @@ import Mono, {
   withErrorHandling,
 } from "../src";
 import { Logger } from "../src/utils/log";
+import { withCoreClasses, withDomain } from "./test-fixtures";
 import {
   assert,
   createIntegrationTest,
-  createMonoDependentTest,
   createPerformanceTest,
   createStandaloneTest,
   TestCategory,
@@ -200,15 +200,7 @@ export async function createMonoErrorHandlingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("MonoManagedExceptionError - real exception from Int32.Parse", () => {
-      const domain = Mono.domain;
-      const int32Class = domain.tryClass("System.Int32");
-
-      if (!int32Class) {
-        console.log("    (Skipped: System.Int32 class not available)");
-        return;
-      }
-
+    withCoreClasses("MonoManagedExceptionError - real exception from Int32.Parse", ({ int32Class }) => {
       const parseMethod = int32Class.tryMethod("Parse", 1);
       if (!parseMethod) {
         console.log("    (Skipped: Int32.Parse method not available)");
@@ -485,9 +477,7 @@ export async function createMonoErrorHandlingTests(): Promise<TestResult> {
   );
 
   await suite.addResultAsync(
-    createMonoDependentTest("Error handling integration - Mono API errors", () => {
-      const domain = Mono.domain;
-
+    withDomain("Error handling integration - Mono API errors", ({ domain }) => {
       // Test class not found error
       const nonExistentClass = domain.tryClass("NonExistent.Class.Name");
       assert(nonExistentClass === null, "tryClass should return null for non-existent class");

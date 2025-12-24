@@ -4,13 +4,13 @@
  */
 
 import Mono from "../src";
+import { withDomain, withUnity } from "./test-fixtures";
 import {
   assert,
   assertDomainAvailable,
   assertNotNull,
   createErrorHandlingTest,
   createIntegrationTest,
-  createMonoDependentTest,
   createPerformanceTest,
   createSmokeTest,
   TestCategory,
@@ -46,11 +46,8 @@ export async function createUnityComponentsTests(): Promise<TestResult> {
 
   // Core Component class availability
   await suite.addResultAsync(
-    createMonoDependentTest("UnityEngine.Component class should be available", () => {
+    withUnity("UnityEngine.Component class should be available", ({ componentClass }) => {
       assertDomainAvailable("Domain should be available for Component tests");
-
-      const domain = Mono.domain;
-      const componentClass = domain.tryClass("UnityEngine.Component");
 
       if (componentClass) {
         console.log(`    Component class found: ${componentClass.name ?? "Component"}`);
@@ -64,10 +61,7 @@ export async function createUnityComponentsTests(): Promise<TestResult> {
 
   // Transform component availability and operations
   await suite.addResultAsync(
-    createMonoDependentTest("UnityEngine.Transform component should be available", () => {
-      const domain = Mono.domain;
-      const transformClass = domain.tryClass("UnityEngine.Transform");
-
+    withUnity("UnityEngine.Transform component should be available", ({ transformClass }) => {
       assertNotNull(transformClass, "UnityEngine.Transform class should be found");
 
       if (transformClass) {
@@ -102,8 +96,7 @@ export async function createUnityComponentsTests(): Promise<TestResult> {
 
   // MonoBehaviour availability
   await suite.addResultAsync(
-    createMonoDependentTest("UnityEngine.MonoBehaviour class should be available", () => {
-      const domain = Mono.domain;
+    withDomain("UnityEngine.MonoBehaviour class should be available", ({ domain }) => {
       const monoBehaviourClass = domain.tryClass("UnityEngine.MonoBehaviour");
 
       if (monoBehaviourClass) {
@@ -137,8 +130,7 @@ export async function createUnityComponentsTests(): Promise<TestResult> {
 
   // Camera component tests
   await suite.addResultAsync(
-    createMonoDependentTest("UnityEngine.Camera component should be available", () => {
-      const domain = Mono.domain;
+    withDomain("UnityEngine.Camera component should be available", ({ domain }) => {
       const cameraClass = domain.tryClass("UnityEngine.Camera");
 
       if (!cameraClass) {
@@ -173,8 +165,7 @@ export async function createUnityComponentsTests(): Promise<TestResult> {
 
   // Rigidbody component tests
   await suite.addResultAsync(
-    createMonoDependentTest("UnityEngine.Rigidbody component should be available", () => {
-      const domain = Mono.domain;
+    withDomain("UnityEngine.Rigidbody component should be available", ({ domain }) => {
       const rigidbodyClass = domain.tryClass("UnityEngine.Rigidbody");
 
       if (!rigidbodyClass) {
@@ -211,74 +202,70 @@ export async function createUnityComponentsTests(): Promise<TestResult> {
 
   // Component retrieval from GameObject
   await suite.addResultAsync(
-    createMonoDependentTest("Component retrieval from GameObject should work (real Transform)", () => {
-      try {
-        const domain = Mono.domain;
-        const gameObjectClass = domain.tryClass("UnityEngine.GameObject");
+    withUnity(
+      "Component retrieval from GameObject should work (real Transform)",
+      ({ gameObjectClass, transformClass }) => {
+        try {
+          if (!gameObjectClass) {
+            console.log("    (Skipped: GameObject class not available)");
+            return;
+          }
 
-        if (!gameObjectClass) {
-          console.log("    (Skipped: GameObject class not available)");
-          return;
+          const getComponentMethod = gameObjectClass.tryMethod("GetComponent", 1);
+          if (!getComponentMethod) {
+            console.log("    (Skipped: GetComponent method not available)");
+            return;
+          }
+
+          // Validate method pointer
+          const methodPtr = (getComponentMethod as any).handle;
+          if (!methodPtr || methodPtr.isNull()) {
+            console.log("    (Skipped: GetComponent method pointer is null)");
+            return;
+          }
+
+          // Create a temporary GameObject and validate Transform retrieval.
+          const go = gameObjectClass.newObject(true);
+          const transformViaProperty = go.tryCall("get_transform", []);
+          assertNotNull(transformViaProperty, "GameObject.transform should be accessible");
+
+          if (!transformClass) {
+            console.log("    (Skipped: Transform class not available)");
+            return;
+          }
+
+          const transformTypeObj = tryGetSystemTypeObject(transformClass);
+          if (!transformTypeObj) {
+            console.log("    (Skipped: Could not create System.Type for Transform)");
+            return;
+          }
+
+          const transformViaGetComponent = getComponentMethod.call<any>(go, [transformTypeObj]);
+          assertNotNull(transformViaGetComponent, "GetComponent(Transform) should return a component");
+
+          // Cross-check Component.gameObject points back to the GameObject.
+          const componentGo = transformViaGetComponent.tryCall("get_gameObject", []);
+          if (componentGo) {
+            assert(componentGo.pointer.equals(go.pointer), "Transform.gameObject should equal source GameObject");
+          }
+
+          console.log("    Retrieved Transform via GetComponent(Type) successfully");
+        } catch (error) {
+          if (isAccessViolation(error)) {
+            console.log(
+              "    (Skipped: Component retrieval access violation - method may not be available in this Unity context)",
+            );
+            return;
+          }
+          throw error;
         }
-
-        const getComponentMethod = gameObjectClass.tryMethod("GetComponent", 1);
-        if (!getComponentMethod) {
-          console.log("    (Skipped: GetComponent method not available)");
-          return;
-        }
-
-        // Validate method pointer
-        const methodPtr = (getComponentMethod as any).handle;
-        if (!methodPtr || methodPtr.isNull()) {
-          console.log("    (Skipped: GetComponent method pointer is null)");
-          return;
-        }
-
-        // Create a temporary GameObject and validate Transform retrieval.
-        const go = gameObjectClass.newObject(true);
-        const transformViaProperty = go.tryCall("get_transform", []);
-        assertNotNull(transformViaProperty, "GameObject.transform should be accessible");
-
-        const transformClass = domain.tryClass("UnityEngine.Transform");
-        if (!transformClass) {
-          console.log("    (Skipped: Transform class not available)");
-          return;
-        }
-
-        const transformTypeObj = tryGetSystemTypeObject(transformClass);
-        if (!transformTypeObj) {
-          console.log("    (Skipped: Could not create System.Type for Transform)");
-          return;
-        }
-
-        const transformViaGetComponent = getComponentMethod.call<any>(go, [transformTypeObj]);
-        assertNotNull(transformViaGetComponent, "GetComponent(Transform) should return a component");
-
-        // Cross-check Component.gameObject points back to the GameObject.
-        const componentGo = transformViaGetComponent.tryCall("get_gameObject", []);
-        if (componentGo) {
-          assert(componentGo.pointer.equals(go.pointer), "Transform.gameObject should equal source GameObject");
-        }
-
-        console.log("    Retrieved Transform via GetComponent(Type) successfully");
-      } catch (error) {
-        if (isAccessViolation(error)) {
-          console.log(
-            "    (Skipped: Component retrieval access violation - method may not be available in this Unity context)",
-          );
-          return;
-        }
-        throw error;
-      }
-    }),
+      },
+    ),
   );
 
   // Component addition tests
   await suite.addResultAsync(
-    createMonoDependentTest("AddComponent(Type) should attach component (best-effort)", () => {
-      const domain = Mono.domain;
-      const gameObjectClass = domain.tryClass("UnityEngine.GameObject");
-
+    withUnity("AddComponent(Type) should attach component (best-effort)", ({ gameObjectClass, domain }) => {
       if (!gameObjectClass) {
         console.log("    (Skipped: GameObject class not available)");
         return;
