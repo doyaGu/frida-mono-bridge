@@ -14,7 +14,7 @@ A TypeScript bridge that exposes the Mono runtime (Unity/Xamarin/embedded Mono) 
 - **Performance**: LRU caching, native delegate thunks, optimized invocation paths
 - **Thread-Safe**: Automatic thread attachment with proper lifecycle management
 - **Resilient**: Graceful fallbacks for unhookable methods and lazy JIT compilation
-- **Well-Tested**: Comprehensive test suite with 1,089 tests across 36 test files
+- **Well-Tested**: Comprehensive test suite with an automated runner and per-suite runners
 
 ## Quick Start
 
@@ -67,7 +67,7 @@ frida -n "UnityGame.exe" -l dist/agent.js
 ## Requirements
 
 - **Node.js**: >= 18.0.0
-- **Frida**: >= 19.0.0 (peer dependency)
+- **frida-gum**: >= 19.0.0 (peer dependency; optional)
 - **Target**: Any process with Mono runtime (Unity games, Xamarin apps, embedded Mono)
 
 ### Installing Frida
@@ -88,63 +88,18 @@ For platform-specific installation options (Linux, macOS, Windows, Android, iOS)
 
 The library is organized into three main layers:
 
-```
-frida-mono-bridge/
-├── src/
-│   ├── runtime/            # Low-level Mono C API bindings
-│   │   ├── api.ts          # MonoApi - bound Mono functions (~150+ API exports)
-│   │   ├── thread.ts       # ThreadManager - thread attachment/lifecycle
-│   │   ├── module.ts       # Module discovery (mono-2.0-bdwgc.dll, etc.)
-│   │   ├── version.ts      # Runtime version & feature detection
-│   │   ├── exports.ts      # Export resolution with aliasing support
-│   │   ├── enums.ts        # Mono runtime enumerations
-│   │   ├── metadata.ts     # Metadata table access
-│   │   ├── memory.ts       # Memory subsystem utilities
-│   │   ├── gchandle.ts     # GC handle wrapper
-│   │   └── signatures.ts   # Native function signatures
-│   ├── model/              # High-level object model
-│   │   ├── domain.ts       # MonoDomain - application domain
-│   │   ├── assembly.ts     # MonoAssembly - loaded assemblies
-│   │   ├── image.ts        # MonoImage - assembly metadata
-│   │   ├── class.ts        # MonoClass - type definitions
-│   │   ├── method.ts       # MonoMethod - method invocation
-│   │   ├── field.ts        # MonoField - field access
-│   │   ├── property.ts     # MonoProperty - property access
-│   │   ├── object.ts       # MonoObject - managed objects
-│   │   ├── string.ts       # MonoString - string operations
-│   │   ├── array.ts        # MonoArray - array operations
-│   │   ├── delegate.ts     # MonoDelegate - delegate handling
-│   │   ├── type.ts         # MonoType - type information and metadata
-│   │   ├── handle.ts       # MonoHandle - base handle class
-│   │   ├── reference.ts    # MonoReference - lazy loading wrapper
-│   │   ├── attribute.ts    # Custom attribute parsing
-│   │   ├── collections.ts  # Lazy collections and indexing
-│   │   ├── gc.ts           # Garbage collector utilities
-│   │   ├── trace.ts        # Method tracing and hooking
-│   │   ├── internal-call.ts # Internal call registration
-│   │   ├── method-signature.ts # Method signature parsing
-│   │   └── value-conversion.ts # Value boxing/unboxing
-│   ├── utils/              # Utility modules
-│   │   ├── errors.ts       # Error types and handling (MonoError, codes)
-│   │   ├── memory.ts       # Memory utilities (boxing, pointers, read/write)
-│   │   ├── log.ts          # Logging infrastructure (Logger class)
-│   │   ├── cache.ts        # LRU caching utilities
-│   │   └── string.ts       # String utilities
-│   ├── mono.ts             # MonoNamespace - main fluent API facade
-│   └── index.ts            # Package entry point and exports
-├── tests/                  # Test suite (36 test files, 1,089 tests)
-│   ├── test-*.ts           # 36 test modules covering all APIs
-│   ├── runners/            # Individual test runners for selective execution
-│   ├── test-framework.ts   # Test framework and utilities
-│   ├── test-common.ts      # Common test setup and helpers
-│   └── README.md           # Test documentation
-├── docs/                   # Documentation
-├── scripts/                # Build and generation scripts
-│   ├── build.mjs                  # Main build script
-│   ├── generate-mono-signatures.ts # API signature generator
-│   └── generate-enums.ts          # Enum definition generator
-└── dist/                   # Compiled output (ES modules + type definitions)
-```
+- **`src/runtime/`** - Low-level Mono C API bindings (~150+ native functions), module discovery, thread management, export resolution, and native function signatures
+- **`src/model/`** - High-level object model providing classes for Domain, Assembly, Image, Class, Method, Field, Property, Object, String, Array, Delegate, Type, and more
+- **`src/utils/`** - Shared utilities for error handling, memory operations, logging, caching, and string manipulation
+- **`src/mono.ts`** - Main `Mono` facade providing the fluent public API
+- **`src/index.ts`** - Package entry point and exports
+
+Additional directories:
+
+- **`tests/`** - Comprehensive test suite (see [tests/README.md](tests/README.md))
+- **`scripts/`** - Build scripts and code generators for signatures/enums
+- **`docs/`** - Documentation and architectural guides
+- **`dist/`** - Compiled ES modules and TypeScript definitions
 
 ## API Overview
 
@@ -201,9 +156,9 @@ await Mono.perform(() => {
   const method = Mono.method.find(image, "MyClass:MyMethod(int)");
   const maybeMethod = Mono.method.tryFind(image, "NotExist:Method()"); // returns null
 
-  // Assembly/Image helpers
-  const asm = Mono.assembly.open("mscorlib");
-  const img = Mono.image.fromAssemblyPath("MyAssembly.dll");
+  // Assembly/Image helpers (get already loaded assembly by name)
+  const asm = Mono.domain.assembly("mscorlib");
+  const img = asm.image;
 
   // Class/Field/Property helpers
   const klass = Mono.class.wrap(klassPtr);
@@ -294,7 +249,9 @@ npm run typecheck
 | `npm run lint`                | ESLint + TypeScript type check                    |
 | `npm run format`              | Prettier formatting                               |
 | `npm run test`                | Compile all tests to dist/tests.js                |
-| `npm run test:*`              | Compile specific test category                    |
+| `npm run test:mono-class`     | Compile a specific suite (e.g. `test:mono-class`) |
+| `npm run test:runner`         | Compile + run tests (automated)                   |
+| `npm run test:runner:compile` | Compile all runner suites only                    |
 | `npm run docs`                | Generate API docs with TypeDoc                    |
 | `npm run generate:signatures` | Regenerate Mono API signatures                    |
 | `npm run generate:enums`      | Regenerate enum definitions                       |
@@ -313,110 +270,54 @@ import { Mono as MonoNamed } from "frida-mono-bridge";
 // Error types/enums for typed catch blocks
 import { MonoError, MonoErrorCodes, MonoRuntimeNotReadyError } from "frida-mono-bridge";
 
-// Type-only exports for annotations (not runtime values)
+// Types are available via `import type`; some model/runtime classes are also exported as runtime values
 import type { MonoDomain, MonoClass, MonoMethod, MonoApi } from "frida-mono-bridge";
 ```
 
 Notes:
 
-- v0.3.0+ no longer re-exports `runtime/`, `model/`, `utils/` as runtime values. Use facade helpers and domain methods directly.
+- v0.3.0+ exports `Mono` facade and also re-exports selected power-user APIs from runtime/model/utils (see exports in src/index.ts). Prefer the `Mono` facade for typical usage.
 - Use facade helpers for object creation: `Mono.array`, `Mono.string`, `Mono.object`, `Mono.delegate`, `Mono.method`, `Mono.image`, `Mono.assembly`, `Mono.class`, `Mono.field`, `Mono.property`, `Mono.type`.
 - Subsystem facades: `Mono.memory` (memory utilities), `Mono.gc` (garbage collection), `Mono.trace` (method tracing), `Mono.icall` (internal calls).
 - `globalThis.Mono` is installed by default on first `Mono.initialize()` / `Mono.perform()`. Disable by setting `Mono.config.installGlobal = false` before first use.
 
 ## Testing
 
-The test suite contains **1,089 individual test cases** organized into **7 categories** across **36 test files**.
-See [tests/README.md](tests/README.md) for complete documentation and [docs/API_QUALITY_REPORT.md](docs/API_QUALITY_REPORT.md) for quality metrics.
+The project includes a comprehensive test suite (mix of standalone and Mono-dependent suites).
+See [tests/README.md](tests/README.md) for detailed test documentation.
 
-### Test Categories
+### Automated Runner (Recommended)
 
-| Category            | Tests     | Files  | Description                                     |
-| ------------------- | --------- | ------ | ----------------------------------------------- |
-| Core Infrastructure | ~115      | 5      | Module detection, type system, metadata         |
-| Utility Tests       | ~80       | 3      | Standalone tests (no Mono dependency)           |
-| Type System         | ~260      | 6      | MonoClass, MonoMethod, MonoField, MonoProperty  |
-| Runtime Objects     | ~275      | 6      | MonoString, MonoArray, MonoDelegate, MonoObject |
-| Domain & Assembly   | ~125      | 5      | MonoDomain, MonoAssembly, MonoImage, threading  |
-| Advanced Features   | ~160      | 4      | Find, Trace, GC, Internal Calls                 |
-| Unity Integration   | ~30       | 3      | GameObject, Components, Engine Modules          |
-| **TOTAL**           | **1,089** | **36** | Complete test coverage                          |
-
-### Running Tests
-
-Tests are compiled with `frida-compile` and executed against a running Mono process:
+Use the automated runner to compile and execute suites against a target process:
 
 ```bash
-# Step 1: Compile tests
-npm run test:mono-class           # Single category (recommended)
-npm test                          # All tests
+# Run all suites against a running process
+npm run test:runner -- --target "YourGame.exe"
 
-# Step 2: Run with Frida against target process
-frida -n "YourApp.exe" -l dist/test-mono-class.js
-frida -n "UnityGame.exe" -l dist/tests.js
+# Windows: provide an EXE so the runner can start/restart the game when needed.
+# If the runner starts the game during this run, it will also stop it after the run completes.
+npm run test:runner -- --target "YourGame.exe" --exe "C:\\Path\\To\\YourGame.exe" --retries 2 --timeout 90
+
+# Run a single suite
+npm run test:runner -- --target "YourGame.exe" --category "runtime-api" --timeout 120
+
+# Compile-only mode (no injection)
+npm run test:runner:compile
 ```
 
-**Test Execution Model:**
+### Manual Execution
 
-- **Phase 1**: Standalone tests (~80 tests) - No Mono runtime required
-- **Phase 2**: Mono-dependent tests (~1,024 tests) - Requires active Mono runtime
-- **Selective Execution**: Run individual test categories for faster iteration
-- **Manual Invocation**: Tests don't auto-run; explicit execution required
-
-### Available Test Scripts
+The individual suite runners are compiled via `frida-compile` and can be executed with `frida`:
 
 ```bash
-# Core Infrastructure Tests (213 tests)
-npm run test:core-infrastructure    # Module detection, version info (11 tests)
-npm run test:mono-types             # MonoType system (77 tests)
-npm run test:data-operations        # Object/String/Array ops (51 tests)
-npm run test:integration            # Fluent API integration (33 tests)
-npm run test:supporting             # Enums, metadata, logger (41 tests)
+# Compile a single suite
+npm run test:mono-class
 
-# Utility Tests - Standalone (95 tests)
-npm run test:mono-utils             # Utility functions (45 tests)
-npm run test:mono-error-handling    # Error handling (46 tests)
-
-# Type System Tests (270 tests)
-npm run test:mono-class             # MonoClass API (56 tests)
-npm run test:mono-method            # MonoMethod API (45 tests)
-npm run test:mono-field             # MonoField API (70 tests)
-npm run test:mono-property          # MonoProperty API (61 tests)
-npm run test:generic-types          # Generic types (29 tests)
-npm run test:custom-attributes      # Custom attributes (9 tests)
-
-# Runtime Object Tests (251 tests)
-npm run test:mono-string            # MonoString ops (70 tests)
-npm run test:mono-array             # MonoArray ops (66 tests)
-npm run test:mono-delegate          # MonoDelegate ops (52 tests)
-npm run test:mono-object            # MonoObject ops (12 tests)
-npm run test:mono-data              # Data operations (41 tests)
-npm run test:runtime-api            # Runtime API (38 tests)
-
-# Domain & Assembly Tests (184 tests)
-npm run test:mono-api               # Core Mono API (18 tests)
-npm run test:mono-domain            # MonoDomain ops (3 tests)
-npm run test:mono-assembly          # MonoAssembly ops (42 tests)
-npm run test:mono-image             # MonoImage ops (52 tests)
-npm run test:mono-threading         # Threading (29 tests)
-npm run test:mono-module            # Module management (24 tests)
-
-# Advanced Feature Tests (143 tests)
-npm run test:find-tools             # Search utilities (56 tests)
-npm run test:trace-tools            # Method tracing (33 tests)
-npm run test:gc-tools               # GC utilities (41 tests)
-
-# Unity Integration Tests (42 tests)
-npm run test:unity-gameobject       # GameObject ops (12 tests)
-npm run test:unity-components       # Component system (11 tests)
-npm run test:unity-engine-modules   # Engine modules (19 tests)
+# Run it against a target process
+frida -n "YourGame.exe" -l dist/test-mono-class.js
 ```
 
-**Test Documentation:**
-
-- Complete test suite documentation: [tests/README.md](tests/README.md)
-- Test framework details and best practices included
-- Individual test file descriptions and examples
+For the list of available `test:*` scripts, see [package.json](package.json).
 
 ## Advanced Features
 
