@@ -93,6 +93,8 @@
     "test:unity-gameobject": "frida-compile tests/runners/test-unity-gameobject.ts -o dist/test-unity-gameobject.js",
     "test:unity-components": "frida-compile tests/runners/test-unity-components.ts -o dist/test-unity-components.js",
     "test:unity-engine-modules": "frida-compile tests/runners/test-unity-engine-modules.ts -o dist/test-unity-engine-modules.js",
+    "test:runner": "node scripts/run-tests.mjs",
+    "test:runner:compile": "node scripts/run-tests.mjs --compile-only",
     "clean": "rimraf dist",
     "generate:enums": "node scripts/generate-enums.ts",
     "generate:signatures": "npx tsx scripts/generate-mono-signatures.ts",
