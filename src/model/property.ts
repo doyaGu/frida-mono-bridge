@@ -1,4 +1,5 @@
 import { hasFlag, pickFlags } from "../runtime/metadata";
+import { tryGetClassPtrFromMonoType } from "../runtime/type-resolution";
 import {
   convertJsToMono,
   convertMonoToJs,
@@ -9,6 +10,7 @@ import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
 import { MonoArray } from "./array";
+import { fillMonoArrayFromJs } from "./array-helpers";
 import type { CustomAttribute } from "./attribute";
 import { createPropertyAttributeContext, getCustomAttributes } from "./attribute";
 import { MonoClass } from "./class";
@@ -108,7 +110,7 @@ export interface PropertyInfo {
  * }
  * ```
  */
-export class MonoProperty<TValue = any> extends MonoHandle {
+export class MonoProperty<TValue = unknown> extends MonoHandle {
   // ===== CORE PROPERTIES =====
 
   /**
@@ -354,7 +356,8 @@ export class MonoProperty<TValue = any> extends MonoHandle {
       );
     }
 
-    const invocationArgs = [...parameters, this.convertValue(value)];
+    const convertedValue = this.convertValue(value) as MethodArgument;
+    const invocationArgs: MethodArgument[] = [...parameters, convertedValue];
     this.setter.invoke(this.resolveInstance(instance), invocationArgs);
   }
 
@@ -535,7 +538,7 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * Convert method result to appropriate JavaScript type.
    * Uses shared conversion for consistency with MonoMethod.call().
    */
-  private convertResult(result: MonoObject | null): any {
+  private convertResult(result: MonoObject | null): unknown {
     if (!result) return null;
 
     const propertyType = this.type;
@@ -556,7 +559,7 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * @param value The value to convert
    * @returns The converted value suitable for Mono runtime
    */
-  private convertValue(value: TValue): any {
+  private convertValue(value: TValue): unknown {
     if (value === null || value === undefined) {
       return null;
     }
@@ -596,7 +599,7 @@ export class MonoProperty<TValue = any> extends MonoHandle {
   /**
    * Convert array value to MonoArray
    */
-  private convertArrayValue(value: any[], propertyType: MonoType): any {
+  private convertArrayValue(value: unknown[], propertyType: MonoType): unknown {
     // If property type is array, try to convert
     if (propertyType.isArray) {
       const elementType = propertyType.elementType;
@@ -607,13 +610,9 @@ export class MonoProperty<TValue = any> extends MonoHandle {
       }
 
       if (!elementClass) {
-        try {
-          const klassPtr = this.native.mono_class_from_mono_type(elementType.pointer);
-          if (!pointerIsNull(klassPtr)) {
-            elementClass = new MonoClass(this.api, klassPtr);
-          }
-        } catch {
-          // ignore
+        const klassPtr = tryGetClassPtrFromMonoType(this.api, elementType.pointer);
+        if (klassPtr) {
+          elementClass = new MonoClass(this.api, klassPtr);
         }
       }
 
@@ -623,38 +622,7 @@ export class MonoProperty<TValue = any> extends MonoHandle {
 
       const monoArray = MonoArray.new(this.api, elementClass, value.length);
 
-      for (let index = 0; index < value.length; index += 1) {
-        const item = value[index];
-
-        if (elementClass.isValueType) {
-          if (typeof item === "bigint" && typeof (monoArray as any).setBigInt === "function") {
-            (monoArray as any).setBigInt(index, item);
-          } else {
-            monoArray.setNumber(index, Number(item));
-          }
-          continue;
-        }
-
-        // Reference-type array.
-        if (item === null || item === undefined) {
-          monoArray.setReference(index, NULL);
-          continue;
-        }
-
-        if (item instanceof MonoObject) {
-          monoArray.setReference(index, item.pointer);
-          continue;
-        }
-
-        if (typeof item === "string") {
-          const strPtr = this.api.stringNew(item);
-          monoArray.setReference(index, strPtr);
-          continue;
-        }
-
-        // Best-effort: allow passing raw pointers.
-        monoArray.setReference(index, item as NativePointer);
-      }
+      fillMonoArrayFromJs(this.api, monoArray, value);
 
       return monoArray.pointer;
     }
@@ -665,7 +633,7 @@ export class MonoProperty<TValue = any> extends MonoHandle {
    * Try to convert value to enum type
    * @returns The converted value, or undefined if not an enum
    */
-  private tryConvertEnumValue(value: any, propertyType: MonoType): any {
+  private tryConvertEnumValue(value: unknown, propertyType: MonoType): unknown {
     const propClass = propertyType.class;
     if (!propClass || !propClass.isEnum) {
       return undefined;

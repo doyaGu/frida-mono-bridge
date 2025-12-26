@@ -1168,14 +1168,16 @@ export class MonoApi {
  * Normalize arguments for native function calls.
  * Converts null/undefined to NULL pointer and booleans to integers.
  */
-function normalizeArg(arg: MonoArg): any {
+function normalizeArg(arg: MonoArg): NativeFunctionArgumentValue {
   if (arg === null || arg === undefined) {
     return NULL;
   }
   if (typeof arg === "boolean") {
     return arg ? 1 : 0;
   }
-  return arg;
+  // Cast required for string type which is valid for NativeFunction but
+  // the TypeScript types don't fully capture Frida's NativeFunction flexibility
+  return arg as NativeFunctionArgumentValue;
 }
 
 /**

@@ -83,31 +83,28 @@ export class Logger {
     this.tag = options.tag ?? "Mono";
   }
 
-  debug(message: string, ...args: any[]): void {
+  debug(message: string, ...args: unknown[]): void {
     this.log("debug", message, args);
   }
 
-  info(message: string, ...args: any[]): void {
+  info(message: string, ...args: unknown[]): void {
     this.log("info", message, args);
   }
 
-  warn(message: string, ...args: any[]): void {
+  warn(message: string, ...args: unknown[]): void {
     this.log("warn", message, args);
   }
 
-  error(message: string, ...args: any[]): void {
+  error(message: string, ...args: unknown[]): void {
     this.log("error", message, args);
   }
 
-  private log(level: LogLevel, message: string, args: any[] = []): void {
+  private log(level: LogLevel, message: string, args: unknown[] = []): void {
     if (LEVEL_ORDER[level] < LEVEL_ORDER[this.level]) {
       return;
     }
     const time = new Date().toISOString();
-    const formattedMessage =
-      args.length > 0
-        ? `${message} ${args.map(arg => formatLogArg(arg)).join(" ")}`
-        : message;
+    const formattedMessage = args.length > 0 ? `${message} ${args.map(arg => formatLogArg(arg)).join(" ")}` : message;
 
     const logMethod = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
 
@@ -115,19 +112,19 @@ export class Logger {
   }
 
   // Static convenience methods
-  static debug(message: string, ...args: any[]): void {
+  static debug(message: string, ...args: unknown[]): void {
     new Logger().debug(message, ...args);
   }
 
-  static info(message: string, ...args: any[]): void {
+  static info(message: string, ...args: unknown[]): void {
     new Logger().info(message, ...args);
   }
 
-  static warn(message: string, ...args: any[]): void {
+  static warn(message: string, ...args: unknown[]): void {
     new Logger().warn(message, ...args);
   }
 
-  static error(message: string, ...args: any[]): void {
+  static error(message: string, ...args: unknown[]): void {
     new Logger().error(message, ...args);
   }
 

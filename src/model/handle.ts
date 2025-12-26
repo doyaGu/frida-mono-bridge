@@ -1,4 +1,4 @@
-import type { MonoApi } from "../runtime/api";
+import type { MonoApi, MonoNativeBindings } from "../runtime/api";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { isValidPointer } from "../utils/memory";
 
@@ -36,7 +36,7 @@ export type MethodArgument = NativePointer | number | boolean | string | bigint 
  * Individual methods don't need to worry about thread attachment.
  */
 export abstract class MonoHandle<THandle extends NativePointer = NativePointer> {
-  private _native: any = null;
+  private _native: MonoNativeBindings | null = null;
 
   /**
    * Create a new Mono handle.
@@ -65,7 +65,7 @@ export abstract class MonoHandle<THandle extends NativePointer = NativePointer> 
    * Get thread-safe native API.
    * All calls are automatically wrapped with thread attachment when needed.
    */
-  protected get native(): any {
+  protected get native(): MonoNativeBindings {
     if (!this._native) {
       this._native = this._api.native;
     }

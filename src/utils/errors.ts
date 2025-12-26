@@ -325,7 +325,7 @@ export class MonoError extends Error {
   /**
    * Convert to JSON for logging
    */
-  toJSON(): any {
+  toJSON(): Record<string, unknown> {
     return {
       name: this.name,
       code: this.code,
@@ -371,7 +371,7 @@ export class MonoValidationError extends MonoError {
     this.name = "MonoValidationError";
   }
 
-  override toJSON(): any {
+  override toJSON(): Record<string, unknown> {
     const base = super.toJSON();
     return {
       ...base,
@@ -698,7 +698,7 @@ export function handleMonoError(error: unknown): MonoError {
 /**
  * Wrap a function with standardized error handling
  */
-export function withErrorHandling<T extends any[], R>(fn: (...args: T) => R): (...args: T) => R {
+export function withErrorHandling<T extends unknown[], R>(fn: (...args: T) => R): (...args: T) => R {
   return (...args: T): R => {
     try {
       return fn(...args);
@@ -711,7 +711,7 @@ export function withErrorHandling<T extends any[], R>(fn: (...args: T) => R): (.
 /**
  * Async version of error handling wrapper
  */
-export async function withAsyncErrorHandling<T extends any[], R>(
+export async function withAsyncErrorHandling<T extends unknown[], R>(
   fn: (...params: T) => Promise<R>,
   params: T,
 ): Promise<R> {
@@ -754,7 +754,7 @@ export function monoErrorResult<T>(error: MonoError): MonoResult<T> {
 /**
  * Wrap function to return Result type instead of throwing
  */
-export function asResult<T extends any[], R>(fn: (...args: T) => R): (...args: T) => MonoResult<R> {
+export function asResult<T extends unknown[], R>(fn: (...args: T) => R): (...args: T) => MonoResult<R> {
   return (...args: T): MonoResult<R> => {
     try {
       const result = fn(...args);

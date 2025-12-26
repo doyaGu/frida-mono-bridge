@@ -70,7 +70,7 @@ export interface FindOptions {
   /** Maximum number of results to return */
   limit?: number;
   /** Filter function to apply after pattern matching */
-  filter?: (item: any) => boolean;
+  filter?: (item: unknown) => boolean;
 }
 
 /**

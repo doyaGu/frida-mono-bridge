@@ -27,7 +27,7 @@ import { MonoType, MonoTypeKind, readPrimitiveValue, writePrimitiveValue } from 
 import type { MonoApi } from "./runtime/api";
 import type { GCHandle } from "./runtime/gchandle";
 import { boxPrimitiveValue, boxValueTypePtr, readTypedValue, writeTypedValue } from "./runtime/value-conversion";
-import type { GC, ICall, MemorySubsystem, MemoryType, Trace, TypedReadOptions } from "./types";
+import type { GC, ICall, MemoryReadOptions, MemorySubsystem, MemoryType, Trace, TypedReadOptions } from "./types";
 import { MonoErrorCodes, raise } from "./utils/errors";
 import { pointerIsNull } from "./utils/memory";
 
@@ -78,17 +78,17 @@ export function buildMemorySubsystem(api: MonoApi): MemorySubsystem {
   const knownMemoryTypes = Object.keys(simpleTypeToKind).join(", ");
 
   return {
-    read(ptr: NativePointer, type: MemoryType): any {
+    read(ptr: NativePointer, type: MemoryType, options?: MemoryReadOptions): unknown {
       const kind = simpleTypeToKind[type];
       if (kind === undefined) {
         raise(MonoErrorCodes.INVALID_ARGUMENT, `Unknown memory type: ${type}`, `Use one of: ${knownMemoryTypes}`, {
           type,
         });
       }
-      return readPrimitiveValue(ptr, kind);
+      return readPrimitiveValue(ptr, kind, { returnBigInt: options?.returnBigInt });
     },
 
-    write(ptr: NativePointer, value: any, type: MemoryType): void {
+    write(ptr: NativePointer, value: unknown, type: MemoryType): void {
       const kind = simpleTypeToKind[type];
       if (kind === undefined) {
         raise(MonoErrorCodes.INVALID_ARGUMENT, `Unknown memory type: ${type}`, `Use one of: ${knownMemoryTypes}`, {
@@ -98,11 +98,11 @@ export function buildMemorySubsystem(api: MonoApi): MemorySubsystem {
       writePrimitiveValue(ptr, kind, value);
     },
 
-    readTyped(ptr: NativePointer, monoType: MonoType, options: TypedReadOptions = {}): any {
-      return readTypedValue(api, ptr, monoType, options);
+    readTyped<T = unknown>(ptr: NativePointer, monoType: MonoType, options: TypedReadOptions = {}): T {
+      return readTypedValue(api, ptr, monoType, options) as T;
     },
 
-    writeTyped(ptr: NativePointer, value: any, monoType: MonoType): void {
+    writeTyped(ptr: NativePointer, value: unknown, monoType: MonoType): void {
       writeTypedValue(api, ptr, value, monoType);
     },
 
@@ -123,13 +123,13 @@ export function buildMemorySubsystem(api: MonoApi): MemorySubsystem {
       return api.native.mono_object_unbox(obj.pointer);
     },
 
-    unboxValue(obj: MonoObject, monoType?: MonoType, options: TypedReadOptions = {}): any {
+    unboxValue<T = unknown>(obj: MonoObject, monoType?: MonoType, options: TypedReadOptions = {}): T {
       if (pointerIsNull(obj.pointer)) {
-        return null;
+        return null as T;
       }
       const valuePtr = api.native.mono_object_unbox(obj.pointer);
       const type = monoType ?? obj.class.type;
-      return readTypedValue(api, valuePtr, type, options);
+      return readTypedValue(api, valuePtr, type, options) as T;
     },
 
     string(value: string): MonoString {
@@ -141,7 +141,7 @@ export function buildMemorySubsystem(api: MonoApi): MemorySubsystem {
       return api.readMonoString(ptr, true);
     },
 
-    array<T = any>(elementClass: MonoClass, length: number): MonoArray<T> {
+    array<T = unknown>(elementClass: MonoClass, length: number): MonoArray<T> {
       return MonoArray.new(api, elementClass, length);
     },
 

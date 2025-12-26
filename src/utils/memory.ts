@@ -67,20 +67,21 @@ export function allocPointerArray(items: NativePointer[]): NativePointer {
  * Resolve a value to a NativePointer
  * Handles NativePointer, objects with handle/pointer properties, and toPointer() methods
  */
-export function resolveNativePointer(value: any): NativePointer | null {
+export function resolveNativePointer(value: unknown): NativePointer | null {
   if (isNativePointer(value)) {
     return value;
   }
 
   if (value && typeof value === "object") {
-    if (isNativePointer((value as any).handle)) {
-      return (value as any).handle;
+    const obj = value as Record<string, unknown>;
+    if ("handle" in obj && isNativePointer(obj.handle)) {
+      return obj.handle;
     }
-    if (isNativePointer((value as any).pointer)) {
-      return (value as any).pointer;
+    if ("pointer" in obj && isNativePointer(obj.pointer)) {
+      return obj.pointer;
     }
-    if (typeof (value as any).toPointer === "function") {
-      const candidate = (value as any).toPointer();
+    if ("toPointer" in obj && typeof obj.toPointer === "function") {
+      const candidate = (obj.toPointer as () => unknown)();
       if (isNativePointer(candidate)) {
         return candidate;
       }
@@ -167,13 +168,18 @@ export function isValidPointer(pointer: NativePointer | null | undefined): point
  * Returns ptr(0) for null/undefined values
  * For value types (structs), returns the unboxed pointer
  */
-export function unwrapInstance(instance: any): NativePointer {
+export function unwrapInstance(instance: unknown): NativePointer {
   if (instance === null || instance === undefined) {
     return ptr(0);
   }
 
   // Check if it's a MonoObject with getInstancePointer method (handles value types correctly)
-  if (typeof instance === "object" && typeof instance.getInstancePointer === "function") {
+  if (
+    typeof instance === "object" &&
+    instance !== null &&
+    "getInstancePointer" in instance &&
+    typeof instance.getInstancePointer === "function"
+  ) {
     return instance.getInstancePointer();
   }
 
@@ -198,7 +204,7 @@ export function unwrapInstance(instance: any): NativePointer {
  * Throws MonoValidationError if pointer is invalid
  */
 export function unwrapInstanceRequired(
-  instance: any,
+  instance: unknown,
   context: string | { getFullName?: () => string; getName?: () => string; toString?: () => string },
 ): NativePointer {
   const pointer = unwrapInstance(instance);

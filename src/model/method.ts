@@ -9,6 +9,7 @@
 
 import type { MonoApi } from "../runtime/api";
 import { MethodAttribute, MethodImplAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
+import { tryGetClassPtrFromMonoType } from "../runtime/type-resolution";
 import {
   allocPrimitiveValue,
   boxPrimitiveValue,
@@ -20,6 +21,7 @@ import { MonoErrorCodes, MonoManagedExceptionError, raise, raiseFrom } from "../
 import { Logger } from "../utils/log";
 import { pointerIsNull, unwrapInstance } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
+import { MonoArray } from "./array";
 import type { CustomAttribute } from "./attribute";
 import { createMethodAttributeContext, getCustomAttributes } from "./attribute";
 import { MonoClass } from "./class";
@@ -42,7 +44,7 @@ export interface InvokeOptions {
 /**
  * Invoke result with automatic unboxing support
  */
-export interface InvokeResult<T = any> {
+export interface InvokeResult<T = unknown> {
   /** Raw pointer result from mono_runtime_invoke */
   raw: NativePointer;
   /** Whether the result is null */
@@ -76,7 +78,7 @@ export type UnboxedType<Kind extends MonoTypeKind> = Kind extends typeof MonoTyp
           ? string
           : Kind extends typeof MonoTypeKind.Void
             ? void
-            : any;
+            : unknown;
 
 export type MethodAccessibility = MemberAccessibility;
 
@@ -764,11 +766,10 @@ export class MonoMethod extends MonoHandle {
         return NULL;
       }
 
-      // Create Type[] array
-      const typeArray = this.native.mono_array_new(domain, typeClass, typeArguments.length);
-      if (pointerIsNull(typeArray)) {
-        return NULL;
-      }
+      const typeClassObj = new MonoClass(this.api, typeClass);
+
+      // Create Type[] array via MonoArray wrapper (write barrier logic lives in one place)
+      const monoArray = MonoArray.new(this.api, typeClassObj, typeArguments.length);
 
       // Fill the array with Type objects for each MonoClass
       for (let i = 0; i < typeArguments.length; i++) {
@@ -779,14 +780,10 @@ export class MonoMethod extends MonoHandle {
           return NULL;
         }
 
-        // Set array element using mono_gc_wbarrier_set_arrayref instead of mono_array_setref
-        // NOTE: mono_array_setref is not exported in any Mono DLL (neither mono.dll nor mono-2.0-bdwgc.dll)
-        // mono_gc_wbarrier_set_arrayref(array, slot_ptr, value) is the correct replacement
-        const elementAddr = this.native.mono_array_addr_with_size(typeArray, Process.pointerSize, i);
-        this.native.mono_gc_wbarrier_set_arrayref(typeArray, elementAddr, typeObj);
+        monoArray.setReference(i, typeObj);
       }
 
-      return typeArray;
+      return monoArray.pointer;
     } catch {
       return NULL;
     }
@@ -981,7 +978,7 @@ export class MonoMethod extends MonoHandle {
    * // Calling a method that returns Int64 with BigInt option
    * const bigValue = method.call<bigint>(null, [], { returnBigInt: true });
    */
-  call<T = any>(
+  call<T = unknown>(
     instance: MonoObject | NativePointer | null,
     args: MethodArgument[] = [],
     options: InvokeOptions = {},
@@ -998,7 +995,7 @@ export class MonoMethod extends MonoHandle {
    * @param args Method arguments
    * @returns InvokeResult with raw pointer, unboxed value, and type information
    */
-  callWithInfo<T = any>(
+  callWithInfo<T = unknown>(
     instance: MonoObject | NativePointer | null,
     args: MethodArgument[] = [],
     options: InvokeOptions = {},
@@ -1039,7 +1036,7 @@ export class MonoMethod extends MonoHandle {
 
     // Handle string specially
     if (kind === MonoTypeKind.String) {
-      return this.readMonoString(rawResult) as unknown as T;
+      return this.api.readMonoString(rawResult, false) as unknown as T;
     }
 
     // Handle value types (need to unbox)
@@ -1052,15 +1049,6 @@ export class MonoMethod extends MonoHandle {
 
     // Handle reference types - return wrapped MonoObject
     return new MonoObject(this.api, rawResult) as unknown as T;
-  }
-
-  /**
-   * Read a MonoString pointer as a JavaScript string.
-   * @param strPtr Pointer to MonoString
-   * @returns JavaScript string
-   */
-  private readMonoString(strPtr: NativePointer): string {
-    return this.api.readMonoString(strPtr, false);
   }
 
   /**
@@ -1126,8 +1114,8 @@ export class MonoMethod extends MonoHandle {
 
     let klass = effectiveType.class;
     if (!klass) {
-      const klassPtr = this.api.native.mono_class_from_mono_type(effectiveType.pointer);
-      if (!pointerIsNull(klassPtr)) {
+      const klassPtr = tryGetClassPtrFromMonoType(this.api, effectiveType.pointer);
+      if (klassPtr) {
         klass = new MonoClass(this.api, klassPtr);
       }
     }
@@ -1166,7 +1154,7 @@ export class MonoMethod extends MonoHandle {
    * @param args Array of arguments to validate
    * @returns Validation result with isValid flag and error messages
    */
-  validateArguments(args: any[]): { isValid: boolean; errors: string[] } {
+  validateArguments(args: unknown[]): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
     const expectedCount = this.parameterCount;
     const actualCount = args.length;

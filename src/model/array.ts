@@ -45,7 +45,7 @@ export namespace ArrayTypeGuards {
   /**
    * Check if array contains numeric values
    */
-  export function isNumericArray(array: MonoArray<any>): array is MonoArray<number> {
+  export function isNumericArray(array: MonoArray<unknown>): array is MonoArray<number> {
     const type = array.elementClass.type;
     const kind = type.kind;
     return kind >= MonoTypeKind.I1 && kind <= MonoTypeKind.R8;
@@ -54,7 +54,7 @@ export namespace ArrayTypeGuards {
   /**
    * Check if array contains string values
    */
-  export function isStringArray(array: MonoArray<any>): array is MonoArray<string> {
+  export function isStringArray(array: MonoArray<unknown>): array is MonoArray<string> {
     const type = array.elementClass.type;
     return type.kind === MonoTypeKind.String;
   }
@@ -62,14 +62,14 @@ export namespace ArrayTypeGuards {
   /**
    * Check if array contains object references
    */
-  export function isObjectArray(array: MonoArray<any>): array is MonoArray<MonoObject> {
+  export function isObjectArray(array: MonoArray<unknown>): array is MonoArray<MonoObject> {
     return !array.elementClass.isValueType;
   }
 
   /**
    * Check if array contains enum values
    */
-  export function isEnumArray(array: MonoArray<any>): array is MonoArray<number> {
+  export function isEnumArray(array: MonoArray<unknown>): array is MonoArray<number> {
     return array.elementClass.isEnum;
   }
 }
@@ -108,7 +108,7 @@ export namespace ArrayTypeGuards {
  * const sum = array.reduce((acc, x) => acc + x, 0);
  * ```
  */
-export class MonoArray<T = any> extends MonoObject implements Iterable<T> {
+export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
   // ===== CORE PROPERTIES =====
   /**
    * Get array length
@@ -943,7 +943,7 @@ export class MonoArray<T = any> extends MonoObject implements Iterable<T> {
    * @param depth Depth to flatten (default: 1)
    * @returns Flattened JavaScript array
    */
-  flat(depth: number = 1): any[] {
+  flat(depth: number = 1): unknown[] {
     const items = this.toArray();
     return items.flat(depth);
   }
@@ -1294,7 +1294,7 @@ export class MonoArray<T = any> extends MonoObject implements Iterable<T> {
    * @param length Number of elements
    * @returns A new MonoArray instance
    */
-  static new<T = any>(api: MonoApi, elementClass: MonoClass, length: number): MonoArray<T> {
+  static new<T = unknown>(api: MonoApi, elementClass: MonoClass, length: number): MonoArray<T> {
     const domain = api.getRootDomain();
     const arrayPtr = api.native.mono_array_new(domain, elementClass.pointer, length);
     return new MonoArray<T>(api, arrayPtr);

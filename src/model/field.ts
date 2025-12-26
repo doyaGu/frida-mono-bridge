@@ -84,7 +84,7 @@ const FIELD_ACCESS_NAMES: Record<number, FieldAccessibility> = {
  * - Custom attributes: `customAttributes`
  * - Value access: raw pointer, object wrapper, and JS-coerced reads/writes
  */
-export class MonoField<T = any> extends MonoHandle {
+export class MonoField<T = unknown> extends MonoHandle {
   // ===== CORE PROPERTIES =====
 
   /** Gets the name of this field. */
@@ -531,7 +531,7 @@ export class MonoField<T = any> extends MonoHandle {
 
     // Handle String specially
     if (kind === MonoTypeKind.String) {
-      return pointerIsNull(valuePointer) ? null : this.readMonoString(valuePointer);
+      return pointerIsNull(valuePointer) ? null : this.api.readMonoString(valuePointer, true);
     }
 
     // Handle arrays - keep model layer decoupled from array wrapper
@@ -594,7 +594,7 @@ export class MonoField<T = any> extends MonoHandle {
    * @param value JavaScript value to convert
    * @returns MonoObject, NativePointer, or null
    */
-  private convertToMonoValue(value: any): MonoObject | NativePointer | null {
+  private convertToMonoValue(value: unknown): MonoObject | NativePointer | null {
     if (value === null || value === undefined) {
       return null;
     }
@@ -637,15 +637,6 @@ export class MonoField<T = any> extends MonoHandle {
 
     // For reference types, just return the value if it's already handled
     return null;
-  }
-
-  /**
-   * Read a MonoString to JavaScript string using available API.
-   * @param pointer Pointer to MonoString
-   * @returns JavaScript string
-   */
-  private readMonoString(pointer: NativePointer): string {
-    return this.api.readMonoString(pointer, true);
   }
 }
 

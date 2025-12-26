@@ -1,4 +1,5 @@
 import { TypeAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
+import { tryGetClassPtrFromMonoType } from "../runtime/type-resolution";
 import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { Logger } from "../utils/log";
@@ -789,13 +790,13 @@ export class MonoClass extends MonoHandle {
         }
 
         // Convert MonoType to MonoClass
-        const klassPtr = this.native.mono_class_from_mono_type(monoTypeGlobal);
-        return pointerIsNull(klassPtr) ? null : new MonoClass(this.api, klassPtr);
+        const klassPtr = tryGetClassPtrFromMonoType(this.api, monoTypeGlobal);
+        return klassPtr ? new MonoClass(this.api, klassPtr) : null;
       }
 
       // Convert MonoType to MonoClass
-      const klassPtr = this.native.mono_class_from_mono_type(monoType);
-      return pointerIsNull(klassPtr) ? null : new MonoClass(this.api, klassPtr);
+      const klassPtr = tryGetClassPtrFromMonoType(this.api, monoType);
+      return klassPtr ? new MonoClass(this.api, klassPtr) : null;
     } catch (e) {
       // Silently fail and return null
       return null;

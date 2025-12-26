@@ -343,7 +343,7 @@ export function readTypedValue(
  * This is the canonical implementation for "write typed" logic used by subsystems
  * and field/property helpers.
  */
-export function writeTypedValue(api: MonoApi, storagePtr: NativePointer, value: any, monoType: MonoType): void {
+export function writeTypedValue(api: MonoApi, storagePtr: NativePointer, value: unknown, monoType: MonoType): void {
   const kind = monoType.kind;
 
   if (value === null || value === undefined) {

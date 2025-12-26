@@ -131,17 +131,17 @@ export class MonoNamespace {
    */
   readonly array = {
     /** Create a new managed array */
-    new: <T = any>(elementClass: MonoClass, length: number): MonoArray<T> => {
+    new: <T = unknown>(elementClass: MonoClass, length: number): MonoArray<T> => {
       return MonoArray.new(this.api, elementClass, length);
     },
 
     /** Wrap an existing array pointer */
-    wrap: <T = any>(ptr: NativePointer): MonoArray<T> => {
+    wrap: <T = unknown>(ptr: NativePointer): MonoArray<T> => {
       return new MonoArray<T>(this.api, ptr);
     },
 
     /** Try to wrap an existing array pointer */
-    tryWrap: <T = any>(ptr: NativePointer | null | undefined): MonoArray<T> | null => {
+    tryWrap: <T = unknown>(ptr: NativePointer | null | undefined): MonoArray<T> | null => {
       if (!ptr || ptr.isNull()) {
         return null;
       }
@@ -339,12 +339,12 @@ export class MonoNamespace {
    */
   readonly field = {
     /** Wrap an existing field pointer */
-    wrap: <T = any>(ptr: NativePointer): MonoField<T> => {
+    wrap: <T = unknown>(ptr: NativePointer): MonoField<T> => {
       return new MonoField<T>(this.api, ptr);
     },
 
     /** Try to wrap an existing field pointer */
-    tryWrap: <T = any>(ptr: NativePointer | null | undefined): MonoField<T> | null => {
+    tryWrap: <T = unknown>(ptr: NativePointer | null | undefined): MonoField<T> | null => {
       if (!ptr || ptr.isNull()) {
         return null;
       }
@@ -357,12 +357,12 @@ export class MonoNamespace {
    */
   readonly property = {
     /** Wrap an existing property pointer */
-    wrap: <TValue = any>(ptr: NativePointer): MonoProperty<TValue> => {
+    wrap: <TValue = unknown>(ptr: NativePointer): MonoProperty<TValue> => {
       return new MonoProperty<TValue>(this.api, ptr);
     },
 
     /** Try to wrap an existing property pointer */
-    tryWrap: <TValue = any>(ptr: NativePointer | null | undefined): MonoProperty<TValue> | null => {
+    tryWrap: <TValue = unknown>(ptr: NativePointer | null | undefined): MonoProperty<TValue> | null => {
       if (!ptr || ptr.isNull()) {
         return null;
       }

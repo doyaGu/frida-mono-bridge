@@ -38,23 +38,33 @@ export function readUtf8String(pointer: NativePointer | null): string {
  * Read UTF-8 string from Mono string or pointer
  * Handles both MonoString objects and raw pointers
  */
-export function readMonoString(monoStringOrPointer: any): string {
+export function readMonoString(monoStringOrPointer: unknown): string {
   if (!monoStringOrPointer) {
     return "";
   }
 
   // If it's a MonoString object, get its handle
-  if (typeof monoStringOrPointer === "object" && monoStringOrPointer.handle) {
-    return readUtf8String(monoStringOrPointer.handle);
+  if (
+    typeof monoStringOrPointer === "object" &&
+    monoStringOrPointer !== null &&
+    "handle" in monoStringOrPointer &&
+    monoStringOrPointer.handle
+  ) {
+    return readUtf8String(monoStringOrPointer.handle as NativePointer);
   }
 
   // If it's a MonoString object with toPointer method
-  if (typeof monoStringOrPointer === "object" && typeof monoStringOrPointer.toPointer === "function") {
+  if (
+    typeof monoStringOrPointer === "object" &&
+    monoStringOrPointer !== null &&
+    "toPointer" in monoStringOrPointer &&
+    typeof monoStringOrPointer.toPointer === "function"
+  ) {
     return readUtf8String(monoStringOrPointer.toPointer());
   }
 
   // Otherwise treat it as a raw pointer
-  return readUtf8String(monoStringOrPointer);
+  return readUtf8String(monoStringOrPointer as NativePointer);
 }
 
 /**
@@ -82,7 +92,7 @@ export function readUtf16String(pointer: NativePointer | null, length?: number):
  * Convert value to safe JSON representation
  * Handles NativePointer and Function types gracefully
  */
-export function safeStringify(value: any): string {
+export function safeStringify(value: unknown): string {
   try {
     return JSON.stringify(value, (_key, val) => {
       if (val instanceof NativePointer) {
@@ -101,7 +111,7 @@ export function safeStringify(value: any): string {
 /**
  * Create error with context information
  */
-export function createError(message: string, context?: any, cause?: Error): MonoError {
+export function createError(message: string, context?: unknown, cause?: Error): MonoError {
   const hasContext = Boolean(context);
   const formattedMessage = hasContext ? `${message} (Context: ${safeStringify(context)})` : message;
   const contextLabel = typeof context === "string" ? context : undefined;

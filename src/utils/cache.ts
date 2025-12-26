@@ -238,20 +238,21 @@ const CACHE_STORE = Symbol("__mono_cache_store__");
 /**
  * Clear all cached values on an instance.
  */
-export function clearCache(instance: any): void {
-  const store = instance[CACHE_STORE];
+export function clearCache(instance: object): void {
+  const store = (instance as Record<symbol, unknown>)[CACHE_STORE];
   if (store instanceof Map) {
     for (const cache of store.values()) {
       cache.clear();
     }
     store.clear();
   } else if (store) {
-    instance[CACHE_STORE] = new Map<string, LruCache<string, unknown>>();
+    (instance as Record<symbol, unknown>)[CACHE_STORE] = new Map<string, LruCache<string, unknown>>();
   }
 }
 
-function ensureCacheStore(instance: any): Map<string, LruCache<string, unknown>> {
-  let store = instance[CACHE_STORE];
+function ensureCacheStore(instance: object): Map<string, LruCache<string, unknown>> {
+  const record = instance as Record<symbol, unknown>;
+  let store = record[CACHE_STORE];
   if (!(store instanceof Map)) {
     store = new Map<string, LruCache<string, unknown>>();
     Object.defineProperty(instance, CACHE_STORE, {
@@ -261,7 +262,7 @@ function ensureCacheStore(instance: any): Map<string, LruCache<string, unknown>>
       writable: true,
     });
   }
-  return store;
+  return store as Map<string, LruCache<string, unknown>>;
 }
 
 // ============================================================================
@@ -382,7 +383,7 @@ function createMemoizedMethodDecorator<Args extends any[], Return>(
   const capacity = options.capacity ?? 128;
   const keyFn = options.key ?? ((...args: Args) => defaultMemoizeKey(args));
 
-  return function <This>(
+  return function <This extends object>(
     method: (this: This, ...args: Args) => Return,
     context: MemoizeMethodContext<This>,
   ): ((this: This, ...args: Args) => Return) | void {

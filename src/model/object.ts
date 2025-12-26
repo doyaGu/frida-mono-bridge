@@ -1,9 +1,10 @@
+import type { MonoApi } from "../runtime/api";
 import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
 import { MonoClass } from "./class";
 import { MonoField } from "./field";
-import { MonoHandle } from "./handle";
+import { MethodArgument, MonoHandle } from "./handle";
 import { MonoMethod } from "./method";
 
 /**
@@ -122,9 +123,9 @@ export class MonoObject extends MonoHandle {
    * @returns Field value
    * @throws {MonoFieldNotFoundError} if field not found
    */
-  getFieldValue(name: string): any {
+  getFieldValue<T = unknown>(name: string): T {
     const f = this.field(name);
-    return f.getValue(this.pointer);
+    return f.getValue(this.pointer) as T;
   }
 
   /**
@@ -132,12 +133,12 @@ export class MonoObject extends MonoHandle {
    * @param name Field name
    * @returns Field value or null if field not found
    */
-  tryGetFieldValue(name: string): any | null {
+  tryGetFieldValue<T = unknown>(name: string): T | null {
     const f = this.tryField(name);
     if (!f) {
       return null;
     }
-    return f.getValue(this.pointer);
+    return f.getValue(this.pointer) as T;
   }
 
   /**
@@ -146,9 +147,9 @@ export class MonoObject extends MonoHandle {
    * @param value Value to set
    * @throws {MonoFieldNotFoundError} if field not found
    */
-  setFieldValue(name: string, value: any): void {
+  setFieldValue(name: string, value: unknown): void {
     const f = this.field(name);
-    f.setValue(this.pointer, value);
+    f.setTypedValue(this.pointer, value);
   }
 
   /**
@@ -157,12 +158,12 @@ export class MonoObject extends MonoHandle {
    * @param value Value to set
    * @returns True if field was set, false if field not found
    */
-  trySetFieldValue(name: string, value: any): boolean {
+  trySetFieldValue(name: string, value: unknown): boolean {
     const f = this.tryField(name);
     if (!f) {
       return false;
     }
-    f.setValue(this.pointer, value);
+    f.setTypedValue(this.pointer, value);
     return true;
   }
 
@@ -248,7 +249,7 @@ export class MonoObject extends MonoHandle {
    * Note: For value types (structs), this automatically uses the unboxed
    * pointer as the 'this' argument.
    */
-  invoke(name: string, args: any[] = []): NativePointer {
+  invoke(name: string, args: MethodArgument[] = []): NativePointer {
     const m = this.tryMethod(name, args.length) || this.tryMethodInHierarchy(name, args.length);
     if (!m) {
       raise(
@@ -280,7 +281,7 @@ export class MonoObject extends MonoHandle {
    * // Call a method with arguments
    * const result = obj.call<boolean>("SetValue", [42, "test"]);
    */
-  call<T = any>(name: string, args: any[] = []): T {
+  call<T = unknown>(name: string, args: MethodArgument[] = []): T {
     const m = this.tryMethod(name, args.length) || this.tryMethodInHierarchy(name, args.length);
     if (!m) {
       raise(
@@ -299,7 +300,7 @@ export class MonoObject extends MonoHandle {
    * @param args Arguments to pass
    * @returns Unboxed return value, or null if method not found
    */
-  tryCall<T = any>(name: string, args: any[] = []): T | null {
+  tryCall<T = unknown>(name: string, args: MethodArgument[] = []): T | null {
     const m = this.tryMethod(name, args.length) || this.tryMethodInHierarchy(name, args.length);
     if (!m) {
       return null;
@@ -324,7 +325,7 @@ export class MonoObject extends MonoHandle {
    * const name = obj.get<string>("Name"); // calls get_Name()
    * const count = obj.get<number>("Count"); // calls get_Count()
    */
-  get<T = any>(name: string): T {
+  get<T = unknown>(name: string): T {
     const getterName = name.startsWith("get_") ? name : `get_${name}`;
     return this.call<T>(getterName, []);
   }
@@ -335,7 +336,7 @@ export class MonoObject extends MonoHandle {
    * @param name Property name (without "get_" prefix)
    * @returns Property value or null if getter not found
    */
-  tryGet<T = any>(name: string): T | null {
+  tryGet<T = unknown>(name: string): T | null {
     const getterName = name.startsWith("get_") ? name : `get_${name}`;
     return this.tryCall<T>(getterName, []);
   }
@@ -355,7 +356,7 @@ export class MonoObject extends MonoHandle {
    * obj.set("Name", "NewName"); // calls set_Name("NewName")
    * obj.set("Count", 42); // calls set_Count(42)
    */
-  set(name: string, value: any): void {
+  set(name: string, value: MethodArgument): void {
     const setterName = name.startsWith("set_") ? name : `set_${name}`;
     this.call<void>(setterName, [value]);
   }
@@ -367,7 +368,7 @@ export class MonoObject extends MonoHandle {
    * @param value Value to set
    * @returns True if property was set, false if setter not found
    */
-  trySet(name: string, value: any): boolean {
+  trySet(name: string, value: MethodArgument): boolean {
     const setterName = name.startsWith("set_") ? name : `set_${name}`;
     const result = this.tryCall<void>(setterName, [value]);
     return result !== null;
@@ -385,10 +386,10 @@ export class MonoObject extends MonoHandle {
    * @returns Property value
    * @throws {MonoPropertyNotFoundError} if property not found
    */
-  getProperty(name: string): any {
+  getProperty<T = unknown>(name: string): T {
     const klass = this.class;
     const prop = klass.property(name);
-    return prop.getValue(this);
+    return prop.getValue(this) as T;
   }
 
   /**
@@ -396,13 +397,13 @@ export class MonoObject extends MonoHandle {
    * @param name Property name
    * @returns Property value or null if property not found
    */
-  tryGetProperty(name: string): any | null {
+  tryGetProperty<T = unknown>(name: string): T | null {
     const klass = this.class;
     const prop = klass.tryProperty(name);
     if (!prop) {
       return null;
     }
-    return prop.getValue(this);
+    return prop.getValue(this) as T;
   }
 
   /**
@@ -415,7 +416,7 @@ export class MonoObject extends MonoHandle {
    * @param value Value to set
    * @throws {MonoPropertyNotFoundError} if property not found
    */
-  setProperty(name: string, value: any): void {
+  setProperty(name: string, value: unknown): void {
     const klass = this.class;
     const prop = klass.property(name);
     prop.setValue(this, value);
@@ -427,7 +428,7 @@ export class MonoObject extends MonoHandle {
    * @param value Value to set
    * @returns True if property was set, false if property not found
    */
-  trySetProperty(name: string, value: any): boolean {
+  trySetProperty(name: string, value: unknown): boolean {
     const klass = this.class;
     const prop = klass.tryProperty(name);
     if (!prop) {
@@ -451,25 +452,25 @@ export class MonoObject extends MonoHandle {
    * @param name Member name
    * @returns Member value or null if not found
    */
-  tryGetMember(name: string): any | null {
+  tryGetMember<T = unknown>(name: string): T | null {
     const klass = this.class;
 
     // Try field first
     const f = klass.tryField(name);
     if (f) {
-      return f.getValue(this.pointer);
+      return f.getValue(this.pointer) as T;
     }
 
     // Try property
     const prop = klass.tryProperty(name);
     if (prop) {
-      return prop.getValue(this);
+      return prop.getValue(this) as T;
     }
 
     // Try method with no parameters (getter-like)
     const m = klass.tryMethod(name, 0);
     if (m) {
-      return m.invoke(this.instancePointer, []);
+      return m.invoke(this.instancePointer, []) as unknown as T;
     }
 
     return null;
@@ -482,8 +483,8 @@ export class MonoObject extends MonoHandle {
    * @returns Member value
    * @throws {MonoFieldNotFoundError} if member not found
    */
-  getMember(name: string): any {
-    const result = this.tryGetMember(name);
+  getMember<T = unknown>(name: string): T {
+    const result = this.tryGetMember<T>(name);
     if (result !== null) {
       return result;
     }
@@ -571,8 +572,8 @@ export class MonoObject extends MonoHandle {
   /**
    * Get all field values as an object
    */
-  toObject(): Record<string, any> {
-    const result: Record<string, any> = {};
+  toObject(): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
     const klass = this.class;
 
     for (const field of klass.fields) {
@@ -676,7 +677,7 @@ export class MonoObject extends MonoHandle {
    * @param wrapperClass The wrapper class constructor
    * @returns Instance of the wrapper class
    */
-  as<T extends MonoObject>(wrapperClass: new (api: any, pointer: NativePointer) => T): T {
+  as<T extends MonoObject>(wrapperClass: new (api: MonoApi, pointer: NativePointer) => T): T {
     return new wrapperClass(this.api, this.pointer);
   }
 

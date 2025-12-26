@@ -51,9 +51,70 @@ export type MemoryType =
   | "bool"
   | "char";
 
+// ============================================================================
+// TYPE MAPPING: MemoryType -> JavaScript Type
+// ============================================================================
+
+/**
+ * Maps each MemoryType to its corresponding JavaScript type.
+ * Used for strongly-typed memory read/write operations.
+ */
+export interface MemoryTypeToJsMap {
+  int8: number;
+  uint8: number;
+  int16: number;
+  uint16: number;
+  int32: number;
+  uint32: number;
+  int64: number;
+  uint64: number;
+  float: number;
+  double: number;
+  pointer: NativePointer;
+  bool: boolean;
+  char: number; // UTF-16 code unit
+}
+
+/**
+ * Maps each MemoryType to its bigint-returning variant for 64-bit integers.
+ */
+export interface MemoryTypeToJsBigIntMap extends Omit<MemoryTypeToJsMap, "int64" | "uint64"> {
+  int64: bigint;
+  uint64: bigint;
+}
+
+/**
+ * Infer the JS return type for a given MemoryType.
+ */
+export type MemoryReadResult<T extends MemoryType> = MemoryTypeToJsMap[T];
+
+/**
+ * Infer the JS return type for a given MemoryType with bigint option.
+ */
+export type MemoryReadResultBigInt<T extends MemoryType> = MemoryTypeToJsBigIntMap[T];
+
+/**
+ * Input value type for writing to memory.
+ * Accepts the mapped JS type or compatible alternatives.
+ */
+export type MemoryWriteValue<T extends MemoryType> = T extends "int64" | "uint64"
+  ? number | bigint | Int64 | UInt64
+  : T extends "pointer"
+    ? NativePointer | NativePointerValue
+    : MemoryTypeToJsMap[T];
+
+// ============================================================================
+// READ OPTIONS
+// ============================================================================
+
 export interface TypedReadOptions extends ValueReadOptions {
   /** Return raw wrapper objects (MonoString, MonoArray) instead of coerced JS values */
   returnRaw?: boolean;
+}
+
+export interface MemoryReadOptions {
+  /** Return int64/uint64 as bigint instead of number (avoids precision loss for values > 2^53) */
+  returnBigInt?: boolean;
 }
 
 export interface MemorySubsystem {
@@ -61,16 +122,38 @@ export interface MemorySubsystem {
    * Read a value from memory using simple type name.
    * @param ptr Memory address
    * @param type Simple type name (int8, uint8, etc.)
+   * @returns The value at the memory address
+   *
+   * @example
+   * ```typescript
+   * // Basic usage (any return type for compatibility)
+   * const value = Mono.memory.read(ptr, "int32");
+   *
+   * // Strongly-typed overload
+   * const health: number = Mono.memory.read<"int32">(ptr, "int32");
+   * const pointer: NativePointer = Mono.memory.read<"pointer">(ptr, "pointer");
+   * ```
    */
-  read(ptr: NativePointer, type: MemoryType): any;
+  read(ptr: NativePointer, type: MemoryType): unknown;
+  read<T extends MemoryType>(ptr: NativePointer, type: T): MemoryReadResult<T>;
+  read<T extends MemoryType>(ptr: NativePointer, type: T, options: { returnBigInt: true }): MemoryReadResultBigInt<T>;
+  read<T extends MemoryType>(ptr: NativePointer, type: T, options?: MemoryReadOptions): MemoryReadResult<T>;
 
   /**
    * Write a value to memory using simple type name.
    * @param ptr Memory address
    * @param value Value to write
    * @param type Simple type name
+   *
+   * @example
+   * ```typescript
+   * Mono.memory.write(ptr, 100, "int32");
+   * Mono.memory.write<"pointer">(ptr, somePointer, "pointer");
+   * Mono.memory.write(ptr, 9007199254740993n, "int64"); // bigint for large values
+   * ```
    */
-  write(ptr: NativePointer, value: any, type: MemoryType): void;
+  write(ptr: NativePointer, value: unknown, type: MemoryType): void;
+  write<T extends MemoryType>(ptr: NativePointer, value: MemoryWriteValue<T>, type: T): void;
 
   /**
    * Read a value from memory using MonoType for full type information.
@@ -78,8 +161,9 @@ export interface MemorySubsystem {
    * @param ptr Memory address
    * @param monoType MonoType describing the value
    * @param options Read options
+   * @returns The value; type depends on MonoType kind
    */
-  readTyped(ptr: NativePointer, monoType: import("./model/type").MonoType, options?: TypedReadOptions): any;
+  readTyped<T = unknown>(ptr: NativePointer, monoType: import("./model/type").MonoType, options?: TypedReadOptions): T;
 
   /**
    * Write a value to memory using MonoType for full type information.
@@ -88,7 +172,7 @@ export interface MemorySubsystem {
    * @param value Value to write
    * @param monoType MonoType describing the value
    */
-  writeTyped(ptr: NativePointer, value: any, monoType: import("./model/type").MonoType): void;
+  writeTyped(ptr: NativePointer, value: unknown, monoType: import("./model/type").MonoType): void;
 
   /**
    * Box a primitive value into a managed object.
@@ -115,12 +199,13 @@ export interface MemorySubsystem {
    * @param obj Boxed object
    * @param monoType Expected type (optional, inferred from object if not provided)
    * @param options Read options
+   * @returns The unboxed value
    */
-  unboxValue(
+  unboxValue<T = unknown>(
     obj: import("./model/object").MonoObject,
     monoType?: import("./model/type").MonoType,
     options?: TypedReadOptions,
-  ): any;
+  ): T;
 
   /**
    * Create a managed string from a JavaScript string.
@@ -139,7 +224,10 @@ export interface MemorySubsystem {
    * @param elementClass Element type
    * @param length Array length
    */
-  array<T = any>(elementClass: import("./model/class").MonoClass, length: number): import("./model/array").MonoArray<T>;
+  array<T = unknown>(
+    elementClass: import("./model/class").MonoClass,
+    length: number,
+  ): import("./model/array").MonoArray<T>;
 
   /**
    * Create a delegate from a method.
