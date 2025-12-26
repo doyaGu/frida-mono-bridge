@@ -5,6 +5,7 @@
 
 import Mono from "../src";
 import { MonoTypeKind, MonoTypeNameFormat } from "../src/model/type";
+import { tryGetClassPtrFromMonoType } from "../src/runtime/type-resolution";
 import { withDomain } from "./test-fixtures";
 import {
   assert,
@@ -1027,6 +1028,54 @@ export async function createMonoTypesTests(): Promise<TestResult> {
               console.log(`    ${className} -> Type -> Class: ${roundTripName}`);
               assert(roundTripName === className, `Round-trip should preserve class name`);
             }
+          }
+        }
+      }
+    }),
+  );
+
+  // ============================================================================
+  // TYPE RESOLUTION HELPER TESTS
+  // ============================================================================
+
+  await suite.addResultAsync(
+    withDomain("tryGetClassPtrFromMonoType should resolve class from type pointer", ({ domain }) => {
+      const testClasses = ["System.Int32", "System.String", "System.Object"];
+
+      for (const className of testClasses) {
+        const cls = domain.tryClass(className);
+        if (cls) {
+          const type = cls.type;
+          if (type) {
+            const klassPtr = tryGetClassPtrFromMonoType(Mono.api, type.pointer);
+            assertNotNull(klassPtr, `${className} type should resolve to class pointer`);
+            assert(!klassPtr!.isNull(), `${className} class pointer should not be null`);
+            console.log(`    ${className} type -> class: ${klassPtr}`);
+          }
+        }
+      }
+    }),
+  );
+
+  await suite.addResultAsync(
+    withDomain("tryGetClassPtrFromMonoType should return null for null pointer", () => {
+      const result = tryGetClassPtrFromMonoType(Mono.api, NULL);
+      assert(result === null, "Should return null for NULL type pointer");
+      console.log("    NULL type pointer -> null (correct)");
+    }),
+  );
+
+  await suite.addResultAsync(
+    withDomain("tryGetClassPtrFromMonoType should handle array element types", ({ domain }) => {
+      const intArrayClass = domain.tryClass("System.Int32[]");
+      if (intArrayClass) {
+        const type = intArrayClass.type;
+        if (type && type.isArray) {
+          const elementType = type.elementType;
+          if (elementType) {
+            const elementClassPtr = tryGetClassPtrFromMonoType(Mono.api, elementType.pointer);
+            assertNotNull(elementClassPtr, "Array element type should resolve to class pointer");
+            console.log(`    Int32[] element type -> class: ${elementClassPtr}`);
           }
         }
       }
