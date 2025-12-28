@@ -1,7 +1,7 @@
 import { TypeAttribute, getMaskedValue, hasFlag, pickFlags } from "../runtime/metadata";
 import { tryGetClassPtrFromMonoType } from "../runtime/type-resolution";
 import { lazy } from "../utils/cache";
-import { MonoErrorCodes, raise } from "../utils/errors";
+import { findSimilarNames, formatSimilarNames, MonoErrorCodes, raise } from "../utils/errors";
 import { Logger } from "../utils/log";
 import { enumerateMonoHandles, pointerIsNull } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
@@ -9,6 +9,7 @@ import type { CustomAttribute } from "./attribute";
 import { createClassAttributeContext, getCustomAttributes } from "./attribute";
 import { MonoDomain } from "./domain";
 import { MonoField } from "./field";
+import type { MethodArgument } from "./handle";
 import { MonoHandle } from "./handle";
 import { MonoImage } from "./image";
 import { MonoMethod } from "./method";
@@ -59,6 +60,7 @@ const TYPE_DESCRIBED_FLAGS: Record<string, number> = {
  */
 export class MonoClass extends MonoHandle {
   #initialized = false;
+  #methodCache: Map<string, MonoMethod | null> | null = null;
 
   // ===== CORE PROPERTIES =====
 
@@ -258,23 +260,57 @@ export class MonoClass extends MonoHandle {
       return m;
     }
     const paramHint = paramCount >= 0 ? ` with ${paramCount} parameter(s)` : "";
+
+    // Find similar method names
+    const methodNames = this.methods.map(m => m.name);
+    const similar = findSimilarNames(name, methodNames);
+    const similarHint = formatSimilarNames(similar);
+    const hint = similarHint ? similarHint : "Use tryMethod() to avoid throwing";
+
     raise(
       MonoErrorCodes.METHOD_NOT_FOUND,
       `Method '${name}'${paramHint} not found on class '${this.fullName}'`,
-      "Use tryMethod() to avoid throwing",
+      hint,
     );
   }
 
   /**
    * Try to find a method by name without throwing.
+   * Uses internal caching to improve performance for repeated lookups.
    * @param name Method name
    * @param paramCount Parameter count (-1 to match any)
    * @returns Method if found, null otherwise
    */
   tryMethod(name: string, paramCount = -1): MonoMethod | null {
+    // Build cache key
+    const cacheKey = `${name}:${paramCount}`;
+
+    // Initialize cache lazily
+    if (!this.#methodCache) {
+      this.#methodCache = new Map();
+    }
+
+    // Check cache first
+    if (this.#methodCache.has(cacheKey)) {
+      return this.#methodCache.get(cacheKey) ?? null;
+    }
+
+    // Perform actual lookup
     const namePtr = this.api.allocUtf8StringCached(name);
     const methodPtr = this.native.mono_class_get_method_from_name(this.pointer, namePtr, paramCount);
-    return pointerIsNull(methodPtr) ? null : new MonoMethod(this.api, methodPtr);
+    const result = pointerIsNull(methodPtr) ? null : new MonoMethod(this.api, methodPtr);
+
+    // Cache result
+    this.#methodCache.set(cacheKey, result);
+    return result;
+  }
+
+  /**
+   * Clear the method lookup cache.
+   * Call this if class methods change dynamically (rare in practice).
+   */
+  clearMethodCache(): void {
+    this.#methodCache?.clear();
   }
 
   /**
@@ -298,10 +334,17 @@ export class MonoClass extends MonoHandle {
     if (f) {
       return f;
     }
+
+    // Find similar field names
+    const fieldNames = this.fields.map(f => f.name);
+    const similar = findSimilarNames(name, fieldNames);
+    const similarHint = formatSimilarNames(similar);
+    const hint = similarHint ? similarHint : "Use tryField() to avoid throwing";
+
     raise(
       MonoErrorCodes.FIELD_NOT_FOUND,
       `Field '${name}' not found on class '${this.fullName}'`,
-      "Use tryField() to avoid throwing",
+      hint,
     );
   }
 
@@ -336,10 +379,17 @@ export class MonoClass extends MonoHandle {
     if (p) {
       return p;
     }
+
+    // Find similar property names
+    const propertyNames = this.properties.map(p => p.name);
+    const similar = findSimilarNames(name, propertyNames);
+    const similarHint = formatSimilarNames(similar);
+    const hint = similarHint ? similarHint : "Use tryProperty() to avoid throwing";
+
     raise(
       MonoErrorCodes.PROPERTY_NOT_FOUND,
       `Property '${name}' not found on class '${this.fullName}'`,
-      "Use tryProperty() to avoid throwing",
+      hint,
     );
   }
 
@@ -481,27 +531,125 @@ export class MonoClass extends MonoHandle {
 
   /**
    * Create a new instance of this class.
-   * @param initialise Whether to call the default constructor (default: true)
+   *
+   * @param args Constructor arguments (optional). If provided, finds and invokes
+   *             a matching constructor. If omitted or empty, calls the default constructor.
    * @returns New MonoObject instance
+   *
+   * @example
+   * ```typescript
+   * // Create with default constructor
+   * const obj = klass.newObject();
+   *
+   * // Create with constructor arguments
+   * const obj = klass.newObject([42, "hello"]);
+   *
+   * // Create with typed arguments
+   * const obj = klass.newObject([{ value: 100, type: intType }]);
+   * ```
    */
-  newObject(initialise = true): MonoObject {
+  newObject(args?: MethodArgument[]): MonoObject {
     this.ensureInitialized();
     const domain = this.api.getRootDomain();
     const objectPtr = this.native.mono_object_new(domain, this.pointer);
-    if (initialise) {
+    const obj = new MonoObject(this.api, objectPtr);
+
+    // If no args provided, use default initialization
+    if (!args || args.length === 0) {
       this.native.mono_runtime_object_init(objectPtr);
+      return obj;
     }
-    return new MonoObject(this.api, objectPtr);
+
+    // Find matching constructor
+    const ctor = this.findConstructor(args.length);
+    if (!ctor) {
+      raise(
+        MonoErrorCodes.METHOD_NOT_FOUND,
+        `No constructor with ${args.length} parameter(s) found on class '${this.fullName}'`,
+        "Check constructor signature or use newObject() for default constructor",
+      );
+    }
+
+    // Invoke constructor
+    ctor.invoke(objectPtr, args);
+    return obj;
   }
 
   /**
    * Allocate a new instance of this class.
-   * Alias for newObject() for convenience.
-   * @param initialise Whether to call the default constructor (default: true)
+   *
+   * @param args Constructor arguments (optional). If provided, finds and invokes
+   *             a matching constructor. If omitted, calls the default constructor.
    * @returns New MonoObject instance
+   *
+   * @example
+   * ```typescript
+   * // Allocate with default constructor
+   * const obj = klass.alloc();
+   *
+   * // Allocate with constructor arguments
+   * const obj = klass.alloc([42, "hello"]);
+   * ```
    */
-  alloc(initialise = true): MonoObject {
-    return this.newObject(initialise);
+  alloc(args?: MethodArgument[]): MonoObject {
+    return this.newObject(args);
+  }
+
+  /**
+   * Allocate a raw instance of this class without calling any constructor.
+   *
+   * This method only allocates memory for the object but does NOT call
+   * any initialization logic. Use this when you need to manually set up
+   * object fields (e.g., for cloning or delegate creation).
+   *
+   * @returns New MonoObject instance (uninitialized)
+   *
+   * @example
+   * ```typescript
+   * // Allocate raw object for manual field copying
+   * const rawObj = klass.allocRaw();
+   * field.setValue(rawObj, someValue);
+   * ```
+   */
+  allocRaw(): MonoObject {
+    this.ensureInitialized();
+    const domain = this.api.getRootDomain();
+    const objectPtr = this.native.mono_object_new(domain, this.pointer);
+    return new MonoObject(this.api, objectPtr);
+  }
+
+  /**
+   * Try to create a new instance of this class without throwing.
+   *
+   * @param args Constructor arguments (optional)
+   * @returns New MonoObject instance if successful, null otherwise
+   */
+  tryNewObject(args?: MethodArgument[]): MonoObject | null {
+    try {
+      return this.newObject(args);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Find a constructor with the specified number of parameters.
+   *
+   * @param paramCount Number of parameters (-1 for any)
+   * @returns MonoMethod representing the constructor, or null if not found
+   */
+  findConstructor(paramCount = -1): MonoMethod | null {
+    return this.tryMethod(".ctor", paramCount);
+  }
+
+  /**
+   * Get all constructors of this class.
+   *
+   * @returns Array of MonoMethod representing constructors
+   */
+  @lazy
+  get constructors(): MonoMethod[] {
+    return this.methods.filter(m => m.isConstructor);
   }
 
   /**
