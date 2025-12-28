@@ -30,6 +30,7 @@ export const MonoErrorCodes = {
   METHOD_NOT_FOUND: "METHOD_NOT_FOUND",
   FIELD_NOT_FOUND: "FIELD_NOT_FOUND",
   PROPERTY_NOT_FOUND: "PROPERTY_NOT_FOUND",
+  MEMBER_NOT_FOUND: "MEMBER_NOT_FOUND",
   ASSEMBLY_NOT_FOUND: "ASSEMBLY_NOT_FOUND",
   IMAGE_NOT_FOUND: "IMAGE_NOT_FOUND",
 
@@ -116,7 +117,7 @@ export function raise(
       break;
     case MonoErrorCodes.THREAD_ATTACH_FAILED:
     case MonoErrorCodes.THREAD_DETACH_FAILED:
-      error = new MonoThreadError(fullMessage, cause);
+      error = new MonoThreadError(fullMessage, code, cause);
       break;
     case MonoErrorCodes.INVOKE_FAILED:
       error = new MonoMethodError(
@@ -472,8 +473,8 @@ export class MonoExportNotFoundError extends MonoError {
  * Thread management error
  */
 export class MonoThreadError extends MonoError {
-  constructor(message: string, cause?: Error) {
-    super(message, MonoErrorCodes.THREAD_ATTACH_FAILED, undefined, cause);
+  constructor(message: string, code: MonoErrorCode = MonoErrorCodes.THREAD_ATTACH_FAILED, cause?: Error) {
+    super(message, code, undefined, cause);
     this.name = "MonoThreadError";
   }
 }
@@ -668,7 +669,10 @@ export function handleMonoError(error: unknown): MonoError {
     const message = error.message.toLowerCase();
 
     if (message.includes("thread") || message.includes("attach")) {
-      return new MonoThreadError(error.message, error);
+      const code = message.includes("detach")
+        ? MonoErrorCodes.THREAD_DETACH_FAILED
+        : MonoErrorCodes.THREAD_ATTACH_FAILED;
+      return new MonoThreadError(error.message, code, error);
     }
 
     if (message.includes("assembly") || message.includes("module")) {
@@ -857,4 +861,91 @@ export class ValidationBuilder {
       );
     }
   }
+}
+
+// ============================================================================
+// FUZZY MATCHING UTILITIES
+// ============================================================================
+
+/**
+ * Calculate Levenshtein distance between two strings.
+ * Used for fuzzy matching to suggest similar names.
+ * @param a First string
+ * @param b Second string
+ * @returns Edit distance between the strings
+ */
+export function levenshteinDistance(a: string, b: string): number {
+  const an = a.length;
+  const bn = b.length;
+
+  if (an === 0) return bn;
+  if (bn === 0) return an;
+
+  // Use two rows for space efficiency
+  let prev = new Array<number>(bn + 1);
+  let curr = new Array<number>(bn + 1);
+
+  // Initialize first row
+  for (let j = 0; j <= bn; j++) {
+    prev[j] = j;
+  }
+
+  for (let i = 1; i <= an; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= bn; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(
+        curr[j - 1] + 1, // insertion
+        prev[j] + 1, // deletion
+        prev[j - 1] + cost, // substitution
+      );
+    }
+    [prev, curr] = [curr, prev];
+  }
+
+  return prev[bn];
+}
+
+/**
+ * Find similar names from a list of candidates.
+ * @param target The name to match against
+ * @param candidates List of candidate names
+ * @param maxDistance Maximum edit distance to consider (default: 3)
+ * @param maxResults Maximum number of results to return (default: 5)
+ * @returns Array of similar names sorted by similarity
+ */
+export function findSimilarNames(
+  target: string,
+  candidates: string[],
+  maxDistance = 3,
+  maxResults = 5,
+): string[] {
+  const targetLower = target.toLowerCase();
+
+  const scored = candidates
+    .map(name => {
+      const nameLower = name.toLowerCase();
+      // Calculate edit distance
+      const distance = levenshteinDistance(targetLower, nameLower);
+      // Give bonus for prefix match
+      const prefixBonus = nameLower.startsWith(targetLower.substring(0, 2)) ? 0.5 : 0;
+      // Give bonus for substring match
+      const substringBonus = nameLower.includes(targetLower) || targetLower.includes(nameLower) ? 1 : 0;
+      return { name, score: distance - prefixBonus - substringBonus };
+    })
+    .filter(({ score }) => score <= maxDistance)
+    .sort((a, b) => a.score - b.score);
+
+  return scored.slice(0, maxResults).map(({ name }) => name);
+}
+
+/**
+ * Format a list of similar names for error messages.
+ * @param similar Array of similar names
+ * @returns Formatted string for display in error message
+ */
+export function formatSimilarNames(similar: string[]): string {
+  if (similar.length === 0) return "";
+  if (similar.length === 1) return `Did you mean '${similar[0]}'?`;
+  return `Similar names: ${similar.map(n => `'${n}'`).join(", ")}`;
 }
