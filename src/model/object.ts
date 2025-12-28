@@ -167,6 +167,95 @@ export class MonoObject extends MonoHandle {
     return true;
   }
 
+  /**
+   * Get multiple field values at once.
+   * More efficient than calling getFieldValue multiple times when reading many fields.
+   *
+   * @param names Array of field names to read
+   * @returns Record with field names as keys and values
+   * @throws {MonoFieldNotFoundError} if any field is not found
+   *
+   * @example
+   * ```typescript
+   * const values = obj.getFieldValues(["health", "mana", "level"]);
+   * console.log(values.health, values.mana, values.level);
+   * ```
+   */
+  getFieldValues<T extends Record<string, unknown> = Record<string, unknown>>(names: string[]): T {
+    const result: Record<string, unknown> = {};
+    for (const name of names) {
+      result[name] = this.getFieldValue(name);
+    }
+    return result as T;
+  }
+
+  /**
+   * Try to get multiple field values at once without throwing.
+   * Skips fields that are not found.
+   *
+   * @param names Array of field names to read
+   * @returns Record with field names as keys and values (missing fields omitted)
+   *
+   * @example
+   * ```typescript
+   * const values = obj.tryGetFieldValues(["health", "mana", "invalidField"]);
+   * // values will have health and mana, but not invalidField
+   * ```
+   */
+  tryGetFieldValues<T extends Record<string, unknown> = Record<string, unknown>>(names: string[]): Partial<T> {
+    const result: Record<string, unknown> = {};
+    for (const name of names) {
+      const value = this.tryGetFieldValue(name);
+      if (value !== null) {
+        result[name] = value;
+      }
+    }
+    return result as Partial<T>;
+  }
+
+  /**
+   * Set multiple field values at once.
+   * More efficient than calling setFieldValue multiple times when writing many fields.
+   *
+   * @param values Record with field names as keys and values to set
+   * @throws {MonoFieldNotFoundError} if any field is not found
+   *
+   * @example
+   * ```typescript
+   * obj.setFieldValues({ health: 100, mana: 50, level: 10 });
+   * ```
+   */
+  setFieldValues(values: Record<string, unknown>): void {
+    for (const [name, value] of Object.entries(values)) {
+      this.setFieldValue(name, value);
+    }
+  }
+
+  /**
+   * Try to set multiple field values at once without throwing.
+   * Skips fields that are not found.
+   *
+   * @param values Record with field names as keys and values to set
+   * @returns Object with success status and list of failed field names
+   *
+   * @example
+   * ```typescript
+   * const result = obj.trySetFieldValues({ health: 100, invalidField: 50 });
+   * if (result.failed.length > 0) {
+   *   console.log("Failed to set:", result.failed);
+   * }
+   * ```
+   */
+  trySetFieldValues(values: Record<string, unknown>): { success: boolean; failed: string[] } {
+    const failed: string[] = [];
+    for (const [name, value] of Object.entries(values)) {
+      if (!this.trySetFieldValue(name, value)) {
+        failed.push(name);
+      }
+    }
+    return { success: failed.length === 0, failed };
+  }
+
   // ===== METHOD OPERATIONS =====
 
   /**
@@ -448,32 +537,40 @@ export class MonoObject extends MonoHandle {
   // ===== UNIFIED MEMBER ACCESS =====
 
   /**
+   * Find a member value in this class or its base classes.
+   */
+  private findMember(name: string): { found: true; value: unknown } | { found: false } {
+    let current: MonoClass | null = this.class;
+    while (current) {
+      const f = current.tryField(name);
+      if (f) {
+        return { found: true, value: f.getValue(this.pointer) };
+      }
+
+      const prop = current.tryProperty(name);
+      if (prop) {
+        return { found: true, value: prop.getValue(this) };
+      }
+
+      const m = current.tryMethod(name, 0);
+      if (m) {
+        return { found: true, value: m.call(this.instancePointer, []) };
+      }
+
+      current = current.parent;
+    }
+
+    return { found: false };
+  }
+
+  /**
    * Try to get a field, property, or call a parameterless method by name without throwing.
    * @param name Member name
    * @returns Member value or null if not found
    */
   tryGetMember<T = unknown>(name: string): T | null {
-    const klass = this.class;
-
-    // Try field first
-    const f = klass.tryField(name);
-    if (f) {
-      return f.getValue(this.pointer) as T;
-    }
-
-    // Try property
-    const prop = klass.tryProperty(name);
-    if (prop) {
-      return prop.getValue(this) as T;
-    }
-
-    // Try method with no parameters (getter-like)
-    const m = klass.tryMethod(name, 0);
-    if (m) {
-      return m.invoke(this.instancePointer, []) as unknown as T;
-    }
-
-    return null;
+    const result = this.findMember(name);
+    return result.found ? (result.value as T) : null;
   }
 
   /**
@@ -484,13 +581,13 @@ export class MonoObject extends MonoHandle {
    * @throws {MonoFieldNotFoundError} if member not found
    */
   getMember<T = unknown>(name: string): T {
-    const result = this.tryGetMember<T>(name);
-    if (result !== null) {
-      return result;
+    const result = this.findMember(name);
+    if (result.found) {
+      return result.value as T;
     }
     raise(
-      MonoErrorCodes.FIELD_NOT_FOUND,
-      `Member '${name}' not found on ${this.class.fullName}`,
+      MonoErrorCodes.MEMBER_NOT_FOUND,
+      `Member '${name}' not found on ${this.class.fullName} or its base classes`,
       "Use tryGetMember() to avoid throwing",
     );
   }
@@ -715,7 +812,7 @@ export class MonoObject extends MonoHandle {
     }
 
     // Manual clone: create new object and copy fields
-    const newObj = klass.newObject(false); // Don't initialize (no constructor call)
+    const newObj = klass.allocRaw(); // Don't initialize (no constructor call)
 
     // Copy all instance fields
     for (const field of klass.fields) {
@@ -768,7 +865,7 @@ export class MonoObject extends MonoHandle {
     const klass = this.class;
 
     // Create new object without initialization
-    const newObj = klass.newObject(false);
+    const newObj = klass.allocRaw();
     visited.set(ptrKey, newObj);
 
     // Copy all instance fields
