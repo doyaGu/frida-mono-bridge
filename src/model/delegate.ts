@@ -151,9 +151,11 @@ export class MonoDelegate extends MonoObject {
     target: MonoObject | NativePointer | null,
     method: MonoMethod | NativePointer,
   ): MonoDelegate {
-    const instance = delegateClass.newObject(false);
+    const instance = delegateClass.allocRaw();
     const methodPtr = method instanceof MonoMethod ? method.pointer : (method as NativePointer);
     const targetPtr = target instanceof MonoObject ? target.pointer : (target ?? NULL);
+    const methodPtrValue = Memory.alloc(Process.pointerSize);
+    methodPtrValue.writePointer(methodPtr);
     const delegate = new MonoDelegate(api, instance.pointer);
 
     // NOTE: mono_delegate_ctor is NOT exported in any Mono DLL (neither mono.dll nor mono-2.0-bdwgc.dll)
@@ -162,7 +164,7 @@ export class MonoDelegate extends MonoObject {
     const ctorMethod = delegateClass.tryMethod(".ctor", 2);
     if (ctorMethod) {
       // Invoke constructor: .ctor(object target, IntPtr method)
-      api.runtimeInvoke(ctorMethod.pointer, instance.pointer, [targetPtr, methodPtr]);
+      api.runtimeInvoke(ctorMethod.pointer, instance.pointer, [targetPtr, methodPtrValue]);
     } else {
       // Fallback: Try to find any constructor and set fields manually
       // Delegate internal layout: _target (object), _methodPtr (IntPtr), _methodPtrAux (IntPtr)
@@ -171,7 +173,7 @@ export class MonoDelegate extends MonoObject {
 
       if (targetField && methodField) {
         targetField.setValue(instance, targetPtr);
-        methodField.setValue(instance.pointer, methodPtr);
+        methodField.setValue(instance.pointer, methodPtrValue);
       } else {
         raise(
           MonoErrorCodes.NOT_SUPPORTED,
@@ -354,9 +356,6 @@ export class MonoDelegate extends MonoObject {
   }
 
   // ===== INVOCATION METHODS =====
-
-  /**
-   * Invoke the delegate using managed invocation (safe mode).
 
   /**
    * Invoke the delegate using managed invocation (safe mode).
