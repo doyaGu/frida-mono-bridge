@@ -11,7 +11,7 @@ import { FieldAttribute, getMaskedValue, hasFlag } from "../runtime/metadata";
 import { boxPrimitiveValue } from "../runtime/value-conversion";
 import { lazy } from "../utils/cache";
 import { MonoErrorCodes, raise } from "../utils/errors";
-import { pointerIsNull, unwrapInstance, unwrapInstanceRequired } from "../utils/memory";
+import { pointerIsNull, tryMakePointer, unwrapInstance, unwrapInstanceRequired } from "../utils/memory";
 import { readUtf8String } from "../utils/string";
 import type { CustomAttribute } from "./attribute";
 import { createFieldAttributeContext, getCustomAttributes } from "./attribute";
@@ -221,8 +221,11 @@ export class MonoField<T = unknown> extends MonoHandle {
     const domainPtr = this.resolveDomainPointer(options.domain);
     if (this.isStatic) {
       this.parent.ensureInitialized();
+    } else if (instance === null || instance === undefined) {
+      return null;
     }
-    const objectPtr = this.native.mono_field_get_value_object(domainPtr, this.pointer, unwrapInstance(instance));
+    const target = this.isStatic ? unwrapInstance(instance) : unwrapInstanceRequired(instance, this);
+    const objectPtr = this.native.mono_field_get_value_object(domainPtr, this.pointer, target);
     return pointerIsNull(objectPtr) ? null : new MonoObject(this.api, objectPtr);
   }
 
@@ -256,6 +259,82 @@ export class MonoField<T = unknown> extends MonoHandle {
   }
 
   /**
+   * Get the value of an Int64/UInt64 field as a BigInt.
+   * This prevents precision loss that occurs when reading 64-bit values as numbers.
+   * @param instance Object instance (null for static fields)
+   * @param options Access options
+   * @returns BigInt value
+   * @throws {MonoTypeMismatchError} if the field is not a 64-bit integer type
+   */
+  getBigIntValue(instance?: MonoObject | NativePointer | null, options: FieldAccessOptions = {}): bigint {
+    const kind = this.type.kind;
+    if (kind !== MonoTypeKind.I8 && kind !== MonoTypeKind.U8) {
+      raise(
+        MonoErrorCodes.TYPE_MISMATCH,
+        `Field ${this.name} is not a 64-bit integer type (is ${this.type.fullName})`,
+        "Use getValue() for non-64-bit fields",
+      );
+    }
+    const raw = this.readRawValue(instance, options);
+    if (kind === MonoTypeKind.I8) {
+      // Convert Frida's Int64 to native bigint
+      return BigInt(raw.storage.readS64().toString());
+    }
+    // Convert Frida's UInt64 to native bigint
+    return BigInt(raw.storage.readU64().toString());
+  }
+
+  /**
+   * Get the static value of an Int64/UInt64 field as a BigInt.
+   * @param options Access options
+   * @returns BigInt value
+   * @throws {MonoTypeMismatchError} if the field is not a 64-bit integer type
+   */
+  getStaticBigIntValue(options: FieldAccessOptions = {}): bigint {
+    return this.getBigIntValue(null, options);
+  }
+
+  /**
+   * Set the value of an Int64/UInt64 field from a BigInt.
+   * @param instance Object instance (null for static fields)
+   * @param value BigInt value to set
+   * @param options Access options
+   * @throws {MonoTypeMismatchError} if the field is not a 64-bit integer type
+   */
+  setBigIntValue(
+    instance: MonoObject | NativePointer | null,
+    value: bigint,
+    options: FieldAccessOptions = {},
+  ): void {
+    const kind = this.type.kind;
+    if (kind !== MonoTypeKind.I8 && kind !== MonoTypeKind.U8) {
+      raise(
+        MonoErrorCodes.TYPE_MISMATCH,
+        `Field ${this.name} is not a 64-bit integer type (is ${this.type.fullName})`,
+        "Use setValue() for non-64-bit fields",
+      );
+    }
+    const storage = Memory.alloc(8);
+    // Convert native bigint to Frida's Int64/UInt64
+    if (kind === MonoTypeKind.I8) {
+      storage.writeS64(int64(value.toString()));
+    } else {
+      storage.writeU64(uint64(value.toString()));
+    }
+    this.setValue(instance, storage, options);
+  }
+
+  /**
+   * Set the static value of an Int64/UInt64 field from a BigInt.
+   * @param value BigInt value to set
+   * @param options Access options
+   * @throws {MonoTypeMismatchError} if the field is not a 64-bit integer type
+   */
+  setStaticBigIntValue(value: bigint, options: FieldAccessOptions = {}): void {
+    this.setBigIntValue(null, value, options);
+  }
+
+  /**
    * Read and coerce the field value to a JavaScript type.
    * @param instance Object instance (null for static fields)
    * @param options Read options (set coerce=false to get raw pointer)
@@ -265,6 +344,9 @@ export class MonoField<T = unknown> extends MonoHandle {
     const raw = this.readRawValue(instance, options);
     const type = raw.type;
     if (options.coerce === false) {
+      if (isPointerLikeKind(type.kind)) {
+        return raw.storage.readPointer();
+      }
       return raw.valuePointer;
     }
     return this.coerceValue(raw, type);
@@ -275,18 +357,19 @@ export class MonoField<T = unknown> extends MonoHandle {
   /**
    * Set the raw value of this field.
    * @param instance Object instance (null for static fields)
-   * @param value NativePointer to the value
+   * @param value NativePointer to the value (for reference types, pass the object pointer)
    * @param options Access options
    */
   setValue(instance: MonoObject | NativePointer | null, value: NativePointer, options: FieldAccessOptions = {}): void {
+    const preparedValue = this.prepareValuePointer(value);
     if (this.isStatic) {
       const domainPtr = this.resolveDomainPointer(options.domain);
       const vtable = this.getStaticVTable(domainPtr);
-      this.native.mono_field_static_set_value(vtable, this.pointer, value);
+      this.native.mono_field_static_set_value(vtable, this.pointer, preparedValue);
       return;
     }
     const target = unwrapInstanceRequired(instance, this);
-    this.native.mono_field_set_value(target, this.pointer, value);
+    this.native.mono_field_set_value(target, this.pointer, preparedValue);
   }
 
   /**
@@ -348,7 +431,33 @@ export class MonoField<T = unknown> extends MonoHandle {
    * @param options Access options
    */
   setTypedValue(instance: MonoObject | NativePointer | null, value: T, options: FieldAccessOptions = {}): void {
+    if (value === null || value === undefined) {
+      if (this.type.valueType) {
+        if (this.isNullableType(this.type)) {
+          const zeroed = this.allocZeroedValue(this.type);
+          this.setValue(instance, zeroed, options);
+          return;
+        }
+        raise(
+          MonoErrorCodes.TYPE_MISMATCH,
+          `Field ${this.name} is a value type and cannot be set to null`,
+          "Provide a non-null value",
+          { fieldName: this.name, value, expectedType: this.type.fullName },
+        );
+      }
+      this.setValueObject(instance, null, options);
+      return;
+    }
+
     const convertedValue = this.convertToMonoValue(value);
+    if (convertedValue === null) {
+      raise(
+        MonoErrorCodes.TYPE_MISMATCH,
+        `Failed to convert value for field ${this.name} (${this.type.fullName})`,
+        "Ensure the value matches the field type",
+        { fieldName: this.name, value, expectedType: this.type.fullName },
+      );
+    }
     this.setValueObject(instance, convertedValue, options);
   }
 
@@ -358,7 +467,33 @@ export class MonoField<T = unknown> extends MonoHandle {
    * @param options Access options
    */
   setTypedStaticValue(value: T, options: FieldAccessOptions = {}): void {
+    if (value === null || value === undefined) {
+      if (this.type.valueType) {
+        if (this.isNullableType(this.type)) {
+          const zeroed = this.allocZeroedValue(this.type);
+          this.setValue(null, zeroed, options);
+          return;
+        }
+        raise(
+          MonoErrorCodes.TYPE_MISMATCH,
+          `Field ${this.name} is a value type and cannot be set to null`,
+          "Provide a non-null value",
+          { fieldName: this.name, value, expectedType: this.type.fullName },
+        );
+      }
+      this.setValueObject(null, null, options);
+      return;
+    }
+
     const convertedValue = this.convertToMonoValue(value);
+    if (convertedValue === null) {
+      raise(
+        MonoErrorCodes.TYPE_MISMATCH,
+        `Failed to convert value for field ${this.name} (${this.type.fullName})`,
+        "Ensure the value matches the field type",
+        { fieldName: this.name, value, expectedType: this.type.fullName },
+      );
+    }
     this.setValueObject(null, convertedValue, options);
   }
 
@@ -477,6 +612,22 @@ export class MonoField<T = unknown> extends MonoHandle {
     const valuePointer = treatAsReference ? storage.readPointer() : storage;
 
     return { storage, valuePointer, type };
+  }
+
+  /**
+   * Prepare a value pointer for mono_field_set_value calls.
+   * Reference types need an extra level of indirection (object pointer stored in memory).
+   */
+  private prepareValuePointer(value: NativePointer): NativePointer {
+    const type = this.type;
+    const kind = type.kind;
+    const needsIndirection = !type.valueType && !isPointerLikeKind(kind);
+    if (!needsIndirection) {
+      return value;
+    }
+    const storage = Memory.alloc(Process.pointerSize);
+    storage.writePointer(value);
+    return storage;
   }
 
   /**
@@ -599,6 +750,34 @@ export class MonoField<T = unknown> extends MonoHandle {
       return null;
     }
 
+    const type = this.type;
+    const kind = type.kind;
+
+    // Handle string conversion
+    if (kind === MonoTypeKind.String) {
+      if (value instanceof MonoObject) {
+        return value;
+      }
+      if (typeof value === "string") {
+        return this.api.stringNew(value);
+      }
+      return null;
+    }
+
+    if (isPointerLikeKind(kind)) {
+      if (value instanceof MonoObject) {
+        return value;
+      }
+      if (value instanceof NativePointer) {
+        return this.allocPointerValue(value, type);
+      }
+      if (typeof value === "number" || typeof value === "string" || typeof value === "bigint") {
+        const ptrValue = tryMakePointer(value);
+        return ptrValue ? this.allocPointerValue(ptrValue, type) : null;
+      }
+      return null;
+    }
+
     // Pass through existing MonoObjects
     if (value instanceof MonoObject) {
       return value;
@@ -607,17 +786,6 @@ export class MonoField<T = unknown> extends MonoHandle {
     // Pass through NativePointers
     if (value instanceof NativePointer) {
       return value;
-    }
-
-    const type = this.type;
-    const kind = type.kind;
-
-    // Handle string conversion
-    if (kind === MonoTypeKind.String) {
-      if (typeof value === "string") {
-        return this.api.stringNew(value);
-      }
-      return null;
     }
 
     // Handle primitives/enums that need boxing (struct/value types require a pointer or boxed object)
@@ -637,6 +805,30 @@ export class MonoField<T = unknown> extends MonoHandle {
 
     // For reference types, just return the value if it's already handled
     return null;
+  }
+
+  private isNullableType(type: MonoType): boolean {
+    const fullName = type.fullName;
+    return (
+      fullName === "System.Nullable`1" ||
+      fullName.startsWith("System.Nullable`1") ||
+      fullName.startsWith("System.Nullable<")
+    );
+  }
+
+  private allocZeroedValue(type: MonoType): NativePointer {
+    const { size } = type.valueSize;
+    const storageSize = Math.max(size, Process.pointerSize);
+    const storage = Memory.alloc(storageSize);
+    const zeros = new Uint8Array(storageSize);
+    storage.writeByteArray(zeros);
+    return storage;
+  }
+
+  private allocPointerValue(value: NativePointer, type: MonoType): NativePointer {
+    const storage = this.allocZeroedValue(type);
+    storage.writePointer(value);
+    return storage;
   }
 }
 
