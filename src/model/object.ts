@@ -544,17 +544,20 @@ export class MonoObject extends MonoHandle {
     while (current) {
       const f = current.tryField(name);
       if (f) {
-        return { found: true, value: f.getValue(this.pointer) };
+        const instance = f.isStatic ? null : this.pointer;
+        return { found: true, value: f.getValue(instance) };
       }
 
       const prop = current.tryProperty(name);
       if (prop) {
-        return { found: true, value: prop.getValue(this) };
+        const instance = prop.isStatic ? null : this;
+        return { found: true, value: prop.getValue(instance) };
       }
 
       const m = current.tryMethod(name, 0);
       if (m) {
-        return { found: true, value: m.call(this.instancePointer, []) };
+        const instance = m.isStatic ? null : this.instancePointer;
+        return { found: true, value: m.call(instance, []) };
       }
 
       current = current.parent;
@@ -674,6 +677,9 @@ export class MonoObject extends MonoHandle {
     const klass = this.class;
 
     for (const field of klass.fields) {
+      if (field.isStatic) {
+        continue;
+      }
       try {
         result[field.name] = field.getValue(this.pointer);
       } catch {
