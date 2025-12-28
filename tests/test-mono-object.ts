@@ -148,7 +148,7 @@ export async function createMonoObjectTests(): Promise<TestResult[]> {
   results.push(
     await withCoreClasses("MonoObject equals should work for same object", ({ objectClass }) => {
       const obj = objectClass.newObject();
-      assert(obj.pointer.equals(obj.pointer), "Same object should be equal to itself");
+      assert(obj.equals(obj), "Same object should be equal to itself");
     }),
   );
 
@@ -157,7 +157,7 @@ export async function createMonoObjectTests(): Promise<TestResult[]> {
       const obj = objectClass.newObject();
       const cloned = obj.clone();
 
-      assert(!obj.pointer.equals(cloned.pointer), "Clone should have different pointer");
+      assert(!obj.equals(cloned), "Clone should not be equal to original");
     }),
   );
 

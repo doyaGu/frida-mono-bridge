@@ -20,6 +20,7 @@
  */
 
 import Mono, { MonoDelegate } from "../src";
+import { pointerIsNull } from "../src/utils/memory";
 import { withDomain } from "./test-fixtures";
 import { TestResult, assert, assertNotNull } from "./test-framework";
 
@@ -272,14 +273,8 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
         assert("thunk" in thunkInfo, "Result should contain thunk property");
 
         // invoke and thunk should both be pointers
-        assert(
-          thunkInfo.invoke instanceof NativePointer || typeof thunkInfo.invoke === "object",
-          "invoke should be NativePointer",
-        );
-        assert(
-          thunkInfo.thunk instanceof NativePointer || typeof thunkInfo.thunk === "object",
-          "thunk should be NativePointer",
-        );
+        assert(!pointerIsNull(thunkInfo.invoke), "invoke should be a non-null pointer");
+        assert(!pointerIsNull(thunkInfo.thunk), "thunk should be a non-null pointer");
       } catch (e) {
         console.log(`[SKIP] getDelegateThunk threw exception: ${e}`);
       }
