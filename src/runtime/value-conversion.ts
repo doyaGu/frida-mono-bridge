@@ -622,6 +622,11 @@ export function convertMonoToJs(
   }
 
   // Handle reference types - return wrapped MonoObject
+  const klass = type.class;
+  if (klass?.isDelegate) {
+    const Ctor = wrappers.delegate ?? DEFAULT_WRAPPERS.delegate;
+    return new Ctor(api, rawResult);
+  }
   const Ctor = wrappers.object ?? DEFAULT_WRAPPERS.object;
   return new Ctor(api, rawResult);
 }

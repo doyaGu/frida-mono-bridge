@@ -20,6 +20,9 @@
 
 // Import the main Mono facade
 import { Mono } from "./mono";
+import { MonoArray } from "./model/array";
+import { MonoDelegate } from "./model/delegate";
+import { registerArrayWrapper, registerDelegateWrapper } from "./model/wrappers";
 
 // ============================================================================
 // PRIMARY EXPORTS
@@ -28,6 +31,9 @@ import { Mono } from "./mono";
 // Named and default export of the facade
 export { Mono };
 export default Mono;
+
+registerArrayWrapper(MonoArray);
+registerDelegateWrapper(MonoDelegate);
 
 // NOTE: `globalThis.Mono` installation is handled lazily by the Mono facade
 // (during `Mono.initialize()`/`Mono.perform()`) so `Mono.config.installGlobal`

@@ -200,6 +200,14 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
     return this.native.mono_array_addr_with_size(this.pointer, this.elementSize, index);
   }
 
+  private resolveElementKind(): MonoTypeKind {
+    const type = this.elementClass.type;
+    if (type.kind === MonoTypeKind.Enum) {
+      return type.underlyingType?.kind ?? type.kind;
+    }
+    return type.kind;
+  }
+
   // ===== BASIC ARRAY OPERATIONS =====
 
   /**
@@ -207,21 +215,42 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
    */
   getNumber(index: number): number {
     const address = this.getElementAddress(index);
+    const kind = this.resolveElementKind();
 
-    switch (this.elementSize) {
-      case 1:
+    switch (kind) {
+      case MonoTypeKind.Boolean:
         return address.readU8();
-      case 2:
+      case MonoTypeKind.I1:
+        return address.readS8();
+      case MonoTypeKind.U1:
+        return address.readU8();
+      case MonoTypeKind.Char:
         return address.readU16();
-      case 4:
+      case MonoTypeKind.I2:
+        return address.readS16();
+      case MonoTypeKind.U2:
+        return address.readU16();
+      case MonoTypeKind.I4:
+        return address.readS32();
+      case MonoTypeKind.U4:
         return address.readU32();
-      case 8:
+      case MonoTypeKind.I8:
+        return address.readS64().toNumber();
+      case MonoTypeKind.U8:
         return address.readU64().toNumber();
+      case MonoTypeKind.R4:
+        return address.readFloat();
+      case MonoTypeKind.R8:
+        return address.readDouble();
+      case MonoTypeKind.Int:
+        return Process.pointerSize === 8 ? address.readS64().toNumber() : address.readS32();
+      case MonoTypeKind.UInt:
+        return Process.pointerSize === 8 ? address.readU64().toNumber() : address.readU32();
       default:
         raise(
           MonoErrorCodes.NOT_SUPPORTED,
-          `Unsupported element size: ${this.elementSize}`,
-          "Use a standard numeric type (1, 2, 4, or 8 bytes)",
+          `Unsupported element kind for numeric read: ${kind}`,
+          "Use a numeric element type",
         );
     }
   }
@@ -231,25 +260,64 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
    */
   setNumber(index: number, value: number): void {
     const address = this.getElementAddress(index);
+    const kind = this.resolveElementKind();
 
-    switch (this.elementSize) {
-      case 1:
+    switch (kind) {
+      case MonoTypeKind.Boolean:
+        address.writeU8(value ? 1 : 0);
+        break;
+      case MonoTypeKind.I1:
+        address.writeS8(value);
+        break;
+      case MonoTypeKind.U1:
         address.writeU8(value);
         break;
-      case 2:
+      case MonoTypeKind.Char:
         address.writeU16(value);
         break;
-      case 4:
+      case MonoTypeKind.I2:
+        address.writeS16(value);
+        break;
+      case MonoTypeKind.U2:
+        address.writeU16(value);
+        break;
+      case MonoTypeKind.I4:
+        address.writeS32(value);
+        break;
+      case MonoTypeKind.U4:
         address.writeU32(value);
         break;
-      case 8:
+      case MonoTypeKind.I8:
+        address.writeS64(value);
+        break;
+      case MonoTypeKind.U8:
         address.writeU64(value);
+        break;
+      case MonoTypeKind.R4:
+        address.writeFloat(value);
+        break;
+      case MonoTypeKind.R8:
+        address.writeDouble(value);
+        break;
+      case MonoTypeKind.Int:
+        if (Process.pointerSize === 8) {
+          address.writeS64(value);
+        } else {
+          address.writeS32(value);
+        }
+        break;
+      case MonoTypeKind.UInt:
+        if (Process.pointerSize === 8) {
+          address.writeU64(value);
+        } else {
+          address.writeU32(value);
+        }
         break;
       default:
         raise(
           MonoErrorCodes.NOT_SUPPORTED,
-          `Unsupported element size: ${this.elementSize}`,
-          "Use a standard numeric type (1, 2, 4, or 8 bytes)",
+          `Unsupported element kind for numeric write: ${kind}`,
+          "Use a numeric element type",
         );
     }
   }
@@ -310,9 +378,13 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
 
     if (this.elementClass.isValueType) {
       return this.getNumber(index) as T;
-    } else {
-      return this.getElement(index) as T;
     }
+
+    const ptr = this.getReference(index);
+    if (pointerIsNull(ptr)) {
+      return null as T;
+    }
+    return new MonoObject(this.api, ptr) as T;
   }
 
   /**
@@ -335,9 +407,13 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
 
     if (this.elementClass.isValueType) {
       return this.getNumber(index) as T;
-    } else {
-      return this.getElement(index) as T;
     }
+
+    const ptr = this.getReference(index);
+    if (pointerIsNull(ptr)) {
+      return null as T;
+    }
+    return new MonoObject(this.api, ptr) as T;
   }
 
   /**
@@ -358,7 +434,9 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
     if (this.elementClass.isValueType) {
       this.setNumber(index, value as number);
     } else {
-      if (value instanceof MonoObject) {
+      if (value === null || value === undefined) {
+        this.setReference(index, NULL);
+      } else if (value instanceof MonoObject) {
         this.setElement(index, value);
       } else {
         raise(
@@ -385,7 +463,9 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
       if (this.elementClass.isValueType) {
         this.setNumber(index, value as number);
       } else {
-        if (value instanceof MonoObject) {
+        if (value === null || value === undefined) {
+          this.setReference(index, NULL);
+        } else if (value instanceof MonoObject) {
           this.setElement(index, value);
         } else {
           return false;
@@ -742,24 +822,44 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
    */
   getBigInt(index: number): bigint {
     const address = this.getElementAddress(index);
+    const kind = this.resolveElementKind();
 
-    if (this.elementSize === 8) {
-      // Read as two 32-bit parts and combine
-      const low = BigInt(address.readU32());
-      const high = BigInt(address.add(4).readU32());
-      return (high << 32n) | low;
-    } else if (this.elementSize === 4) {
-      return BigInt(address.readS32());
-    } else if (this.elementSize === 2) {
-      return BigInt(address.readS16());
-    } else if (this.elementSize === 1) {
-      return BigInt(address.readS8());
+    switch (kind) {
+      case MonoTypeKind.Boolean:
+        return BigInt(address.readU8());
+      case MonoTypeKind.I1:
+        return BigInt(address.readS8());
+      case MonoTypeKind.U1:
+        return BigInt(address.readU8());
+      case MonoTypeKind.Char:
+        return BigInt(address.readU16());
+      case MonoTypeKind.I2:
+        return BigInt(address.readS16());
+      case MonoTypeKind.U2:
+        return BigInt(address.readU16());
+      case MonoTypeKind.I4:
+        return BigInt(address.readS32());
+      case MonoTypeKind.U4:
+        return BigInt(address.readU32());
+      case MonoTypeKind.I8:
+        return BigInt(address.readS64().toString());
+      case MonoTypeKind.U8:
+        return BigInt(address.readU64().toString());
+      case MonoTypeKind.Int:
+        return Process.pointerSize === 8
+          ? BigInt(address.readS64().toString())
+          : BigInt(address.readS32());
+      case MonoTypeKind.UInt:
+        return Process.pointerSize === 8
+          ? BigInt(address.readU64().toString())
+          : BigInt(address.readU32());
+      default:
+        raise(
+          MonoErrorCodes.NOT_SUPPORTED,
+          `Unsupported element kind for BigInt read: ${kind}`,
+          "Use an integer element type",
+        );
     }
-    raise(
-      MonoErrorCodes.NOT_SUPPORTED,
-      `Unsupported element size for BigInt: ${this.elementSize}`,
-      "Use an 8, 4, 2, or 1-byte integer type",
-    );
   }
 
   /**
@@ -769,23 +869,59 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
    */
   setBigInt(index: number, value: bigint): void {
     const address = this.getElementAddress(index);
+    const kind = this.resolveElementKind();
 
-    if (this.elementSize === 8) {
-      // Write as two 32-bit parts
-      address.writeU32(Number(value & 0xffffffffn));
-      address.add(4).writeU32(Number((value >> 32n) & 0xffffffffn));
-    } else if (this.elementSize === 4) {
-      address.writeS32(Number(value));
-    } else if (this.elementSize === 2) {
-      address.writeS16(Number(value));
-    } else if (this.elementSize === 1) {
-      address.writeS8(Number(value));
-    } else {
-      raise(
-        MonoErrorCodes.NOT_SUPPORTED,
-        `Unsupported element size for BigInt: ${this.elementSize}`,
-        "Use an 8, 4, 2, or 1-byte integer type",
-      );
+    switch (kind) {
+      case MonoTypeKind.Boolean:
+        address.writeU8(value === 0n ? 0 : 1);
+        break;
+      case MonoTypeKind.I1:
+        address.writeS8(Number(value));
+        break;
+      case MonoTypeKind.U1:
+        address.writeU8(Number(value));
+        break;
+      case MonoTypeKind.Char:
+        address.writeU16(Number(value));
+        break;
+      case MonoTypeKind.I2:
+        address.writeS16(Number(value));
+        break;
+      case MonoTypeKind.U2:
+        address.writeU16(Number(value));
+        break;
+      case MonoTypeKind.I4:
+        address.writeS32(Number(value));
+        break;
+      case MonoTypeKind.U4:
+        address.writeU32(Number(value));
+        break;
+      case MonoTypeKind.I8:
+        address.writeS64(int64(value.toString()));
+        break;
+      case MonoTypeKind.U8:
+        address.writeU64(uint64(value.toString()));
+        break;
+      case MonoTypeKind.Int:
+        if (Process.pointerSize === 8) {
+          address.writeS64(int64(value.toString()));
+        } else {
+          address.writeS32(Number(value));
+        }
+        break;
+      case MonoTypeKind.UInt:
+        if (Process.pointerSize === 8) {
+          address.writeU64(uint64(value.toString()));
+        } else {
+          address.writeU32(Number(value));
+        }
+        break;
+      default:
+        raise(
+          MonoErrorCodes.NOT_SUPPORTED,
+          `Unsupported element kind for BigInt write: ${kind}`,
+          "Use an integer element type",
+        );
     }
   }
 

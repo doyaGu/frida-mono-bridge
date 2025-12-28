@@ -6,6 +6,8 @@ import { MonoClass } from "./class";
 import { MonoField } from "./field";
 import { MethodArgument, MonoHandle } from "./handle";
 import { MonoMethod } from "./method";
+import { isArrayKind } from "./type";
+import { getArrayWrapper, getDelegateWrapper } from "./wrappers";
 
 /**
  * Represents a Mono object instance.
@@ -545,19 +547,28 @@ export class MonoObject extends MonoHandle {
       const f = current.tryField(name);
       if (f) {
         const instance = f.isStatic ? null : this.pointer;
-        return { found: true, value: f.getValue(instance) };
+        let value = f.readValue(instance, { coerce: true });
+        value = this.wrapArrayValue(f.type.kind, value);
+        value = this.wrapDelegateValue(f.type.class, value);
+        return { found: true, value };
       }
 
       const prop = current.tryProperty(name);
       if (prop) {
-        const instance = prop.isStatic ? null : this;
-        return { found: true, value: prop.getValue(instance) };
+        if (!prop.hasParameters && prop.canRead) {
+          const instance = prop.isStatic ? null : this;
+          return { found: true, value: prop.getValue(instance) };
+        }
       }
 
       const m = current.tryMethod(name, 0);
       if (m) {
         const instance = m.isStatic ? null : this.instancePointer;
-        return { found: true, value: m.call(instance, []) };
+        let value = m.call(instance, []);
+        const returnType = m.returnType;
+        value = this.wrapArrayValue(returnType.kind, value);
+        value = this.wrapDelegateValue(returnType.class, value);
+        return { found: true, value };
       }
 
       current = current.parent;
@@ -572,8 +583,12 @@ export class MonoObject extends MonoHandle {
    * @returns Member value or null if not found
    */
   tryGetMember<T = unknown>(name: string): T | null {
-    const result = this.findMember(name);
-    return result.found ? (result.value as T) : null;
+    try {
+      const result = this.findMember(name);
+      return result.found ? (result.value as T) : null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -620,7 +635,7 @@ export class MonoObject extends MonoHandle {
 
       // Fallback: Call ToString() method directly via mono_runtime_invoke
       const klass = this.class;
-      const toStringMethod = klass.tryMethod("ToString", 0);
+      const toStringMethod = this.tryMethodInHierarchy("ToString", 0);
       if (toStringMethod) {
         const excSlot = Memory.alloc(Process.pointerSize);
         excSlot.writePointer(NULL);
@@ -674,16 +689,27 @@ export class MonoObject extends MonoHandle {
    */
   toObject(): Record<string, unknown> {
     const result: Record<string, unknown> = {};
-    const klass = this.class;
-
-    for (const field of klass.fields) {
-      if (field.isStatic) {
+    for (const field of this.getAllInstanceFields()) {
+      if (Object.prototype.hasOwnProperty.call(result, field.name)) {
         continue;
       }
       try {
-        result[field.name] = field.getValue(this.pointer);
+        let value = field.readValue(this.pointer, { coerce: true });
+        value = this.wrapArrayValue(field.type.kind, value);
+        value = this.wrapDelegateValue(field.type.class, value);
+        Object.defineProperty(result, field.name, {
+          value,
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
       } catch {
-        result[field.name] = undefined;
+        Object.defineProperty(result, field.name, {
+          value: undefined,
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
       }
     }
 
@@ -732,7 +758,7 @@ export class MonoObject extends MonoHandle {
   equals(other: MonoObject): boolean {
     try {
       // Try calling Equals(object) method
-      const equalsMethod = this.tryMethod("Equals", 1);
+      const equalsMethod = this.tryMethodInHierarchy("Equals", 1);
       if (equalsMethod) {
         return this.call<boolean>("Equals", [other.pointer]);
       }
@@ -751,7 +777,7 @@ export class MonoObject extends MonoHandle {
   getHashCode(): number {
     try {
       // Try calling GetHashCode() method
-      const hashMethod = this.tryMethod("GetHashCode", 0);
+      const hashMethod = this.tryMethodInHierarchy("GetHashCode", 0);
       if (hashMethod) {
         return this.call<number>("GetHashCode", []);
       }
@@ -768,7 +794,7 @@ export class MonoObject extends MonoHandle {
    * @returns MonoObject representing System.Type
    */
   getType(): MonoObject {
-    const typeMethod = this.method("GetType", 0);
+    const typeMethod = this.methodInHierarchy("GetType", 0);
     const typePtr = typeMethod.invoke(this.instancePointer, []);
     return new MonoObject(this.api, typePtr);
   }
@@ -820,15 +846,13 @@ export class MonoObject extends MonoHandle {
     // Manual clone: create new object and copy fields
     const newObj = klass.allocRaw(); // Don't initialize (no constructor call)
 
-    // Copy all instance fields
-    for (const field of klass.fields) {
-      if (!field.isStatic) {
-        try {
-          const value = field.getValue(this.pointer);
-          field.setValue(newObj.pointer, value);
-        } catch {
-          // Skip fields that fail to copy (might be special runtime fields)
-        }
+    // Copy all instance fields (including inherited fields)
+    for (const field of this.getAllInstanceFields()) {
+      try {
+        const value = field.getValue(this.pointer);
+        field.setValue(newObj.pointer, value);
+      } catch {
+        // Skip fields that fail to copy (might be special runtime fields)
       }
     }
 
@@ -874,10 +898,8 @@ export class MonoObject extends MonoHandle {
     const newObj = klass.allocRaw();
     visited.set(ptrKey, newObj);
 
-    // Copy all instance fields
-    for (const field of klass.fields) {
-      if (field.isStatic) continue;
-
+    // Copy all instance fields (including inherited fields)
+    for (const field of this.getAllInstanceFields()) {
       try {
         const fieldType = field.type;
         const value = field.getValue(this.pointer);
@@ -906,5 +928,50 @@ export class MonoObject extends MonoHandle {
     }
 
     return newObj;
+  }
+
+  /**
+   * Get all instance fields from this class and its base classes.
+   */
+  private getAllInstanceFields(): MonoField[] {
+    const fields: MonoField[] = [];
+    let current: MonoClass | null = this.class;
+    while (current) {
+      for (const field of current.fields) {
+        if (!field.isStatic) {
+          fields.push(field);
+        }
+      }
+      current = current.parent;
+    }
+    return fields;
+  }
+
+  private wrapArrayValue(kind: number, value: unknown): unknown {
+    if (!isArrayKind(kind)) {
+      return value;
+    }
+    const wrapper = getArrayWrapper();
+    if (!wrapper || !(value instanceof MonoObject)) {
+      return value;
+    }
+    if (value instanceof (wrapper as unknown as new (...args: any[]) => object)) {
+      return value;
+    }
+    return new wrapper(this.api, value.pointer);
+  }
+
+  private wrapDelegateValue(klass: MonoClass | null, value: unknown): unknown {
+    if (!klass?.isDelegate) {
+      return value;
+    }
+    const wrapper = getDelegateWrapper();
+    if (!wrapper || !(value instanceof MonoObject)) {
+      return value;
+    }
+    if (value instanceof (wrapper as unknown as new (...args: any[]) => object)) {
+      return value;
+    }
+    return new wrapper(this.api, value.pointer);
   }
 }
