@@ -173,14 +173,16 @@ export function unwrapInstance(instance: unknown): NativePointer {
     return ptr(0);
   }
 
-  // Check if it's a MonoObject with getInstancePointer method (handles value types correctly)
-  if (
-    typeof instance === "object" &&
-    instance !== null &&
-    "getInstancePointer" in instance &&
-    typeof instance.getInstancePointer === "function"
-  ) {
-    return instance.getInstancePointer();
+  if (typeof instance === "object" && instance !== null) {
+    if ("instancePointer" in instance) {
+      const candidate = (instance as { instancePointer?: unknown }).instancePointer;
+      if (isNativePointer(candidate)) {
+        return candidate;
+      }
+    }
+    if ("getInstancePointer" in instance && typeof instance.getInstancePointer === "function") {
+      return instance.getInstancePointer();
+    }
   }
 
   const resolved = resolveNativePointer(instance);
