@@ -225,7 +225,7 @@ export async function createUnityComponentsTests(): Promise<TestResult> {
           }
 
           // Create a temporary GameObject and validate Transform retrieval.
-          const go = gameObjectClass.newObject(true);
+          const go = gameObjectClass.newObject();
           const transformViaProperty = go.tryCall("get_transform", []);
           assertNotNull(transformViaProperty, "GameObject.transform should be accessible");
 
@@ -298,7 +298,7 @@ export async function createUnityComponentsTests(): Promise<TestResult> {
       }
 
       try {
-        const go = gameObjectClass.newObject(true);
+        const go = gameObjectClass.newObject();
         const component = addComponentMethod.call<any>(go, [candidateTypeObj]);
         assertNotNull(component, "AddComponent should return a component");
 
@@ -394,7 +394,7 @@ export async function createUnityComponentsTests(): Promise<TestResult> {
       // Use a real GameObject instance so this measures actual path rather than guaranteed failure.
       let go: any;
       try {
-        go = gameObjectClass.newObject(true);
+        go = gameObjectClass.newObject();
       } catch {
         console.log("    (Skipped: Could not create GameObject for perf test)");
         return;

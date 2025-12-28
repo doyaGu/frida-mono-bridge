@@ -124,8 +124,8 @@ export async function createUnityEngineModulesTests(): Promise<TestResult> {
       try {
         // Vector3 is a value type; some Unity/Mono builds dislike mono_runtime_object_init on boxed structs.
         // Allocate without initialization and invoke the explicit .ctor ourselves.
-        const v0 = vector3Class.newObject(false);
-        const v1 = vector3Class.newObject(false);
+        const v0 = vector3Class.allocRaw();
+        const v1 = vector3Class.allocRaw();
         v0.call(".ctor", [0, 0, 0]);
         v1.call(".ctor", [1, 0, 0]);
 

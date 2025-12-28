@@ -19,7 +19,7 @@
  * - Performance comparison
  */
 
-import Mono from "../src";
+import Mono, { MonoDelegate } from "../src";
 import { withDomain } from "./test-fixtures";
 import { TestResult, assert, assertNotNull } from "./test-framework";
 
@@ -157,6 +157,29 @@ export async function createMonoDelegateTests(): Promise<TestResult[]> {
       // Creating a delegate requires instantiating generics, which is complex in Frida
       // Here we only verify API callability
       console.log("[INFO] Static method delegate creation API verified");
+    }),
+  );
+
+  results.push(
+    await withDomain("MonoDelegate.new should create and invoke Action delegate", () => {
+      const actionClass = Mono.domain.tryClass("System.Action");
+      assertNotNull(actionClass, "System.Action class should exist");
+
+      const gcClass = Mono.domain.tryClass("System.GC");
+      if (!gcClass) {
+        console.log("[SKIP] System.GC class not found");
+        return;
+      }
+
+      const collectMethod = gcClass.tryMethod("Collect", 0);
+      if (!collectMethod) {
+        console.log("[SKIP] GC.Collect() method not found");
+        return;
+      }
+
+      const delegate = MonoDelegate.new(Mono.api, actionClass, null, collectMethod);
+      delegate.invokeManaged([]);
+      delegate.dispose();
     }),
   );
 

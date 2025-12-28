@@ -204,6 +204,41 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
     }),
   );
 
+  results.push(
+    await withDomain("MonoField should set instance reference field values", ({ domain }) => {
+      const exceptionClass = domain.tryClass("System.Exception");
+      if (!exceptionClass) {
+        console.log("[SKIP] System.Exception class not found");
+        return;
+      }
+
+      const obj = exceptionClass.alloc();
+      assertNotNull(obj, "Exception instance should be allocated");
+
+      const stringField = exceptionClass.fields.find(field => {
+        const typeName = field.type.fullName;
+        return (
+          !field.isStatic &&
+          !field.isInitOnly &&
+          !field.isLiteral &&
+          (typeName === "System.String" || typeName === "String")
+        );
+      });
+
+      if (!stringField) {
+        console.log("[SKIP] No writable string field found on System.Exception");
+        return;
+      }
+
+      const newValue = "frida-mono-bridge";
+      const newValuePtr = Mono.api.stringNew(newValue);
+      stringField.setValue(obj, newValuePtr);
+
+      const readBack = stringField.readValue(obj, { coerce: true });
+      assert(readBack === newValue, `Expected '${newValue}', got: ${readBack}`);
+    }),
+  );
+
   // ===== TYPE CHECKING AND VALIDATION TESTS =====
 
   results.push(

@@ -209,7 +209,7 @@ export async function createUnityGameObjectTests(): Promise<TestResult> {
 
       let go: any;
       try {
-        go = gameObjectClass.newObject(true);
+        go = gameObjectClass.newObject();
       } catch (error) {
         if (isAccessViolation(error) || isMonoMethodNotFound(error)) {
           console.log(`    (Skipped: GameObject creation not supported here: ${error})`);
@@ -268,8 +268,8 @@ export async function createUnityGameObjectTests(): Promise<TestResult> {
       let parent: any;
       let child: any;
       try {
-        parent = gameObjectClass.newObject(true);
-        child = gameObjectClass.newObject(true);
+        parent = gameObjectClass.newObject();
+        child = gameObjectClass.newObject();
       } catch (error) {
         if (isAccessViolation(error) || isMonoMethodNotFound(error)) {
           console.log(`    (Skipped: GameObject creation not supported here: ${error})`);

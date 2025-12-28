@@ -5,7 +5,7 @@
  */
 
 import Mono from "../src";
-import { withCoreClasses } from "./test-fixtures";
+import { withCoreClasses, withDomain } from "./test-fixtures";
 import { TestResult, assert, assertNotNull, createErrorHandlingTest } from "./test-framework";
 
 export async function createMonoObjectTests(): Promise<TestResult[]> {
@@ -80,6 +80,42 @@ export async function createMonoObjectTests(): Promise<TestResult[]> {
       const cloned = obj.deepClone();
 
       assert(obj.class.fullName === cloned.class.fullName, "Deep clone should have same class");
+    }),
+  );
+
+  results.push(
+    await withDomain("MonoObject.clone should preserve reference field values", ({ domain }) => {
+      const exceptionClass = domain.tryClass("System.Exception");
+      if (!exceptionClass) {
+        console.log("[SKIP] System.Exception class not found");
+        return;
+      }
+
+      const obj = exceptionClass.alloc();
+      assertNotNull(obj, "Exception instance should be allocated");
+
+      const stringField = exceptionClass.fields.find(field => {
+        const typeName = field.type.fullName;
+        return (
+          !field.isStatic &&
+          !field.isInitOnly &&
+          !field.isLiteral &&
+          (typeName === "System.String" || typeName === "String")
+        );
+      });
+
+      if (!stringField) {
+        console.log("[SKIP] No writable string field found on System.Exception");
+        return;
+      }
+
+      const newValue = "frida-mono-bridge-clone";
+      const newValuePtr = Mono.api.stringNew(newValue);
+      stringField.setValue(obj, newValuePtr);
+
+      const cloned = obj.clone();
+      const clonedValue = stringField.readValue(cloned, { coerce: true });
+      assert(clonedValue === newValue, `Expected '${newValue}', got: ${clonedValue}`);
     }),
   );
 
