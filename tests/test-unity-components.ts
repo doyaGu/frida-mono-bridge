@@ -19,7 +19,15 @@ import {
 } from "./test-framework";
 
 function isAccessViolation(error: unknown): boolean {
-  return error instanceof Error && error.message.toLowerCase().includes("access violation");
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : typeof error === "object" && error !== null && "message" in error
+          ? String((error as { message: unknown }).message)
+          : String(error);
+  return message.toLowerCase().includes("access violation");
 }
 
 function tryGetSystemTypeObject(monoClass: any): NativePointer | null {
