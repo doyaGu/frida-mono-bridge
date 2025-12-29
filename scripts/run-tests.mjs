@@ -357,11 +357,9 @@ async function getProcessPidsWindows(processName) {
   // CSV output is easiest to parse reliably across locales.
   // Example line:
   // "Duckov.exe","54696","Console","1","123,456 K"
-  const { stdout } = await execCommand(
-    "tasklist",
-    ["/FI", `IMAGENAME eq ${processName}`, "/FO", "CSV", "/NH"],
-    { verbose: false },
-  );
+  const { stdout } = await execCommand("tasklist", ["/FI", `IMAGENAME eq ${processName}`, "/FO", "CSV", "/NH"], {
+    verbose: false,
+  });
 
   const processes = [];
   for (const line of stdout.split(/\r?\n/)) {
