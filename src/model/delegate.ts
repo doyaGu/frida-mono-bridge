@@ -19,6 +19,7 @@ import { MonoClass } from "./class";
 import { MonoMethod } from "./method";
 import { MonoObject } from "./object";
 import { isCompatibleNativeType, MonoType, MonoTypeKind, monoTypeKindToNative } from "./type";
+import { getDelegateWrapper, registerDelegateWrapper } from "./wrappers";
 
 const delegateLogger = Logger.withTag("MonoDelegate");
 
@@ -152,7 +153,24 @@ export class MonoDelegate extends MonoObject {
     method: MonoMethod | NativePointer,
   ): MonoDelegate {
     const instance = delegateClass.allocRaw();
-    const methodPtr = method instanceof MonoMethod ? method.pointer : (method as NativePointer);
+
+    // Delegate constructors take a native function pointer (IntPtr), not a MonoMethod*.
+    // If we were given a MonoMethod (or a MonoMethod*), try to JIT-compile it.
+    // If compilation fails (e.g., InternalCall), fall back to using the provided pointer.
+    const methodPtr = (() => {
+      if (method instanceof MonoMethod) {
+        return method.tryCompile() ?? method.pointer;
+      }
+
+      const methodCandidate = method as NativePointer;
+      try {
+        const compiled = api.native.mono_compile_method(methodCandidate);
+        return pointerIsNull(compiled) ? methodCandidate : (compiled as NativePointer);
+      } catch {
+        return methodCandidate;
+      }
+    })();
+
     const targetPtr = target instanceof MonoObject ? target.pointer : (target ?? NULL);
     const methodPtrValue = Memory.alloc(Process.pointerSize);
     methodPtrValue.writePointer(methodPtr);
@@ -649,6 +667,10 @@ export class MonoDelegate extends MonoObject {
     this.#thunkPtr = thunk;
     return { invoke, thunk };
   }
+}
+
+if (!getDelegateWrapper()) {
+  registerDelegateWrapper(MonoDelegate);
 }
 
 /**

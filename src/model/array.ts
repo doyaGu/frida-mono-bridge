@@ -4,7 +4,52 @@ import { MonoErrorCodes, raise } from "../utils/errors";
 import { pointerIsNull } from "../utils/memory";
 import { MonoClass } from "./class";
 import { MonoObject } from "./object";
-import { MonoTypeKind } from "./type";
+import { MonoTypeKind, isNumericKind } from "./type";
+import { getArrayWrapper, registerArrayWrapper } from "./wrappers";
+
+const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+const INT32_MIN = -2147483648;
+const INT32_MAX = 2147483647;
+const UINT32_MAX = 4294967295;
+const INT16_MIN = -32768;
+const INT16_MAX = 32767;
+const UINT16_MAX = 65535;
+const INT8_MIN = -128;
+const INT8_MAX = 127;
+const UINT8_MAX = 255;
+const INT64_MIN_BIGINT = -(1n << 63n);
+const INT64_MAX_BIGINT = (1n << 63n) - 1n;
+const UINT64_MAX_BIGINT = (1n << 64n) - 1n;
+const INT32_MIN_BIGINT = BigInt(INT32_MIN);
+const INT32_MAX_BIGINT = BigInt(INT32_MAX);
+const UINT32_MAX_BIGINT = BigInt(UINT32_MAX);
+const INT16_MIN_BIGINT = BigInt(INT16_MIN);
+const INT16_MAX_BIGINT = BigInt(INT16_MAX);
+const UINT16_MAX_BIGINT = BigInt(UINT16_MAX);
+const INT8_MIN_BIGINT = BigInt(INT8_MIN);
+const INT8_MAX_BIGINT = BigInt(INT8_MAX);
+const UINT8_MAX_BIGINT = BigInt(UINT8_MAX);
+
+function assertNumberRange(value: number, min: number, max: number, typeName: string): void {
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < min || value > max) {
+    raise(
+      MonoErrorCodes.INVALID_ARGUMENT,
+      `${typeName} value ${value} is out of range (${min} to ${max})`,
+      "Use an integer value within the valid range",
+    );
+  }
+}
+
+function assertBigIntRange(value: bigint, min: bigint, max: bigint, typeName: string): void {
+  if (value < min || value > max) {
+    raise(
+      MonoErrorCodes.INVALID_ARGUMENT,
+      `${typeName} value ${value} is out of range (${min} to ${max})`,
+      "Use a value within the valid range",
+    );
+  }
+}
 
 /**
  * Summary information about a MonoArray instance.
@@ -47,8 +92,8 @@ export namespace ArrayTypeGuards {
    */
   export function isNumericArray(array: MonoArray<unknown>): array is MonoArray<number> {
     const type = array.elementClass.type;
-    const kind = type.kind;
-    return kind >= MonoTypeKind.I1 && kind <= MonoTypeKind.R8;
+    const kind = type.kind === MonoTypeKind.Enum ? (type.underlyingType?.kind ?? type.kind) : type.kind;
+    return isNumericKind(kind);
   }
 
   /**
@@ -60,9 +105,10 @@ export namespace ArrayTypeGuards {
   }
 
   /**
-   * Check if array contains object references
+   * Check if array contains object references.
+   * Reference arrays can still contain null entries.
    */
-  export function isObjectArray(array: MonoArray<unknown>): array is MonoArray<MonoObject> {
+  export function isObjectArray(array: MonoArray<unknown>): array is MonoArray<MonoObject | null> {
     return !array.elementClass.isValueType;
   }
 
@@ -208,10 +254,118 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
     return type.kind;
   }
 
+  private readValueTypeElement(index: number): unknown {
+    const address = this.getElementAddress(index);
+    const kind = this.resolveElementKind();
+
+    if (kind === MonoTypeKind.Boolean) {
+      return address.readU8() !== 0;
+    }
+
+    if (kind === MonoTypeKind.Char) {
+      return String.fromCharCode(address.readU16());
+    }
+
+    if (isNumericKind(kind)) {
+      return this.getNumber(index);
+    }
+
+    // For non-primitive structs, return a pointer to the inline data.
+    return address;
+  }
+
+  private writeValueTypeElement(index: number, value: unknown): void {
+    const address = this.getElementAddress(index);
+    const kind = this.resolveElementKind();
+
+    if (kind === MonoTypeKind.Boolean) {
+      if (typeof value !== "boolean" && typeof value !== "number") {
+        raise(
+          MonoErrorCodes.TYPE_MISMATCH,
+          "Boolean arrays only accept boolean or 0/1 values",
+          "Pass a boolean or 0/1 number",
+        );
+      }
+      const normalized = typeof value === "boolean" ? (value ? 1 : 0) : value;
+      assertNumberRange(normalized, 0, 1, "Boolean");
+      address.writeU8(normalized ? 1 : 0);
+      return;
+    }
+
+    if (kind === MonoTypeKind.Char) {
+      if (typeof value === "string") {
+        if (value.length !== 1) {
+          raise(
+            MonoErrorCodes.INVALID_ARGUMENT,
+            `Char value '${value}' must be a single character`,
+            "Pass a single-character string",
+          );
+        }
+        address.writeU16(value.charCodeAt(0));
+        return;
+      }
+      if (typeof value === "number") {
+        assertNumberRange(value, 0, UINT16_MAX, "Char");
+        address.writeU16(value);
+        return;
+      }
+      raise(
+        MonoErrorCodes.TYPE_MISMATCH,
+        "Char arrays only accept a single-character string or numeric code point",
+        "Pass a single-character string or numeric code point",
+      );
+    }
+
+    if (isNumericKind(kind)) {
+      this.setNumber(index, value as number);
+      return;
+    }
+
+    if (value instanceof MonoObject) {
+      if (!value.isValueType) {
+        raise(
+          MonoErrorCodes.TYPE_MISMATCH,
+          "Value type arrays require boxed value types when passing MonoObject instances",
+          "Pass a boxed value type or a NativePointer to value data",
+        );
+      }
+      if (!value.class.pointer.equals(this.elementClass.pointer)) {
+        raise(
+          MonoErrorCodes.TYPE_MISMATCH,
+          `Boxed value type '${value.class.fullName}' does not match array element type '${this.elementClass.fullName}'`,
+          "Pass a boxed value of the correct element type",
+        );
+      }
+      const valueSize = value.class.valueSize.size;
+      if (valueSize !== this.elementSize) {
+        raise(
+          MonoErrorCodes.TYPE_MISMATCH,
+          `Boxed value size ${valueSize} does not match array element size ${this.elementSize}`,
+          "Pass a boxed value with the correct size",
+        );
+      }
+      const unboxed = value.unbox();
+      Memory.copy(address, unboxed, this.elementSize);
+      return;
+    }
+
+    if (value instanceof NativePointer) {
+      Memory.copy(address, value, this.elementSize);
+      return;
+    }
+
+    raise(
+      MonoErrorCodes.TYPE_MISMATCH,
+      "Non-primitive value type arrays require a NativePointer or boxed MonoObject",
+      "Pass a pointer to the value data or a boxed value type",
+    );
+  }
+
   // ===== BASIC ARRAY OPERATIONS =====
 
   /**
    * Get a value as a number (for numeric arrays)
+   * Throws if a 64-bit integer cannot be represented safely.
    */
   getNumber(index: number): number {
     const address = this.getElementAddress(index);
@@ -234,18 +388,60 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
         return address.readS32();
       case MonoTypeKind.U4:
         return address.readU32();
-      case MonoTypeKind.I8:
-        return address.readS64().toNumber();
-      case MonoTypeKind.U8:
-        return address.readU64().toNumber();
+      case MonoTypeKind.I8: {
+        const value = BigInt(address.readS64().toString());
+        if (value < MIN_SAFE_INTEGER_BIGINT || value > MAX_SAFE_INTEGER_BIGINT) {
+          raise(
+            MonoErrorCodes.INVALID_ARGUMENT,
+            `Int64 value ${value} exceeds JS safe integer range`,
+            "Use getBigInt() for lossless reads",
+          );
+        }
+        return Number(value);
+      }
+      case MonoTypeKind.U8: {
+        const value = BigInt(address.readU64().toString());
+        if (value > MAX_SAFE_INTEGER_BIGINT) {
+          raise(
+            MonoErrorCodes.INVALID_ARGUMENT,
+            `UInt64 value ${value} exceeds JS safe integer range`,
+            "Use getBigInt() for lossless reads",
+          );
+        }
+        return Number(value);
+      }
       case MonoTypeKind.R4:
         return address.readFloat();
       case MonoTypeKind.R8:
         return address.readDouble();
-      case MonoTypeKind.Int:
-        return Process.pointerSize === 8 ? address.readS64().toNumber() : address.readS32();
-      case MonoTypeKind.UInt:
-        return Process.pointerSize === 8 ? address.readU64().toNumber() : address.readU32();
+      case MonoTypeKind.Int: {
+        if (Process.pointerSize !== 8) {
+          return address.readS32();
+        }
+        const value = BigInt(address.readS64().toString());
+        if (value < MIN_SAFE_INTEGER_BIGINT || value > MAX_SAFE_INTEGER_BIGINT) {
+          raise(
+            MonoErrorCodes.INVALID_ARGUMENT,
+            `IntPtr value ${value} exceeds JS safe integer range`,
+            "Use getBigInt() for lossless reads",
+          );
+        }
+        return Number(value);
+      }
+      case MonoTypeKind.UInt: {
+        if (Process.pointerSize !== 8) {
+          return address.readU32();
+        }
+        const value = BigInt(address.readU64().toString());
+        if (value > MAX_SAFE_INTEGER_BIGINT) {
+          raise(
+            MonoErrorCodes.INVALID_ARGUMENT,
+            `UIntPtr value ${value} exceeds JS safe integer range`,
+            "Use getBigInt() for lossless reads",
+          );
+        }
+        return Number(value);
+      }
       default:
         raise(
           MonoErrorCodes.NOT_SUPPORTED,
@@ -256,61 +452,101 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
   }
 
   /**
-   * Set a number value (for numeric arrays)
+   * Set a number value (for numeric arrays).
+   * Boolean arrays accept true/false, and 64-bit integers should use setBigInt() to avoid precision loss.
    */
-  setNumber(index: number, value: number): void {
+  setNumber(index: number, value: number | boolean): void {
     const address = this.getElementAddress(index);
     const kind = this.resolveElementKind();
+    const normalizedValue = typeof value === "boolean" ? (value ? 1 : 0) : value;
 
     switch (kind) {
       case MonoTypeKind.Boolean:
-        address.writeU8(value ? 1 : 0);
+        assertNumberRange(normalizedValue, 0, 1, "Boolean");
+        address.writeU8(normalizedValue ? 1 : 0);
         break;
       case MonoTypeKind.I1:
-        address.writeS8(value);
+        assertNumberRange(normalizedValue, INT8_MIN, INT8_MAX, "Int8");
+        address.writeS8(normalizedValue);
         break;
       case MonoTypeKind.U1:
-        address.writeU8(value);
+        assertNumberRange(normalizedValue, 0, UINT8_MAX, "UInt8");
+        address.writeU8(normalizedValue);
         break;
       case MonoTypeKind.Char:
-        address.writeU16(value);
+        assertNumberRange(normalizedValue, 0, UINT16_MAX, "Char");
+        address.writeU16(normalizedValue);
         break;
       case MonoTypeKind.I2:
-        address.writeS16(value);
+        assertNumberRange(normalizedValue, INT16_MIN, INT16_MAX, "Int16");
+        address.writeS16(normalizedValue);
         break;
       case MonoTypeKind.U2:
-        address.writeU16(value);
+        assertNumberRange(normalizedValue, 0, UINT16_MAX, "UInt16");
+        address.writeU16(normalizedValue);
         break;
       case MonoTypeKind.I4:
-        address.writeS32(value);
+        assertNumberRange(normalizedValue, INT32_MIN, INT32_MAX, "Int32");
+        address.writeS32(normalizedValue);
         break;
       case MonoTypeKind.U4:
-        address.writeU32(value);
+        assertNumberRange(normalizedValue, 0, UINT32_MAX, "UInt32");
+        address.writeU32(normalizedValue);
         break;
       case MonoTypeKind.I8:
-        address.writeS64(value);
+        if (!Number.isSafeInteger(normalizedValue)) {
+          raise(
+            MonoErrorCodes.INVALID_ARGUMENT,
+            `Int64 value ${normalizedValue} is not a safe integer`,
+            "Use setBigInt() for lossless writes",
+          );
+        }
+        address.writeS64(normalizedValue);
         break;
       case MonoTypeKind.U8:
-        address.writeU64(value);
+        if (!Number.isSafeInteger(normalizedValue) || normalizedValue < 0) {
+          raise(
+            MonoErrorCodes.INVALID_ARGUMENT,
+            `UInt64 value ${normalizedValue} is not a safe unsigned integer`,
+            "Use setBigInt() for lossless writes",
+          );
+        }
+        address.writeU64(normalizedValue);
         break;
       case MonoTypeKind.R4:
-        address.writeFloat(value);
+        address.writeFloat(normalizedValue);
         break;
       case MonoTypeKind.R8:
-        address.writeDouble(value);
+        address.writeDouble(normalizedValue);
         break;
       case MonoTypeKind.Int:
         if (Process.pointerSize === 8) {
-          address.writeS64(value);
+          if (!Number.isSafeInteger(normalizedValue)) {
+            raise(
+              MonoErrorCodes.INVALID_ARGUMENT,
+              `IntPtr value ${normalizedValue} is not a safe integer`,
+              "Use setBigInt() for lossless writes",
+            );
+          }
+          address.writeS64(normalizedValue);
         } else {
-          address.writeS32(value);
+          assertNumberRange(normalizedValue, INT32_MIN, INT32_MAX, "IntPtr");
+          address.writeS32(normalizedValue);
         }
         break;
       case MonoTypeKind.UInt:
         if (Process.pointerSize === 8) {
-          address.writeU64(value);
+          if (!Number.isSafeInteger(normalizedValue) || normalizedValue < 0) {
+            raise(
+              MonoErrorCodes.INVALID_ARGUMENT,
+              `UIntPtr value ${normalizedValue} is not a safe unsigned integer`,
+              "Use setBigInt() for lossless writes",
+            );
+          }
+          address.writeU64(normalizedValue);
         } else {
-          address.writeU32(value);
+          assertNumberRange(normalizedValue, 0, UINT32_MAX, "UIntPtr");
+          address.writeU32(normalizedValue);
         }
         break;
       default:
@@ -345,17 +581,26 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
   }
 
   /**
-   * Get element as MonoObject (for object arrays)
+   * Get element as MonoObject (for object arrays).
+   * Returns null if the element is a null reference.
    */
-  getElement(index: number): MonoObject {
+  getElement(index: number): MonoObject | null {
     const ptr = this.getReference(index);
+    if (pointerIsNull(ptr)) {
+      return null;
+    }
     return new MonoObject(this.api, ptr);
   }
 
   /**
-   * Set element as MonoObject (for object arrays)
+   * Set element as MonoObject (for object arrays).
+   * Pass null to clear the reference.
    */
-  setElement(index: number, value: MonoObject): void {
+  setElement(index: number, value: MonoObject | null): void {
+    if (!value) {
+      this.setReference(index, NULL);
+      return;
+    }
     this.setReference(index, value.pointer);
   }
 
@@ -365,6 +610,9 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
    * Get a typed value at the specified index.
    * @param index Array index (0-based)
    * @returns The element at the index
+   * For 64-bit integer arrays, use getBigInt() to avoid precision loss.
+   * For Boolean/Char arrays, returns boolean/string values.
+   * For non-primitive value type arrays, returns a NativePointer to the inline data.
    * @throws {MonoValidationError} If index is out of bounds
    */
   getTyped(index: number): T {
@@ -377,7 +625,7 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
     }
 
     if (this.elementClass.isValueType) {
-      return this.getNumber(index) as T;
+      return this.readValueTypeElement(index) as T;
     }
 
     const ptr = this.getReference(index);
@@ -406,7 +654,7 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
     }
 
     if (this.elementClass.isValueType) {
-      return this.getNumber(index) as T;
+      return this.readValueTypeElement(index) as T;
     }
 
     const ptr = this.getReference(index);
@@ -420,6 +668,7 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
    * Set a typed value at the specified index.
    * @param index Array index (0-based)
    * @param value Value to set
+   * For non-primitive value types, pass a boxed MonoObject or NativePointer to the value data.
    * @throws {MonoValidationError} If index is out of bounds
    */
   setTyped(index: number, value: T): void {
@@ -432,7 +681,7 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
     }
 
     if (this.elementClass.isValueType) {
-      this.setNumber(index, value as number);
+      this.writeValueTypeElement(index, value);
     } else {
       if (value === null || value === undefined) {
         this.setReference(index, NULL);
@@ -461,7 +710,7 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
 
     try {
       if (this.elementClass.isValueType) {
-        this.setNumber(index, value as number);
+        this.writeValueTypeElement(index, value);
       } else {
         if (value === null || value === undefined) {
           this.setReference(index, NULL);
@@ -846,13 +1095,9 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
       case MonoTypeKind.U8:
         return BigInt(address.readU64().toString());
       case MonoTypeKind.Int:
-        return Process.pointerSize === 8
-          ? BigInt(address.readS64().toString())
-          : BigInt(address.readS32());
+        return Process.pointerSize === 8 ? BigInt(address.readS64().toString()) : BigInt(address.readS32());
       case MonoTypeKind.UInt:
-        return Process.pointerSize === 8
-          ? BigInt(address.readU64().toString())
-          : BigInt(address.readU32());
+        return Process.pointerSize === 8 ? BigInt(address.readU64().toString()) : BigInt(address.readU32());
       default:
         raise(
           MonoErrorCodes.NOT_SUPPORTED,
@@ -873,46 +1118,60 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
 
     switch (kind) {
       case MonoTypeKind.Boolean:
+        assertBigIntRange(value, 0n, 1n, "Boolean");
         address.writeU8(value === 0n ? 0 : 1);
         break;
       case MonoTypeKind.I1:
+        assertBigIntRange(value, INT8_MIN_BIGINT, INT8_MAX_BIGINT, "Int8");
         address.writeS8(Number(value));
         break;
       case MonoTypeKind.U1:
+        assertBigIntRange(value, 0n, UINT8_MAX_BIGINT, "UInt8");
         address.writeU8(Number(value));
         break;
       case MonoTypeKind.Char:
+        assertBigIntRange(value, 0n, UINT16_MAX_BIGINT, "Char");
         address.writeU16(Number(value));
         break;
       case MonoTypeKind.I2:
+        assertBigIntRange(value, INT16_MIN_BIGINT, INT16_MAX_BIGINT, "Int16");
         address.writeS16(Number(value));
         break;
       case MonoTypeKind.U2:
+        assertBigIntRange(value, 0n, UINT16_MAX_BIGINT, "UInt16");
         address.writeU16(Number(value));
         break;
       case MonoTypeKind.I4:
+        assertBigIntRange(value, INT32_MIN_BIGINT, INT32_MAX_BIGINT, "Int32");
         address.writeS32(Number(value));
         break;
       case MonoTypeKind.U4:
+        assertBigIntRange(value, 0n, UINT32_MAX_BIGINT, "UInt32");
         address.writeU32(Number(value));
         break;
       case MonoTypeKind.I8:
+        assertBigIntRange(value, INT64_MIN_BIGINT, INT64_MAX_BIGINT, "Int64");
         address.writeS64(int64(value.toString()));
         break;
       case MonoTypeKind.U8:
+        assertBigIntRange(value, 0n, UINT64_MAX_BIGINT, "UInt64");
         address.writeU64(uint64(value.toString()));
         break;
       case MonoTypeKind.Int:
         if (Process.pointerSize === 8) {
+          assertBigIntRange(value, INT64_MIN_BIGINT, INT64_MAX_BIGINT, "IntPtr");
           address.writeS64(int64(value.toString()));
         } else {
+          assertBigIntRange(value, INT32_MIN_BIGINT, INT32_MAX_BIGINT, "IntPtr");
           address.writeS32(Number(value));
         }
         break;
       case MonoTypeKind.UInt:
         if (Process.pointerSize === 8) {
+          assertBigIntRange(value, 0n, UINT64_MAX_BIGINT, "UIntPtr");
           address.writeU64(uint64(value.toString()));
         } else {
+          assertBigIntRange(value, 0n, UINT32_MAX_BIGINT, "UIntPtr");
           address.writeU32(Number(value));
         }
         break;
@@ -1322,8 +1581,9 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
   getSummary(): MonoArraySummary {
     const elementType = this.elementClass.type;
     const kind = elementType.kind;
+    const numericKind = kind === MonoTypeKind.Enum ? (elementType.underlyingType?.kind ?? kind) : kind;
     const isValueType = this.elementClass.isValueType;
-    const isPrimitive = kind >= MonoTypeKind.I1 && kind <= MonoTypeKind.R8;
+    const isPrimitive = isNumericKind(numericKind);
     const isString = kind === MonoTypeKind.String;
 
     return {
@@ -1361,8 +1621,11 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
   @lazy
   get isPrimitiveArray(): boolean {
     const elementType = this.elementClass.type;
-    const kind = elementType.kind;
-    return kind >= MonoTypeKind.I1 && kind <= MonoTypeKind.R8;
+    const kind =
+      elementType.kind === MonoTypeKind.Enum
+        ? (elementType.underlyingType?.kind ?? elementType.kind)
+        : elementType.kind;
+    return isNumericKind(kind);
   }
 
   /**
@@ -1454,10 +1717,29 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
       | "float64",
     length: number,
   ): MonoArray<number> {
-    const domain = api.getRootDomain();
-    const elementClass = api.native.mono_class_from_name(domain, "mscorlib", elementType) as NativePointer;
+    const typeMap: Record<string, string> = {
+      int8: "SByte",
+      int16: "Int16",
+      int32: "Int32",
+      int64: "Int64",
+      uint8: "Byte",
+      uint16: "UInt16",
+      uint32: "UInt32",
+      uint64: "UInt64",
+      float32: "Single",
+      float64: "Double",
+    };
+    const monoTypeName = typeMap[elementType] ?? elementType;
+    const corlibImage = api.native.mono_get_corlib() as NativePointer;
+    if (pointerIsNull(corlibImage)) {
+      raise(MonoErrorCodes.RUNTIME_NOT_READY, "mono_get_corlib returned NULL", "Ensure Mono runtime is initialized");
+    }
+
+    const nsPtr = api.allocUtf8StringCached("System");
+    const namePtr = api.allocUtf8StringCached(monoTypeName);
+    const elementClass = api.native.mono_class_from_name(corlibImage, nsPtr, namePtr) as NativePointer;
     if (pointerIsNull(elementClass)) {
-      raise(MonoErrorCodes.CLASS_NOT_FOUND, `Could not find class: System.${elementType}`, "Ensure mscorlib is loaded");
+      raise(MonoErrorCodes.CLASS_NOT_FOUND, `Could not find class: System.${monoTypeName}`, "Ensure corlib is loaded");
     }
     const classObj = new MonoClass(api, elementClass);
     return MonoArray.new(api, classObj, length) as MonoArray<number>;
@@ -1467,10 +1749,16 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
    * Create string array
    */
   static createStringArray(api: MonoApi, length: number): MonoArray<string> {
-    const domain = api.getRootDomain();
-    const stringClass = api.native.mono_class_from_name(domain, "mscorlib", "String") as NativePointer;
+    const corlibImage = api.native.mono_get_corlib() as NativePointer;
+    if (pointerIsNull(corlibImage)) {
+      raise(MonoErrorCodes.RUNTIME_NOT_READY, "mono_get_corlib returned NULL", "Ensure Mono runtime is initialized");
+    }
+
+    const nsPtr = api.allocUtf8StringCached("System");
+    const namePtr = api.allocUtf8StringCached("String");
+    const stringClass = api.native.mono_class_from_name(corlibImage, nsPtr, namePtr) as NativePointer;
     if (pointerIsNull(stringClass)) {
-      raise(MonoErrorCodes.CLASS_NOT_FOUND, "Could not find class: System.String", "Ensure mscorlib is loaded");
+      raise(MonoErrorCodes.CLASS_NOT_FOUND, "Could not find class: System.String", "Ensure corlib is loaded");
     }
     const classObj = new MonoClass(api, stringClass);
     return MonoArray.new(api, classObj, length) as MonoArray<string>;
@@ -1497,6 +1785,10 @@ export class MonoArray<T = unknown> extends MonoObject implements Iterable<T> {
   override toString(): string {
     return `${this.elementClass.fullName}[${this.length}]`;
   }
+}
+
+if (!getArrayWrapper()) {
+  registerArrayWrapper(MonoArray);
 }
 
 // ===== UTILITY FUNCTIONS =====

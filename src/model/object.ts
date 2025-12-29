@@ -6,7 +6,7 @@ import { MonoClass } from "./class";
 import { MonoField } from "./field";
 import { MethodArgument, MonoHandle } from "./handle";
 import { MonoMethod } from "./method";
-import { isArrayKind } from "./type";
+import { isArrayKind, type MonoTypeKind } from "./type";
 import { getArrayWrapper, getDelegateWrapper } from "./wrappers";
 
 /**
@@ -126,8 +126,15 @@ export class MonoObject extends MonoHandle {
    * @throws {MonoFieldNotFoundError} if field not found
    */
   getFieldValue<T = unknown>(name: string): T {
+    if (this.isNull) {
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        "Cannot read fields from a null object",
+        "Ensure the object pointer is valid",
+      );
+    }
     const f = this.field(name);
-    return f.getValue(this.pointer) as T;
+    return f.getValue(this) as T;
   }
 
   /**
@@ -136,11 +143,14 @@ export class MonoObject extends MonoHandle {
    * @returns Field value or null if field not found
    */
   tryGetFieldValue<T = unknown>(name: string): T | null {
+    if (this.isNull) {
+      return null;
+    }
     const f = this.tryField(name);
     if (!f) {
       return null;
     }
-    return f.getValue(this.pointer) as T;
+    return f.getValue(this) as T;
   }
 
   /**
@@ -150,8 +160,15 @@ export class MonoObject extends MonoHandle {
    * @throws {MonoFieldNotFoundError} if field not found
    */
   setFieldValue(name: string, value: unknown): void {
+    if (this.isNull) {
+      raise(
+        MonoErrorCodes.INVALID_ARGUMENT,
+        "Cannot write fields on a null object",
+        "Ensure the object pointer is valid",
+      );
+    }
     const f = this.field(name);
-    f.setTypedValue(this.pointer, value);
+    f.setTypedValue(this, value);
   }
 
   /**
@@ -161,11 +178,14 @@ export class MonoObject extends MonoHandle {
    * @returns True if field was set, false if field not found
    */
   trySetFieldValue(name: string, value: unknown): boolean {
+    if (this.isNull) {
+      return false;
+    }
     const f = this.tryField(name);
     if (!f) {
       return false;
     }
-    f.setTypedValue(this.pointer, value);
+    f.setTypedValue(this, value);
     return true;
   }
 
@@ -947,7 +967,7 @@ export class MonoObject extends MonoHandle {
     return fields;
   }
 
-  private wrapArrayValue(kind: number, value: unknown): unknown {
+  private wrapArrayValue(kind: MonoTypeKind, value: unknown): unknown {
     if (!isArrayKind(kind)) {
       return value;
     }

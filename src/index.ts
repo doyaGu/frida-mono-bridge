@@ -22,7 +22,7 @@
 import { Mono } from "./mono";
 import { MonoArray } from "./model/array";
 import { MonoDelegate } from "./model/delegate";
-import { registerArrayWrapper, registerDelegateWrapper } from "./model/wrappers";
+import { getArrayWrapper, getDelegateWrapper, registerArrayWrapper, registerDelegateWrapper } from "./model/wrappers";
 
 // ============================================================================
 // PRIMARY EXPORTS
@@ -32,8 +32,12 @@ import { registerArrayWrapper, registerDelegateWrapper } from "./model/wrappers"
 export { Mono };
 export default Mono;
 
-registerArrayWrapper(MonoArray);
-registerDelegateWrapper(MonoDelegate);
+if (!getArrayWrapper()) {
+  registerArrayWrapper(MonoArray);
+}
+if (!getDelegateWrapper()) {
+  registerDelegateWrapper(MonoDelegate);
+}
 
 // NOTE: `globalThis.Mono` installation is handled lazily by the Mono facade
 // (during `Mono.initialize()`/`Mono.perform()`) so `Mono.config.installGlobal`

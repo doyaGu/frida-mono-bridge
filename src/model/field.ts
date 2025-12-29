@@ -301,11 +301,7 @@ export class MonoField<T = unknown> extends MonoHandle {
    * @param options Access options
    * @throws {MonoTypeMismatchError} if the field is not a 64-bit integer type
    */
-  setBigIntValue(
-    instance: MonoObject | NativePointer | null,
-    value: bigint,
-    options: FieldAccessOptions = {},
-  ): void {
+  setBigIntValue(instance: MonoObject | NativePointer | null, value: bigint, options: FieldAccessOptions = {}): void {
     const kind = this.type.kind;
     if (kind !== MonoTypeKind.I8 && kind !== MonoTypeKind.U8) {
       raise(
@@ -361,14 +357,26 @@ export class MonoField<T = unknown> extends MonoHandle {
    * @param options Access options
    */
   setValue(instance: MonoObject | NativePointer | null, value: NativePointer, options: FieldAccessOptions = {}): void {
-    const preparedValue = this.prepareValuePointer(value);
     if (this.isStatic) {
+      const preparedValue = this.prepareValuePointer(value);
       const domainPtr = this.resolveDomainPointer(options.domain);
       const vtable = this.getStaticVTable(domainPtr);
       this.native.mono_field_static_set_value(vtable, this.pointer, preparedValue);
       return;
     }
     const target = unwrapInstanceRequired(instance, this);
+
+    // For reference-type instance fields, use the GC write barrier to ensure
+    // generational GC sees the new reference (important when storing young
+    // objects into old objects).
+    const type = this.type;
+    if (!type.valueType && !isPointerLikeKind(type.kind)) {
+      const fieldAddress = target.add(this.offset);
+      this.native.mono_gc_wbarrier_set_field(target, fieldAddress, value);
+      return;
+    }
+
+    const preparedValue = this.prepareValuePointer(value);
     this.native.mono_field_set_value(target, this.pointer, preparedValue);
   }
 
@@ -753,6 +761,13 @@ export class MonoField<T = unknown> extends MonoHandle {
     const type = this.type;
     const kind = type.kind;
 
+    if (this.isNullableType(type)) {
+      if (value instanceof MonoObject && this.isNullableType(value.class.type)) {
+        return value;
+      }
+      return this.createNullableValuePointer(value);
+    }
+
     // Handle string conversion
     if (kind === MonoTypeKind.String) {
       if (value instanceof MonoObject) {
@@ -807,6 +822,26 @@ export class MonoField<T = unknown> extends MonoHandle {
     return null;
   }
 
+  private createNullableValuePointer(value: unknown): NativePointer | null {
+    const nullableClass = this.type.class;
+    if (!nullableClass) {
+      return null;
+    }
+
+    const hasValueField =
+      nullableClass.tryField("hasValue") ?? nullableClass.tryField("has_value") ?? nullableClass.tryField("hasValue");
+    const valueField = nullableClass.tryField("value");
+
+    if (!hasValueField || !valueField) {
+      return null;
+    }
+
+    const storage = this.allocZeroedValue(this.type);
+    hasValueField.setTypedValue(storage, true);
+    valueField.setTypedValue(storage, value as unknown);
+    return storage;
+  }
+
   private isNullableType(type: MonoType): boolean {
     const fullName = type.fullName;
     return (
@@ -820,8 +855,7 @@ export class MonoField<T = unknown> extends MonoHandle {
     const { size } = type.valueSize;
     const storageSize = Math.max(size, Process.pointerSize);
     const storage = Memory.alloc(storageSize);
-    const zeros = new Uint8Array(storageSize);
-    storage.writeByteArray(zeros);
+    storage.writeByteArray(new ArrayBuffer(storageSize));
     return storage;
   }
 
