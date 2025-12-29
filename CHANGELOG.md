@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2025-12-29
+
+### Added
+- Wrapper registry for arrays and delegates to avoid circular imports and enable lazy wrapper registration
+- BigInt support for 64-bit MonoField values
+- Batch field operations for MonoObject
+- Fuzzy matching utilities for MonoError handling
+- Expanded tests for delegates, field operations, object cloning, and tryGetClassPtrFromMonoType
+- Stronger assertions in MonoDelegate and MonoObject tests
+- MonoArray tests for numeric range validation, boolean writes, and unsafe 64-bit reads
+
+### Changed
+- Type system enhancements: replace `any` with `unknown`, improve unwrapInstance type checks, and tighten MonoField pointer handling
+- Improved array type handling with wrapper-aware member access
+- MonoArray setNumber/getNumber validate integer ranges, accept boolean inputs for Boolean arrays, and reject unsafe 64-bit reads/writes
+- MonoArray getElement returns null for null references; setElement accepts null
+- MonoObject toObject uses safe property definitions; member access respects readable, non-indexer properties and wraps array/delegate members when wrappers are registered
+- MonoClass now caches methods and provides improved error hints for method/field/property lookups
+- Test framework respects skipIfNoMono/timeout and preserves result metadata for reporting
+- Test runner command execution refactor for readability
+- package.json marks dist/index.js as sideEffects to avoid tree-shaking
+
+### Fixed
+- Delegate conversions now return MonoDelegate wrappers
+- MonoDelegate constructor now uses the allocated method pointer for safer invocation
+- MonoObject static member handling
+- Field writes enforce numeric limits and apply GC write barriers
+- Test runner fixes and improved access violation error handling
+
 ## [0.3.1] - 2025-12-24
 
 ### Added
@@ -207,6 +236,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **0.3.2** - Type system enhancements, wrapper registration, field/array robustness, expanded tests, and test framework improvements
 - **0.3.1** - Performance optimizations, test infrastructure consolidation, architecture improvements
 - **0.3.0** - facade, async lifecycle, signature pipeline modernization
 - **0.2.2** - Bundled declarations, improved package structure
@@ -214,7 +244,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **0.2.0** - ES module support, resilient method interception, utility consolidation
 - **0.1.0** - Initial public release
 
-[Unreleased]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/doyaGu/frida-mono-bridge/compare/0.2.2...v0.3.0
 [0.2.2]: https://github.com/doyaGu/frida-mono-bridge/compare/v0.2.1...0.2.2
