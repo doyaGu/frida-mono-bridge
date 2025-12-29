@@ -173,7 +173,7 @@ const testCategories = {
   "custom-attributes": {
     name: "Custom Attributes",
     file: "test-custom-attributes",
-    tests: 10,
+    tests: 9,
     priority: 21,
   },
   "internal-call": {
@@ -351,6 +351,78 @@ function normalizeTarget(target) {
 async function isProcessRunningWindows(processName) {
   const { stdout } = await execCommand("tasklist", ["/FI", `IMAGENAME eq ${processName}`], { verbose: false });
   return stdout.toLowerCase().includes(processName.toLowerCase());
+}
+
+async function getProcessPidsWindows(processName) {
+  // CSV output is easiest to parse reliably across locales.
+  // Example line:
+  // "Duckov.exe","54696","Console","1","123,456 K"
+  const { stdout } = await execCommand(
+    "tasklist",
+    ["/FI", `IMAGENAME eq ${processName}`, "/FO", "CSV", "/NH"],
+    { verbose: false },
+  );
+
+  const processes = [];
+  for (const line of stdout.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) continue;
+    if (trimmed.toLowerCase().includes("no tasks")) continue;
+
+    // Split CSV line (simple, tasklist doesn't emit quoted commas other than separating columns)
+    const cols = trimmed
+      .split(",")
+      .map(s => s.trim())
+      .map(s => s.replace(/^"|"$/g, ""));
+
+    const image = cols[0];
+    const pid = cols[1];
+    const mem = cols[4];
+    if (!image || !pid) continue;
+    if (image.toLowerCase() !== processName.toLowerCase()) continue;
+    if (!/^\d+$/.test(pid)) continue;
+
+    // mem is like "123,456 K" (or locale-specific separators). Parse best-effort.
+    let memKb = 0;
+    if (typeof mem === "string") {
+      const normalized = mem.replace(/[^0-9]/g, "");
+      if (normalized.length > 0) memKb = Number(normalized);
+    }
+
+    processes.push({ pid, memKb });
+  }
+
+  return processes;
+}
+
+async function resolveAttachTargetInfo(targetInfo, verbose) {
+  if (targetInfo.kind === "pid") return targetInfo;
+  if (process.platform !== "win32") return targetInfo;
+
+  const processName = targetInfo.kind === "path" || targetInfo.kind === "name" ? targetInfo.processName : null;
+  if (!processName) return targetInfo;
+
+  const processes = await getProcessPidsWindows(processName);
+  if (processes.length === 0) {
+    return targetInfo;
+  }
+
+  // Prefer the process with the largest working set (usually the main game),
+  // falling back to highest PID.
+  processes.sort((a, b) => {
+    if (b.memKb !== a.memKb) return b.memKb - a.memKb;
+    return Number(b.pid) - Number(a.pid);
+  });
+  const chosen = processes[0];
+
+  if (verbose && processes.length > 1) {
+    writeColorOutput(
+      `  [INFO] Multiple '${processName}' processes found; attaching to PID ${chosen.pid} (mem=${chosen.memKb}K)`,
+      colors.gray,
+    );
+  }
+
+  return { kind: "pid", pid: chosen.pid };
 }
 
 async function killProcessWindows(processName) {
@@ -536,11 +608,12 @@ async function compileTest(category, config, verbose) {
     });
     const duration = Date.now() - startTime;
 
-    if (code === 0 || code === null) {
+    if (code === 0) {
       writeColorOutput(`  [OK] Compiled in ${duration}ms`, colors.green);
       return true;
     } else {
-      writeColorOutput(`  [FAIL] Compilation failed (exit code: ${code})`, colors.red);
+      const exitLabel = code === null ? "null" : code;
+      writeColorOutput(`  [FAIL] Compilation failed (exit code: ${exitLabel})`, colors.red);
       if (verbose) {
         if (stdout.trim().length > 0) console.log(stdout);
         if (stderr.trim().length > 0) console.error(stderr);
@@ -559,7 +632,11 @@ function shouldRestartFromOutput(output) {
     text.includes("the connection is closed") ||
     text.includes("failed to load script") ||
     text.includes("unable to find process") ||
-    text.includes("process not found")
+    text.includes("process not found") ||
+    // Frida Windows attach can fail transiently if the wrong process is targeted
+    // (e.g., multiple processes with same name) or if the process is restarting.
+    text.includes("virtualallocex returned 0x00000005") ||
+    text.includes("unexpected error allocating memory in target process")
   );
 }
 
@@ -622,15 +699,16 @@ async function runTest(category, config, targetInfo, timeout, verbose) {
       };
     }
 
-    if (code !== 0 && code !== null) {
-      writeColorOutput(`  [FAIL] frida exited with code ${code}`, colors.red);
+    if (code !== 0) {
+      const exitMessage = code === null ? "frida exited without an exit code" : `frida exited with code ${code}`;
+      writeColorOutput(`  [FAIL] ${exitMessage}`, colors.red);
       if (verbose) {
         if (stdout.trim().length > 0) console.log(stdout);
         if (stderr.trim().length > 0) console.error(stderr);
       }
       return {
         status: "FAIL",
-        message: `frida exited with code ${code}`,
+        message: exitMessage,
         duration,
         output: combined,
         exitCode: code,
@@ -714,6 +792,7 @@ async function runTestWithRetries(category, config, targetInfo, launchTargetInfo
       const startedNow = await ensureTargetRunning(launchTargetInfo ?? targetInfo, verbose);
       if (startedNow) {
         targetStartedByRunner = true;
+        targetJustStartedAt = Date.now();
         extraTimeoutSeconds = Math.max(extraTimeoutSeconds, startupGraceSeconds);
       }
     } catch (e) {
@@ -737,7 +816,10 @@ async function runTestWithRetries(category, config, targetInfo, launchTargetInfo
       );
     }
 
-    const result = await runTest(category, config, targetInfo, effectiveTimeout, verbose);
+    await waitForTargetWarmupIfNeeded(verbose);
+
+    const attachTargetInfo = await resolveAttachTargetInfo(targetInfo, verbose);
+    const result = await runTest(category, config, attachTargetInfo, effectiveTimeout, verbose);
     extraTimeoutSeconds = 0;
     if (result.status === "PASS") return result;
 
@@ -751,6 +833,7 @@ async function runTestWithRetries(category, config, targetInfo, launchTargetInfo
       );
       try {
         await restartTarget(launchTargetInfo ?? targetInfo, verbose);
+        targetJustStartedAt = Date.now();
         extraTimeoutSeconds = Math.max(extraTimeoutSeconds, startupGraceSeconds);
       } catch (e) {
         return {
@@ -948,6 +1031,26 @@ if (options.exe) {
 // If so, we will shut it down after the test run completes.
 let targetStartedByRunner = false;
 
+// When we start/restart the target, give it a brief warm-up before attempting to attach.
+// This reduces flakiness where the process exists but isn't ready for injection yet.
+let targetJustStartedAt = 0;
+const targetAttachWarmupMs = 10_000;
+
+async function waitForTargetWarmupIfNeeded(verbose) {
+  if (process.platform !== "win32") return;
+  if (!Number.isFinite(targetJustStartedAt) || targetJustStartedAt <= 0) return;
+
+  const elapsed = Date.now() - targetJustStartedAt;
+  const remaining = targetAttachWarmupMs - elapsed;
+  if (remaining <= 0) return;
+
+  if (verbose) {
+    writeColorOutput(`  Waiting ${Math.ceil(remaining / 1000)}s for target warm-up...`, colors.gray);
+  }
+
+  await sleep(remaining);
+}
+
 // Categories that are known to leave the process in a bad state for subsequent categories.
 // We restart after these to prevent cascading failures.
 const restartAfterCategories = new Set(["mono-module", "mono-data", "mono-error-handling", "mono-assembly"]);
@@ -974,6 +1077,23 @@ if (options.category) {
     .map(([cat]) => cat);
 }
 
+// Preflight: if we can manage the target process (exe path provided or --target is a path),
+// ensure it is running before we begin any suites.
+try {
+  const managedTargetInfo = launchTargetInfo ?? targetInfo;
+  const canManageTarget = managedTargetInfo.kind === "path" && process.platform === "win32";
+  if (!options.compileOnly && canManageTarget) {
+    const startedNow = await ensureTargetRunning(managedTargetInfo, options.verbose);
+    if (startedNow) {
+      targetStartedByRunner = true;
+      targetJustStartedAt = Date.now();
+    }
+  }
+} catch (e) {
+  writeColorOutput(`  ERROR: Target startup failed: ${e?.message ?? e}`, colors.red);
+  process.exit(1);
+}
+
 // Run tests
 for (let i = 0; i < categoriesToRun.length; i++) {
   const category = categoriesToRun[i];
@@ -996,6 +1116,7 @@ for (let i = 0; i < categoriesToRun.length; i++) {
   if (!isLast && restartAfterCategories.has(category) && canManageTarget) {
     try {
       await restartTarget(launchTargetInfo ?? targetInfo, options.verbose);
+      targetJustStartedAt = Date.now();
     } catch (e) {
       writeColorOutput(`  [WARN] Post-category restart failed: ${e?.message ?? e}`, colors.yellow);
     }
