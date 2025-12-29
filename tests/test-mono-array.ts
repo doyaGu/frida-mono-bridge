@@ -15,9 +15,9 @@
  * - Edge cases
  */
 
-import Mono from "../src";
+import Mono, { MonoArray } from "../src";
 import { withCoreClasses, withDomain, withNumericTypes } from "./test-fixtures";
-import { TestResult, assert, assertNotNull } from "./test-framework";
+import { TestResult, assert, assertNotNull, assertThrows } from "./test-framework";
 
 export async function createMonoArrayTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
@@ -232,6 +232,106 @@ export async function createMonoArrayTests(): Promise<TestResult[]> {
     }),
   );
 
+  results.push(
+    await withNumericTypes("MonoArray - setNumber() rejects out-of-range values", ({ byteClass, int16Class, uint16Class, uint32Class }) => {
+      const byteArr = Mono.array.new<number>(byteClass, 1);
+      assertThrows(() => byteArr.setNumber(0, 256), "Byte array should reject values > 255");
+      assertThrows(() => byteArr.setNumber(0, -1), "Byte array should reject negative values");
+      assertThrows(() => byteArr.setNumber(0, 1.5), "Byte array should reject non-integer values");
+
+      if (int16Class) {
+        const int16Arr = Mono.array.new<number>(int16Class, 1);
+        assertThrows(() => int16Arr.setNumber(0, 40000), "Int16 array should reject out-of-range values");
+      }
+
+      if (uint16Class) {
+        const uint16Arr = Mono.array.new<number>(uint16Class, 1);
+        assertThrows(() => uint16Arr.setNumber(0, -1), "UInt16 array should reject negative values");
+      }
+
+      if (uint32Class) {
+        const uint32Arr = Mono.array.new<number>(uint32Class, 1);
+        assertThrows(() => uint32Arr.setNumber(0, -1), "UInt32 array should reject negative values");
+      }
+    }),
+  );
+
+  results.push(
+    await withNumericTypes("MonoArray - getNumber() rejects unsafe Int64/UInt64 values", ({ int64Class, uint64Class }) => {
+      const unsafeValue = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
+
+      if (int64Class) {
+        const int64Arr = Mono.array.new<number>(int64Class, 1);
+        int64Arr.setBigInt(0, unsafeValue);
+        assertThrows(() => int64Arr.getNumber(0), "Int64 getNumber should reject unsafe values");
+      }
+
+      if (uint64Class) {
+        const uint64Arr = Mono.array.new<number>(uint64Class, 1);
+        uint64Arr.setBigInt(0, unsafeValue);
+        assertThrows(() => uint64Arr.getNumber(0), "UInt64 getNumber should reject unsafe values");
+      }
+    }),
+  );
+
+  results.push(
+    await withNumericTypes(
+      "MonoArray - setBigInt() rejects out-of-range values",
+      ({ byteClass, sbyteClass, int16Class, uint16Class, int64Class, uint64Class }) => {
+        const byteArr = Mono.array.new<number>(byteClass, 1);
+        assertThrows(() => byteArr.setBigInt(0, 256n), "Byte array should reject values > 255");
+        assertThrows(() => byteArr.setBigInt(0, -1n), "Byte array should reject negative values");
+
+        if (sbyteClass) {
+          const sbyteArr = Mono.array.new<number>(sbyteClass, 1);
+          assertThrows(() => sbyteArr.setBigInt(0, 128n), "SByte array should reject values > 127");
+          assertThrows(() => sbyteArr.setBigInt(0, -129n), "SByte array should reject values < -128");
+        }
+
+        if (int16Class) {
+          const int16Arr = Mono.array.new<number>(int16Class, 1);
+          assertThrows(() => int16Arr.setBigInt(0, 32768n), "Int16 array should reject values > 32767");
+          assertThrows(() => int16Arr.setBigInt(0, -32769n), "Int16 array should reject values < -32768");
+        }
+
+        if (uint16Class) {
+          const uint16Arr = Mono.array.new<number>(uint16Class, 1);
+          assertThrows(() => uint16Arr.setBigInt(0, -1n), "UInt16 array should reject negative values");
+          assertThrows(() => uint16Arr.setBigInt(0, 65536n), "UInt16 array should reject values > 65535");
+        }
+
+        if (int64Class) {
+          const int64Arr = Mono.array.new<number>(int64Class, 1);
+          const int64Max = (1n << 63n) - 1n;
+          const int64Min = -(1n << 63n);
+          assertThrows(() => int64Arr.setBigInt(0, int64Max + 1n), "Int64 array should reject values > max");
+          assertThrows(() => int64Arr.setBigInt(0, int64Min - 1n), "Int64 array should reject values < min");
+        }
+
+        if (uint64Class) {
+          const uint64Arr = Mono.array.new<number>(uint64Class, 1);
+          const uint64Max = (1n << 64n) - 1n;
+          assertThrows(() => uint64Arr.setBigInt(0, uint64Max + 1n), "UInt64 array should reject values > max");
+          assertThrows(() => uint64Arr.setBigInt(0, -1n), "UInt64 array should reject negative values");
+        }
+      },
+    ),
+  );
+
+  results.push(
+    await withDomain("MonoArray - createNumericArray supports primitive aliases", () => {
+      const intArray = MonoArray.createNumericArray(Mono.api, "int32", 3);
+      assert(intArray.elementClass.name === "Int32", `Expected Int32, got ${intArray.elementClass.name}`);
+      assert(intArray.length === 3, "int32 array length should be 3");
+
+      const byteArray = MonoArray.createNumericArray(Mono.api, "uint8", 2);
+      assert(byteArray.elementClass.name === "Byte", `Expected Byte, got ${byteArray.elementClass.name}`);
+
+      const floatArray = MonoArray.createNumericArray(Mono.api, "float32", 1);
+      assert(floatArray.elementClass.name === "Single", `Expected Single, got ${floatArray.elementClass.name}`);
+    }),
+  );
+
   // =====================================================
   // SECTION 5: getTyped() / setTyped() Tests
   // =====================================================
@@ -252,6 +352,55 @@ export async function createMonoArrayTests(): Promise<TestResult[]> {
 
       const value = arr.getNumber(3);
       assert(value === 99, `setTyped should set value to 99, got ${value}`);
+    }),
+  );
+
+  results.push(
+    await withCoreClasses("MonoArray - setTyped() accepts boolean values", ({ booleanClass }) => {
+      const arr = Mono.array.new<boolean>(booleanClass, 2);
+      arr.setTyped(0, true);
+      arr.setTyped(1, false);
+
+      assert(arr.getTyped(0) === true, "Boolean array should return true");
+      assert(arr.getTyped(1) === false, "Boolean array should return false");
+      assert(arr.getNumber(0) === 1, "Boolean array should store true as 1");
+      assert(arr.getNumber(1) === 0, "Boolean array should store false as 0");
+    }),
+  );
+
+  results.push(
+    await withDomain("MonoArray - getTyped() returns string for Char arrays", ({ domain }) => {
+      const charClass = domain.tryClass("System.Char");
+      if (!charClass) {
+        console.log("  [SKIP] System.Char class not available");
+        return;
+      }
+
+      const arr = Mono.array.new<string>(charClass, 2);
+      arr.setTyped(0, "A");
+      arr.setTyped(1, "Z");
+
+      assert(arr.getTyped(0) === "A", "Char array should return 'A'");
+      assert(arr.getTyped(1) === "Z", "Char array should return 'Z'");
+    }),
+  );
+
+  results.push(
+    await withDomain("MonoArray - getTyped() returns pointer for struct arrays", ({ domain }) => {
+      const dateTimeClass = domain.tryClass("System.DateTime");
+      if (!dateTimeClass) {
+        console.log("  [SKIP] System.DateTime class not available");
+        return;
+      }
+
+      const arr = Mono.array.new<NativePointer>(dateTimeClass, 1);
+      const value = arr.getTyped(0);
+
+      assertNotNull(value, "Struct array element should return a pointer");
+      assert(
+        value instanceof NativePointer || typeof value === "object",
+        `Struct array element should be NativePointer, got: ${typeof value}`,
+      );
     }),
   );
 
@@ -772,9 +921,9 @@ export async function createMonoArrayTests(): Promise<TestResult[]> {
       assertNotNull(boolClass, "Boolean class should exist");
 
       const arr = Mono.array.new<number>(boolClass, 3);
-      arr.setNumber(0, 0); // false
-      arr.setNumber(1, 1); // true
-      arr.setNumber(2, 0); // false
+      arr.setNumber(0, false);
+      arr.setNumber(1, true);
+      arr.setNumber(2, false);
 
       assert(arr.getNumber(0) === 0, "Boolean[0] should be 0 (false)");
       assert(arr.getNumber(1) === 1, "Boolean[1] should be 1 (true)");

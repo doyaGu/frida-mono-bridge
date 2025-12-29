@@ -5,8 +5,9 @@
  */
 
 import Mono from "../src";
+import { MonoObject } from "../src/model/object";
 import { withCoreClasses, withDomain } from "./test-fixtures";
-import { TestResult, assert, assertNotNull, createErrorHandlingTest } from "./test-framework";
+import { TestResult, assert, assertNotNull, assertThrows, createErrorHandlingTest } from "./test-framework";
 
 export async function createMonoObjectTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
@@ -119,6 +120,55 @@ export async function createMonoObjectTests(): Promise<TestResult[]> {
     }),
   );
 
+  results.push(
+    await withDomain("MonoObject.clone should copy base class instance fields", ({ domain }) => {
+      const derivedClass =
+        domain.tryClass("System.ArgumentException") ||
+        domain.tryClass("System.ArgumentNullException") ||
+        domain.tryClass("System.InvalidOperationException");
+      if (!derivedClass) {
+        console.log("[SKIP] No derived exception class found");
+        return;
+      }
+
+      let baseClass = derivedClass.parent;
+      let baseStringField: (typeof derivedClass.fields)[number] | null = null;
+
+      while (baseClass) {
+        const candidate = baseClass.fields.find(field => {
+          if (field.isStatic || field.isInitOnly || field.isLiteral) {
+            return false;
+          }
+          const typeName = field.type.fullName;
+          return typeName === "System.String" || typeName === "String";
+        });
+
+        if (candidate) {
+          baseStringField = candidate;
+          break;
+        }
+
+        baseClass = baseClass.parent;
+      }
+
+      if (!baseStringField) {
+        console.log("[SKIP] No writable string field found on base exception class hierarchy");
+        return;
+      }
+
+      const obj = derivedClass.alloc();
+      assertNotNull(obj, "Derived exception instance should be allocated");
+
+      const newValue = "frida-mono-bridge-base-field";
+      const newValuePtr = Mono.api.stringNew(newValue);
+      baseStringField.setValue(obj, newValuePtr);
+
+      const cloned = obj.clone();
+      const clonedValue = baseStringField.readValue(cloned, { coerce: true });
+      assert(clonedValue === newValue, `Expected '${newValue}', got: ${clonedValue}`);
+    }),
+  );
+
   // ===== OBJECT TYPE TESTS =====
 
   results.push(
@@ -178,6 +228,18 @@ export async function createMonoObjectTests(): Promise<TestResult[]> {
 
       const clone = obj.clone();
       assertNotNull(clone, "clone should work");
+    }),
+  );
+
+  results.push(
+    await createErrorHandlingTest("MonoObject field access should reject null instances", () => {
+      // The object model enforces non-NULL handles at construction time.
+      // Nullable pointers should be handled via the facade tryWrap() helpers.
+      assert(Mono.object.tryWrap(ptr(0)) === null, "Mono.object.tryWrap(NULL) should return null");
+
+      assertThrows(() => Mono.object.wrap(ptr(0)), "Mono.object.wrap(NULL) should throw (invalid handle)");
+
+      assertThrows(() => new MonoObject(Mono.api, ptr(0)), "MonoObject constructor should throw for NULL handle");
     }),
   );
 

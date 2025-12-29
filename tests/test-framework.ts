@@ -7,6 +7,7 @@
 
 import Mono from "../src";
 import type { MonoDomain } from "../src/model/domain";
+import { tryFindMonoModule, tryWaitForMonoModule } from "../src/runtime/module";
 
 export interface TestResult {
   name: string;
@@ -46,6 +47,7 @@ export interface TestOptions {
 
 export class TestSuite {
   public results: TestResult[] = [];
+  private readonly startTime = Date.now();
 
   constructor(
     public readonly name: string,
@@ -72,6 +74,7 @@ export class TestSuite {
       failed: this.results.filter(r => r.failed).length,
       skipped: this.results.filter(r => r.skipped).length,
       results: this.results,
+      duration: Date.now() - this.startTime,
     };
   }
 
@@ -88,25 +91,132 @@ export class TestSuite {
   }
 }
 
+let monoDetected = false;
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return !!value && typeof (value as { then?: unknown }).then === "function";
+}
+
+function normalizeTimeout(timeout?: number): number | undefined {
+  if (timeout === undefined) {
+    return undefined;
+  }
+  if (!Number.isFinite(timeout) || timeout <= 0) {
+    return undefined;
+  }
+  return timeout;
+}
+
+function getMonoMissingReason(): string {
+  const moduleName = Mono.config.moduleName;
+  if (Array.isArray(moduleName) && moduleName.length > 0) {
+    return `Mono module not found (${moduleName.join(", ")})`;
+  }
+  if (typeof moduleName === "string" && moduleName.trim().length > 0) {
+    return `Mono module not found (${moduleName})`;
+  }
+  return "Mono module not detected";
+}
+
+function getMonoSkipReason(options: TestOptions | undefined, requiresMono: boolean): string | null {
+  if (!options?.skipIfNoMono || !requiresMono) {
+    return null;
+  }
+
+  if (monoDetected) {
+    return null;
+  }
+
+  try {
+    const moduleInfo = tryFindMonoModule(Mono.config.moduleName);
+    if (!moduleInfo) {
+      return getMonoMissingReason();
+    }
+    monoDetected = true;
+  } catch {
+    return getMonoMissingReason();
+  }
+
+  return null;
+}
+
+async function getMonoSkipReasonAsync(
+  options: TestOptions | undefined,
+  requiresMono: boolean,
+  timeoutMs: number | undefined,
+): Promise<string | null> {
+  if (!options?.skipIfNoMono || !requiresMono) {
+    return null;
+  }
+
+  if (monoDetected) {
+    return null;
+  }
+
+  const waitTimeoutMs = normalizeTimeout(timeoutMs) ?? Mono.config.initializeTimeoutMs;
+  const warnAfterMs = Math.min(Mono.config.warnAfterMs, waitTimeoutMs);
+
+  try {
+    const moduleInfo = await tryWaitForMonoModule({
+      moduleName: Mono.config.moduleName,
+      timeoutMs: waitTimeoutMs,
+      warnAfterMs,
+    });
+    if (!moduleInfo) {
+      return getMonoMissingReason();
+    }
+    monoDetected = true;
+  } catch {
+    return getMonoMissingReason();
+  }
+
+  return null;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Test "${name}" timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export function createTest(name: string, testFn: () => void | Promise<void>, options?: TestOptions): TestResult {
   const startTime = Date.now();
+  const normalizedOptions: TestOptions = { ...options, requiresMono: options?.requiresMono ?? true };
+  const timeoutMs = normalizeTimeout(normalizedOptions.timeout);
+  const skipReason = getMonoSkipReason(normalizedOptions, normalizedOptions.requiresMono ?? true);
+  if (skipReason) {
+    return createSkippedTest(name, skipReason, normalizedOptions);
+  }
+
   try {
     const result = testFn();
     // Handle both sync and async test functions
-    if (result instanceof Promise) {
-      // For async tests, we need to handle differently
-      // This will be caught by the caller who should await
-      console.log(`  PASS ${name} (async - duration pending)`);
-      return {
-        name,
-        passed: true,
-        failed: false,
-        skipped: false,
-        category: options?.category,
-        requiresMono: options?.requiresMono ?? true,
-      };
+    if (isThenable(result)) {
+      Promise.resolve(result).catch(error => {
+        console.error(`  FAIL ${name} (async)`);
+        if (error instanceof Error) {
+          console.error(`    Error: ${error.message}`);
+        }
+      });
+      throw new Error("Async tests must use createStandaloneTestAsync or a Mono-perform test helper");
     }
     const duration = Date.now() - startTime;
+    if (timeoutMs !== undefined && duration > timeoutMs) {
+      throw new Error(`Test "${name}" timed out after ${timeoutMs}ms`);
+    }
     console.log(`  PASS ${name} (${duration}ms)`);
     return {
       name,
@@ -114,10 +224,14 @@ export function createTest(name: string, testFn: () => void | Promise<void>, opt
       failed: false,
       skipped: false,
       duration,
-      category: options?.category,
-      requiresMono: options?.requiresMono ?? true,
+      category: normalizedOptions.category,
+      requiresMono: normalizedOptions.requiresMono,
     };
   } catch (error) {
+    if (error instanceof TestSkippedError) {
+      const duration = Date.now() - startTime;
+      return createSkippedTest(name, error.message, normalizedOptions, duration);
+    }
     const duration = Date.now() - startTime;
     console.error(`  FAIL ${name} (${duration}ms)`);
     if (error instanceof Error) {
@@ -133,13 +247,18 @@ export function createTest(name: string, testFn: () => void | Promise<void>, opt
       skipped: false,
       error: error instanceof Error ? error : new Error(String(error)),
       duration,
-      category: options?.category,
-      requiresMono: options?.requiresMono ?? true,
+      category: normalizedOptions.category,
+      requiresMono: normalizedOptions.requiresMono,
     };
   }
 }
 
-export function createSkippedTest(name: string, reason?: string): TestResult {
+export function createSkippedTest(
+  name: string,
+  reason?: string,
+  options?: TestOptions,
+  duration?: number,
+): TestResult {
   console.log(`  - ${name} (skipped${reason ? ": " + reason : ""})`);
   return {
     name,
@@ -147,7 +266,21 @@ export function createSkippedTest(name: string, reason?: string): TestResult {
     failed: false,
     skipped: true,
     message: reason,
+    duration,
+    category: options?.category,
+    requiresMono: options?.requiresMono,
   };
+}
+
+export class TestSkippedError extends Error {
+  constructor(message?: string) {
+    super(message ?? "Skipped");
+    this.name = "TestSkippedError";
+  }
+}
+
+export function skipTest(reason?: string): never {
+  throw new TestSkippedError(reason);
 }
 
 /**
@@ -160,8 +293,43 @@ export async function createMonoTestAsync<T>(
   options?: TestOptions,
 ): Promise<TestResult> {
   const startTime = Date.now();
+  const normalizedOptions: TestOptions = {
+    ...options,
+    category: options?.category ?? TestCategory.MONO_DEPENDENT,
+    requiresMono: options?.requiresMono ?? true,
+  };
+  const timeoutMs = normalizeTimeout(normalizedOptions.timeout);
+  const skipReason = await getMonoSkipReasonAsync(
+    normalizedOptions,
+    normalizedOptions.requiresMono ?? true,
+    timeoutMs,
+  );
+  if (skipReason) {
+    return createSkippedTest(name, skipReason, normalizedOptions);
+  }
+  const elapsedMs = Date.now() - startTime;
+  const remainingTimeout = timeoutMs !== undefined ? Math.max(timeoutMs - elapsedMs, 0) : undefined;
+
   try {
-    await Mono.perform(testFn);
+    const performPromise = Mono.perform(async () => {
+      try {
+        await testFn();
+        return { skipped: false as const };
+      } catch (error) {
+        if (error instanceof TestSkippedError) {
+          return { skipped: true as const, reason: error.message };
+        }
+        throw error;
+      }
+    });
+    const outcome =
+      remainingTimeout !== undefined
+        ? await withTimeout(performPromise, remainingTimeout, name)
+        : await performPromise;
+    if (outcome.skipped) {
+      const duration = Date.now() - startTime;
+      return createSkippedTest(name, outcome.reason, normalizedOptions, duration);
+    }
     const duration = Date.now() - startTime;
     console.log(`  PASS ${name} (${duration}ms)`);
     return {
@@ -170,10 +338,14 @@ export async function createMonoTestAsync<T>(
       failed: false,
       skipped: false,
       duration,
-      category: options?.category ?? TestCategory.MONO_DEPENDENT,
-      requiresMono: options?.requiresMono ?? true,
+      category: normalizedOptions.category,
+      requiresMono: normalizedOptions.requiresMono,
     };
   } catch (error) {
+    if (error instanceof TestSkippedError) {
+      const duration = Date.now() - startTime;
+      return createSkippedTest(name, error.message, normalizedOptions, duration);
+    }
     const duration = Date.now() - startTime;
     console.error(`  FAIL ${name} (${duration}ms)`);
     if (error instanceof Error) {
@@ -189,8 +361,8 @@ export async function createMonoTestAsync<T>(
       skipped: false,
       error: error instanceof Error ? error : new Error(String(error)),
       duration,
-      category: options?.category ?? TestCategory.MONO_DEPENDENT,
-      requiresMono: options?.requiresMono ?? true,
+      category: normalizedOptions.category,
+      requiresMono: normalizedOptions.requiresMono,
     };
   }
 }
@@ -238,6 +410,9 @@ export function assertThrows(fn: () => void, message: string): void {
     fn();
     throw new Error(`Assertion failed: Expected function to throw, but it didn't. ${message}`);
   } catch (error) {
+    if (error instanceof TestSkippedError) {
+      throw error;
+    }
     // Expected
     if (error instanceof Error && error.message.includes("Expected function to throw")) {
       throw error;
@@ -398,6 +573,73 @@ export function createStandaloneTest(
     requiresMono: false,
   });
   return result;
+}
+
+export async function createStandaloneTestAsync(
+  name: string,
+  testFn: () => void | Promise<void>,
+  options?: TestOptions,
+): Promise<TestResult> {
+  const startTime = Date.now();
+  const normalizedOptions: TestOptions = {
+    ...options,
+    category: options?.category ?? TestCategory.STANDALONE,
+    requiresMono: options?.requiresMono ?? false,
+  };
+  const timeoutMs = normalizeTimeout(normalizedOptions.timeout);
+  const skipReason = await getMonoSkipReasonAsync(
+    normalizedOptions,
+    normalizedOptions.requiresMono ?? false,
+    timeoutMs,
+  );
+  if (skipReason) {
+    return createSkippedTest(name, skipReason, normalizedOptions);
+  }
+  const elapsedMs = Date.now() - startTime;
+  const remainingTimeout = timeoutMs !== undefined ? Math.max(timeoutMs - elapsedMs, 0) : undefined;
+
+  try {
+    const testPromise = Promise.resolve().then(() => testFn());
+    if (remainingTimeout !== undefined) {
+      await withTimeout(testPromise, remainingTimeout, name);
+    } else {
+      await testPromise;
+    }
+    const duration = Date.now() - startTime;
+    console.log(`  PASS ${name} (${duration}ms)`);
+    return {
+      name,
+      passed: true,
+      failed: false,
+      skipped: false,
+      duration,
+      category: normalizedOptions.category,
+      requiresMono: normalizedOptions.requiresMono,
+    };
+  } catch (error) {
+    if (error instanceof TestSkippedError) {
+      const duration = Date.now() - startTime;
+      return createSkippedTest(name, error.message, normalizedOptions, duration);
+    }
+    const duration = Date.now() - startTime;
+    console.error(`  FAIL ${name} (${duration}ms)`);
+    if (error instanceof Error) {
+      console.error(`    Error: ${error.message}`);
+      if (error.stack) {
+        console.error(`    Stack: ${error.stack.split("\n").slice(0, 3).join("\n    ")}`);
+      }
+    }
+    return {
+      name,
+      passed: false,
+      failed: true,
+      skipped: false,
+      error: error instanceof Error ? error : new Error(String(error)),
+      duration,
+      category: normalizedOptions.category,
+      requiresMono: normalizedOptions.requiresMono,
+    };
+  }
 }
 
 export async function createMonoDependentTest(

@@ -5,6 +5,9 @@
  */
 
 import Mono from "../src";
+import type { MonoClass } from "../src/model/class";
+import type { MonoField } from "../src/model/field";
+import { MonoTypeKind, isPointerLikeKind } from "../src/model/type";
 import { setupCoreClassesFixture, withCoreClasses, withDomain } from "./test-fixtures";
 import { TestResult, assert, assertNotNull, assertThrows, createErrorHandlingTest } from "./test-framework";
 import { createBasicLookupPerformanceTest, createFieldLookupPerformanceTest } from "./test-utilities";
@@ -1125,6 +1128,83 @@ export async function createMonoFieldTests(): Promise<TestResult[]> {
           console.log("  - Found Nullable<Boolean> for testing");
         }
       }
+    }),
+  );
+
+  results.push(
+    await withDomain("MonoField setTypedValue should handle Nullable<T> fields", ({ domain }) => {
+      const assemblies = domain.assemblies.slice(0, 6);
+      let targetField: MonoField | null = null;
+      let declaringClass: MonoClass | null = null;
+      let hasValueField: MonoField | null = null;
+      let valueField: MonoField | null = null;
+
+      for (const assembly of assemblies) {
+        try {
+          const classes = assembly.image.classes.slice(0, 40);
+          for (const klass of classes) {
+            const fields = klass.fields.slice(0, 40);
+            for (const field of fields) {
+              if (field.isInitOnly || field.isLiteral) {
+                continue;
+              }
+              const fieldType = field.type;
+              if (!fieldType.fullName.startsWith("System.Nullable")) {
+                continue;
+              }
+
+              const nullableClass = fieldType.class;
+              if (!nullableClass) {
+                continue;
+              }
+
+              const candidateHasValue =
+                nullableClass.tryField("hasValue") ?? nullableClass.tryField("has_value") ?? nullableClass.tryField("hasValue");
+              const candidateValue = nullableClass.tryField("value");
+              if (!candidateHasValue || !candidateValue) {
+                continue;
+              }
+
+              const valueType = candidateValue.type;
+              if (
+                (!valueType.isNumeric && valueType.kind !== MonoTypeKind.Boolean) ||
+                isPointerLikeKind(valueType.kind)
+              ) {
+                continue;
+              }
+
+              targetField = field;
+              declaringClass = klass;
+              hasValueField = candidateHasValue;
+              valueField = candidateValue;
+              break;
+            }
+            if (targetField) break;
+          }
+        } catch {
+          continue;
+        }
+        if (targetField) break;
+      }
+
+      if (!targetField || !declaringClass || !hasValueField || !valueField) {
+        console.log("  [SKIP] No Nullable<T> field with numeric/boolean value found");
+        return;
+      }
+
+      const instance = targetField.isStatic ? null : declaringClass.allocRaw();
+      const testValue = valueField.type.kind === MonoTypeKind.Boolean ? true : 123;
+
+      targetField.setTypedValue(instance, testValue);
+
+      const rawValue = targetField.readValue(instance, { coerce: false });
+      assertNotNull(rawValue, "Nullable field should provide raw value storage");
+
+      const hasValue = hasValueField.getTypedValue(rawValue as NativePointer);
+      const actualValue = valueField.getTypedValue(rawValue as NativePointer);
+
+      assert(hasValue === true, "Nullable field should have HasValue set to true");
+      assert(actualValue === testValue, `Nullable field value should be ${testValue}, got ${actualValue}`);
     }),
   );
 
